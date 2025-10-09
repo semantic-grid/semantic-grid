@@ -10,26 +10,8 @@ from fm_app.api.model import (
 )
 
 
-def get_db_name(req: WorkerRequest):
-    if (
-        req.db == DBType.new_wh
-        or req.flow == FlowType.openai_simple_new_wh
-        or req.flow == FlowType.gemini_simple_new_wh
-        or req.flow == FlowType.deepseek_simple_new_wh
-        or req.flow == FlowType.anthropic_simple_new_wh
-    ):
-        db = "new_wh"
-    elif (
-        req.db == DBType.v2
-        or req.flow == FlowType.openai_simple_v2
-        or req.flow == FlowType.gemini_simple_v2
-        or req.flow == FlowType.deepseek_simple_v2
-        or req.flow == FlowType.anthropic_simple_v2
-    ):
-        db = "wh_v2"
-    else:
-        db = "wh"
-    return db
+def get_db_name(req: McpServerRequest):
+    return "wh"
 
 
 async def get_db_meta_mcp_prompt_items(

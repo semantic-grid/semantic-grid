@@ -1,5 +1,6 @@
 import json
 import pathlib
+import typing
 
 import numpy as np
 import openai
@@ -9,6 +10,7 @@ from pymilvus import (
     CollectionSchema,
     DataType,
     FieldSchema,
+    SearchResult,
     connections,
     utility,
 )
@@ -107,7 +109,8 @@ def load_query_examples():
         "params": json.loads(settings.vector_db_params),
         # Adjust based on dataset size
     }
-    if collection_name in pymilvus.utility.list_collections():
+    names: list[str] = pymilvus.utility.list_collections()
+    if collection_name in names:
         utility.drop_collection(collection_name)
     collection = Collection(name=collection_name, schema=schema)
     collection.create_index("embedding", index_params)
@@ -155,7 +158,7 @@ def get_hits(query: str, db: str, top_k=3):
     schema = CollectionSchema(fields, description="Query examples")
     collection = Collection(name=collection_name, schema=schema)
 
-    results = collection.search(
+    results: SearchResult = typing.cast(SearchResult, collection.search(
         # data=[query_embedding.tolist()],  # Query vector
         data=[normalize_vector(np.array(query_embedding[0]))],  # Query vector
         anns_field="embedding",
@@ -163,16 +166,17 @@ def get_hits(query: str, db: str, top_k=3):
         limit=top_k,
         output_fields=["request", "response"],
         expr=f'db == "{db}"',
-    )
+    ))
 
     output = []
-    for i, hit in enumerate(results[0]):
-        request = hit.entity.get("request")
-        response = hit.entity.get("response")
-        # print(f"   : {request} - {response} - {1 / (1 + hit.score):.2f}")
-        output.append(
-            QueryExample(request=request, response=response, score=1 / (1 + hit.score))
-        )
+    if results:
+        for i, hit in enumerate(results[0]):
+            request = hit.entity.get("request")
+            response = hit.entity.get("response")
+            # print(f"   : {request} - {response} - {1 / (1 + hit.score):.2f}")
+            output.append(
+                QueryExample(request=request, response=response, score=1 / (1 + hit.score))
+            )
 
     # Combine all examples into a single LLM input string
 
@@ -184,11 +188,11 @@ def test_vector_db():
     print(f"Index type: {settings.vector_db_index_type}")
 
     question = "What wallet held the most MOBILE tokens on February 12th, 2025."
-    hits = get_hits(query=question, db="wh_v2")
+    hits = get_hits(query=question, db="wh")
     print(f"{question}\n{hits}")
 
     # question = "Get the name of mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So address"
-    # hits = get_hits(query=question, db="wh_v2")
+    # hits = get_hits(query=question, db="wh")
     # print(f"{question} => {hits}")
 
 

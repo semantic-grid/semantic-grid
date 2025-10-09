@@ -11,7 +11,7 @@ all:
     These transactions usually involve two or more Token Mint accounts.
 
 
-wh_v2:
+wh:
     - |
       Detailed data (all tables in DB) is available for (at most) the past 30 days
     - |

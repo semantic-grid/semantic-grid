@@ -2,6 +2,7 @@ import csv
 import json
 from io import StringIO
 from typing import Any, Optional
+import typing
 from uuid import UUID, uuid4
 
 from clickhouse_driver import Client
@@ -387,7 +388,10 @@ async def get_request(
         get_req_sql, params={"session_id": session_id, "seq_num": seq_num}
     )
     row = res.mappings().fetchone()
-
+    if row is None:
+        logging.error(f"Can't validate Request object from DB: not found")
+        raise HTTPException(status_code=404, detail=str("not found"))
+    row = typing.cast(RowMapping, row)
     # Flatten and nest 'query__*' into a 'query' subdict
     data = {}
     query_data = {}
@@ -929,7 +933,7 @@ def run_structured_wh_request(request: str, db: Session):
     return {"csv": csv_result, "rows": len(rows)}
 
 
-from sqlalchemy import text
+from sqlalchemy import RowMapping, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 import logging

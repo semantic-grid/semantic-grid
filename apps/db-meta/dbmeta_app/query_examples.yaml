@@ -1,5 +1,5 @@
 # --------------------------------------------------------------------------------------
-# wh_v2
+# wh
 # --------------------------------------------------------------------------------------
 
 - request: |
@@ -20,7 +20,7 @@
     FROM latest_balance_per_owner
     ORDER BY latest_balance DESC
     LIMIT 1;
-  db: wh_v2
+  db: wh
 
 - request: |
     What was the calculated balance of the wallet with the highest number of $token token transactions
@@ -73,7 +73,7 @@
       COALESCE(c.final_balance, s.snapshot_balance) AS balance_by_end_of_feb
     FROM latest_snapshot s
     FULL OUTER JOIN latest_change c USING (owner);
-  db: wh_v2
+  db: wh
 
 - request: |
     What was the $token_symbol balance of account $wallet one $time_interval ago?
@@ -85,7 +85,7 @@
     AND tb.ts < now() - INTERVAL $time_interval
     ORDER BY tb.ts DESC
     LIMIT 1;
-  db: wh_v2
+  db: wh
 
 - request: |
     What is the full $token_symbol token supply for end of the day yesterday (assuming that today is $date)
@@ -103,7 +103,7 @@
             AND ts <= '$date'
         GROUP BY owner
     );
-  db: wh_v2
+  db: wh
 
 - request: |
     What are the last $count $token transactions in $period completed by the following wallet $wallet?
@@ -122,7 +122,7 @@
         AND ts < '$period_end'
     ORDER BY ts DESC
     LIMIT $count;
-  db: wh_v2
+  db: wh
 
 - request: |
     What was the balance of the wallet that sent most recent transaction of $token_symbol in $period to the $wallet ?
@@ -144,7 +144,7 @@
     WHERE
         tb.signature = src_owner.signature
       AND tb.token_mint = '$token_mint'
-  db: wh_v2
+  db: wh
 
 - request: How many $token token holders existed on $date?
   response: |
@@ -161,7 +161,7 @@
       GROUP BY owner
       HAVING balance > 0
     )
-  db: wh_v2
+  db: wh
 
 - request: |
     What was the balance by the end of $period of the wallet that was the first wallet to send $token_symbol
@@ -187,7 +187,7 @@
         owner = (SELECT owner FROM first_sender)
         AND ts <= '$period'
     GROUP BY owner
-  db: wh_v2
+  db: wh
 
 - request: |
     Find the total number of wallets that sent their entire $token_symbol token balance to other wallets during $period?
@@ -199,7 +199,7 @@
       AND post_balance_calculated  = 0
       AND ts >= '$period_start'
       AND ts < '$period_end'
-  db: wh_v2
+  db: wh
 
 - request: |
     provide a list of wallets that have profited from $token token trades (as measured against USD)
@@ -335,7 +335,7 @@
     LEFT JOIN buy_counts b ON p.wallet = b.wallet
     GROUP BY p.wallet, b.num_token_buys
     ORDER BY net_pnl_usd DESC;
-  db: wh_v2
+  db: wh
 
 - request: |
     Which wallets have copied the trades of other wallets most often for the $token?
@@ -356,4 +356,4 @@
     GROUP BY leader, follower
     HAVING times_copied >= 2
     ORDER BY times_copied DESC;
-  db: wh_v2
+  db: wh

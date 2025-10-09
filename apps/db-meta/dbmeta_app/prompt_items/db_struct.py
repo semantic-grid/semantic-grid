@@ -23,9 +23,9 @@ class DbTable(BaseModel):
     description: str | None = None
 
 
-class DbSchema(RootModel[Dict[str, DbTable]]):
-    pass
-
+class DbSchema(RootModel[dict[str, DbTable]]):
+    def __setitem__(self, key: str, value: DbTable) -> None:
+        self.root[key] = value
 
 class PreflightResult(BaseModel):
     explanation: list[dict[str, Any]] | None = None
@@ -159,7 +159,7 @@ def get_db_schema() -> DbSchema:
     file = load_yaml(tree, "resources/schema_descriptions.yaml")
     descriptions = file["profiles"][profile]
 
-    result: DbSchema = {}
+    result: DbSchema = DbSchema({})
 
     with engine.connect():
         for idx, table in enumerate(inspector.get_table_names()):
@@ -185,7 +185,6 @@ def get_db_schema() -> DbSchema:
                         description=col_desc,
                         example=col_example,
                     )
-
             result[table] = DbTable(
                 columns=columns,
                 description=table_metadata.get("description", None),

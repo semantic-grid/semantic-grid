@@ -22,7 +22,7 @@ async def check_mcp(mcp_server: FastMCP):
     print(
         f"""
         {len(resources)} Resource(s):
-        {', '.join([r.name for r in resources.values()])}
+        {', '.join([str(r.name) for r in resources.values()])}
         """
     )
     print(
@@ -41,7 +41,7 @@ async def check_mcp(mcp_server: FastMCP):
                 {
                     "req": {
                         "user_request": "Count all trades in the warehouse",
-                        "db": "wh_v2",
+                        "db": "wh",
                     }
                 },
             )
@@ -51,7 +51,7 @@ async def check_mcp(mcp_server: FastMCP):
                 {
                     "req": {
                         "sql": "select count(*) from trades;",
-                        "db": "wh_v2",
+                        "db": "wh",
                     }
                 },
             )

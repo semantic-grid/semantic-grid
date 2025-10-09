@@ -1,7 +1,7 @@
 version: 1.0.0
 description: Description of the database containing Solana blockchain data.
 profiles:
-  wh_v2:
+  wh:
     whitelist: false
     tables:
       account_token_balance:

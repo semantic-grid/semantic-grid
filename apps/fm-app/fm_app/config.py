@@ -4,6 +4,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from dotenv import load_dotenv, find_dotenv
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # 1) Load .env from the project root (or nearest up the tree)
@@ -27,20 +28,13 @@ class Settings(BaseSettings):
     database_port: int
     database_server: str
     database_db: str
-    database_wh_user: str
-    database_wh_pass: str
-    database_wh_port: int
-    database_wh_port_new: int
-    database_wh_port_v2: int
-    database_wh_server: str
-    database_wh_server_new: str
-    database_wh_server_v2: str
-    database_wh_params: str
-    database_wh_params_new: str
-    database_wh_params_v2: str
-    database_wh_db: str
-    database_wh_db_new: str
-    database_wh_db_v2: str
+    database_wh_user: str = ""
+    database_wh_pass: str = ""
+    database_wh_port: int = 0
+    database_wh_server: str = ""
+    database_wh_params: str = ""
+    database_wh_db: str = "wh"
+    database_wh_driver: str = "clickhouse+native"
     auth0_domain: str
     auth0_api_audience: str
     auth0_issuer: str
@@ -69,6 +63,26 @@ class Settings(BaseSettings):
     system_version: str = "v1.0.0"
     packs_resources_dir: str = "/app/packages"
 
+    @field_validator(
+        "database_wh_user",
+        "database_wh_pass",
+        "database_wh_server",
+        "database_wh_db",
+        "database_wh_driver",
+        mode="after",
+    )
+    @classmethod
+    def validator_string_not_empty(cls, value: str) -> str:
+        if value == "":
+            raise ValueError("empty string")
+        return value
+
+    @field_validator("database_wh_port", mode="after")
+    @classmethod
+    def validator_port(cls, value: int) -> int:
+        if 1 <= value <= 65535:
+            return value
+        raise ValueError("invalid port")
 
 @lru_cache()
 def get_settings() -> Settings:

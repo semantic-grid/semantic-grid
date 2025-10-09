@@ -4,8 +4,9 @@ from decimal import Decimal
 from io import StringIO
 
 from fastmcp import Context, FastMCP
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
-from sqlalchemy import create_engine, text
+from sqlalchemy import URL, create_engine, text
 from sqlalchemy.orm import sessionmaker
 
 
@@ -15,20 +16,13 @@ class Settings(BaseSettings):
     database_port: int
     database_server: str
     database_db: str
-    database_wh_user: str
-    database_wh_pass: str
-    database_wh_port: int
-    database_wh_port_new: int
-    database_wh_port_v2: int
-    database_wh_server: str
-    database_wh_server_new: str
-    database_wh_server_v2: str
-    database_wh_params: str
-    database_wh_params_new: str
-    database_wh_params_v2: str
-    database_wh_db: str
-    database_wh_db_new: str
-    database_wh_db_v2: str
+    database_wh_user: str = ""
+    database_wh_pass: str = ""
+    database_wh_port: int = 0
+    database_wh_server: str = ""
+    database_wh_params: str = ""
+    database_wh_db: str = "wh"
+    database_wh_driver: str = "clickhouse+native"
     auth0_domain: str
     auth0_api_audience: str
     auth0_issuer: str
@@ -52,6 +46,27 @@ class Settings(BaseSettings):
     max_steps: int = 5
     guest_auth_host: str
     guest_auth_issuer: str
+
+    @field_validator(
+        "database_wh_user",
+        "database_wh_pass",
+        "database_wh_server",
+        "database_wh_db",
+        "database_wh_driver",
+        mode="after",
+    )
+    @classmethod
+    def validator_string_not_empty(cls, value: str) -> str:
+        if value == "":
+            raise ValueError("empty string")
+        return value
+
+    @field_validator("port", "database_wh_port", mode="after")
+    @classmethod
+    def validator_port(cls, value: int) -> int:
+        if 1 <= value <= 65535:
+            return value
+        raise ValueError("invalid port")
 
 
 def sanitize_for_json(obj):
@@ -87,44 +102,26 @@ async def fetch_data(
         message=f"Querying {request} from {db}", level="info", logger_name="solana-db"
     )
     try:
-        if db == "":
-            database_url = f"clickhouse+native://{settings.database_wh_user}:{settings.database_wh_pass}@{settings.database_wh_server}:{settings.database_wh_port}/{settings.database_wh_db}{settings.database_wh_params}"
-            engine = create_engine(
-                database_url,
-                pool_size=40,
-                max_overflow=60,
-                pool_pre_ping=True,
-                pool_recycle=360,
-            )
-            session = sessionmaker(bind=engine, expire_on_commit=False)
-            database = session()
+        WH_URL: URL = URL.create(
+            drivername=settings.database_wh_driver,
+            username=settings.database_wh_user,
+            password=settings.database_wh_pass,
+            host=settings.database_wh_server,
+            port=settings.database_wh_port,
+            database=settings.database_wh_db
+        )
+        WH_URL = WH_URL.update_query_string(settings.database_wh_params)
 
-        elif db == "NWH":
-            database_new_wh_url = f"clickhouse+native://{settings.database_wh_user}:{settings.database_wh_pass}@{settings.database_wh_server_new}:{settings.database_wh_port_new}/{settings.database_wh_db_new}{settings.database_wh_params_new}"
-            engine_new_wh = create_engine(
-                database_new_wh_url,
-                pool_size=40,
-                max_overflow=60,
-                pool_pre_ping=True,
-                pool_recycle=360,
-            )
-            session_new_wh = sessionmaker(bind=engine_new_wh, expire_on_commit=False)
-            database = session_new_wh()
+        wh_engine = create_engine(
+            WH_URL,
+            pool_size=40,
+            max_overflow=60,
+            pool_pre_ping=True,
+            pool_recycle=360,
+        )
 
-        elif db == "V2":
-            database_v2_url = f"clickhouse+native://{settings.database_wh_user}:{settings.database_wh_pass}@{settings.database_wh_server_v2}:{settings.database_wh_port_v2}/{settings.database_wh_db_v2}{settings.database_wh_params_v2}"
-            engine_v2 = create_engine(
-                database_v2_url,
-                pool_size=40,
-                max_overflow=60,
-                pool_pre_ping=True,
-                pool_recycle=360,
-            )
-            session_v2 = sessionmaker(bind=engine_v2, expire_on_commit=False)
-            database = session_v2()
-
-        else:
-            raise Exception(f"Unknown database: {db}")
+        session = sessionmaker(bind=wh_engine, expire_on_commit=False)
+        database = session()
 
         result = database.execute(text(request))
         data = result.mappings().fetchall()
@@ -161,44 +158,26 @@ async def execute_sql(
         message=f"Querying {request} from {db}", level="info", logger_name="solana-db"
     )
     try:
-        if db == "":
-            database_url = f"clickhouse+native://{settings.database_wh_user}:{settings.database_wh_pass}@{settings.database_wh_server}:{settings.database_wh_port}/{settings.database_wh_db}{settings.database_wh_params}"
-            engine = create_engine(
-                database_url,
-                pool_size=40,
-                max_overflow=60,
-                pool_pre_ping=True,
-                pool_recycle=360,
-            )
-            session = sessionmaker(bind=engine, expire_on_commit=False)
-            database = session()
+        WH_URL: URL = URL.create(
+            drivername=settings.database_wh_driver,
+            username=settings.database_wh_user,
+            password=settings.database_wh_pass,
+            host=settings.database_wh_server,
+            port=settings.database_wh_port,
+            database=settings.database_wh_db
+        )
+        WH_URL = WH_URL.update_query_string(settings.database_wh_params)
 
-        elif db == "NWH":
-            database_new_wh_url = f"clickhouse+native://{settings.database_wh_user}:{settings.database_wh_pass}@{settings.database_wh_server_new}:{settings.database_wh_port_new}/{settings.database_wh_db_new}{settings.database_wh_params_new}"
-            engine_new_wh = create_engine(
-                database_new_wh_url,
-                pool_size=40,
-                max_overflow=60,
-                pool_pre_ping=True,
-                pool_recycle=360,
-            )
-            session_new_wh = sessionmaker(bind=engine_new_wh, expire_on_commit=False)
-            database = session_new_wh()
+        wh_engine = create_engine(
+            WH_URL,
+            pool_size=40,
+            max_overflow=60,
+            pool_pre_ping=True,
+            pool_recycle=360,
+        )
 
-        elif db == "V2":
-            database_v2_url = f"clickhouse+native://{settings.database_wh_user}:{settings.database_wh_pass}@{settings.database_wh_server_v2}:{settings.database_wh_port_v2}/{settings.database_wh_db_v2}{settings.database_wh_params_v2}"
-            engine_v2 = create_engine(
-                database_v2_url,
-                pool_size=40,
-                max_overflow=60,
-                pool_pre_ping=True,
-                pool_recycle=360,
-            )
-            session_v2 = sessionmaker(bind=engine_v2, expire_on_commit=False)
-            database = session_v2()
-
-        else:
-            raise Exception(f"Unknown database: {db}")
+        session = sessionmaker(bind=wh_engine, expire_on_commit=False)
+        database = session()
 
         result = database.execute(text(request))
         data = result.mappings().fetchall()

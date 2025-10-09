@@ -32,7 +32,7 @@ if __name__ == "__main__":
     component = "dbmeta_app"
     client = "apegpt"
     env = "prod"
-    profile = "wh_v2"
+    profile = "wh"
     tree = assemble_effective_tree(repo_root, profile, client, env)
 
     merged = load_yaml(tree, "resources/prompt_instructions.yaml")["profiles"][profile]

@@ -56,7 +56,7 @@ class VerifyToken:
             payload = jwt.decode(
                 token.credentials,
                 signing_key,
-                algorithms=self.config.auth0_algorithms,
+                algorithms=[self.config.auth0_algorithms],
                 audience=self.config.auth0_api_audience,
                 issuer=self.config.auth0_issuer,
             )
@@ -121,7 +121,7 @@ class VerifyGuestToken:
             payload = jwt.decode(
                 token.credentials,
                 signing_key,
-                algorithms=self.config.auth0_algorithms,
+                algorithms=[self.config.auth0_algorithms],
                 audience=self.config.auth0_api_audience,
                 issuer=self.config.guest_auth_issuer,
             )

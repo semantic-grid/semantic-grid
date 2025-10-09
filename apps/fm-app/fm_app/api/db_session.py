@@ -1,10 +1,11 @@
-from sqlalchemy import create_engine
+from sqlalchemy import URL, create_engine
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker, Session
 
 from fm_app.config import get_settings
 
 settings = get_settings()
+
 DATABASE_URL = f"postgresql+asyncpg://{settings.database_user}:{settings.database_pass}@{settings.database_server}:{settings.database_port}/{settings.database_db}"
 
 engine = create_async_engine(
@@ -19,7 +20,16 @@ async def get_db() -> AsyncSession:
         yield session
 
 
-WH_URL = f"clickhouse+native://{settings.database_wh_user}:{settings.database_wh_pass}@{settings.database_wh_server_v2}:{settings.database_wh_port_v2}/{settings.database_wh_db_v2}{settings.database_wh_params_v2}"
+WH_URL: URL = URL.create(
+    drivername=settings.database_wh_driver,
+    username=settings.database_wh_user,
+    password=settings.database_wh_pass,
+    host=settings.database_wh_server,
+    port=settings.database_wh_port,
+    database=settings.database_wh_db
+)
+WH_URL = WH_URL.update_query_string(settings.database_wh_params)
+
 wh_engine = create_engine(
     WH_URL,
     pool_size=40,

@@ -147,7 +147,7 @@ Recommended tools:
 * `get_prompt_bundle(profile, client?, env?, max_examples?)` → returns dialect, capabilities, instructions, schema card, examples, lineage.
 * `explain_analyze(sql, profile?, client?, env?)` → normalized JSON plan/metrics for validation.
 
-**Profiles** map to DB flavors/environments (e.g., `wh_v2`). fm-app chooses profile per tenant and step.
+**Profiles** map to DB flavors/environments (e.g., `wh`). fm-app chooses profile per tenant and step.
 
 ---
 

@@ -2,5 +2,5 @@
 # Override or amend this file in client-configs overlays to customize behavior.
 version: 1.0.0
 profiles:
-  wh_v2:
+  wh:
     - TEST: This line should be overridden in client-configs overlays.

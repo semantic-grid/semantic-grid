@@ -18,3 +18,5 @@ tmp/
 
 
 volumes/
+
+flow_manager.egg-info/

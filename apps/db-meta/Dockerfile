@@ -38,7 +38,7 @@ ENV PATH="/app/.venv/bin:${PATH}"
 ENV PACKS_RESOURCES_DIR=/app/packages
 
 # Optional: service-specific envs (example)
-# ENV DBMETA_DEFAULT_PROFILE=wh_v2 \
+# ENV DBMETA_DEFAULT_PROFILE=wh \
 #     DBMETA_LOG_LEVEL=INFO
 
 # Expose service port

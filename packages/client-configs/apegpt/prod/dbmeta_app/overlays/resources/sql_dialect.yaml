@@ -4,7 +4,7 @@ version: 1.0.0
 description: SQL dialect instructions for dbmeta_app
 strategy: override
 profiles:
-  wh_v2:
+  wh:
     - Generated SQL has to be compatible with ClickHouse SQL dialect. 
     - |
       The following SQL statements are NOT supported, DO NOT USE:
