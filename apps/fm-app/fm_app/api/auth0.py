@@ -1,11 +1,13 @@
 from typing import Optional
 
 import jwt
+import structlog
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer, SecurityScopes
 
 from fm_app.config import get_settings
 
+logger = structlog.get_logger()
 
 class UnauthorizedException(HTTPException):
     def __init__(self, detail: str, **kwargs):
@@ -37,6 +39,7 @@ class VerifyToken:
         token: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer()),
     ):
         # print("verify user token", token)
+        logger.info("verify user token %s" % token)
         if token is None:
             return None
             # raise UnauthenticatedException
@@ -46,7 +49,8 @@ class VerifyToken:
             signing_key = self.jwks_client.get_signing_key_from_jwt(
                 token.credentials
             ).key
-        except jwt.exceptions.PyJWKClientError:
+        except jwt.exceptions.PyJWKClientError as error:
+            logger.info("jwt.exceptions.PyJWKClientError %s" % str(error))
             return None
             # raise UnauthorizedException(str(error))
         except jwt.exceptions.DecodeError as error:
@@ -60,8 +64,9 @@ class VerifyToken:
                 audience=self.config.auth0_api_audience,
                 issuer=self.config.auth0_issuer,
             )
-        except Exception:
+        except Exception as error:
             # print(error, token.credentials, signing_key)
+            logger.info("jwt.decode %s, credentials %s, signing_key %s" % (str(error), token.credentials, signing_key))
             return None
             # raise UnauthorizedException(str(error))
 
@@ -70,6 +75,8 @@ class VerifyToken:
 
         for scope in security_scopes.scopes:
             if scope not in token_scopes:
+
+                logger.info("scope not in token scopes: scope %s, token_scopes %s" % (scope, token_scopes))
                 print("scope not in token scopes", scope, token_scopes)
                 return None
                 # raise HTTPException(
@@ -108,11 +115,13 @@ class VerifyGuestToken:
             ).key
             # print("verify sign key", signing_key)
 
-        except jwt.exceptions.PyJWKClientError:
+        except jwt.exceptions.PyJWKClientError as error:
+            logger.info("VerifyGuestToken: jwt.exceptions.PyJWKClientError %s" % str(error))
             # print("verify error", error)
             # raise UnauthorizedException(str(error))
             return None
-        except jwt.exceptions.DecodeError:
+        except jwt.exceptions.DecodeError as error:
+            logger.info("VerifyGuestToken: jwt.exceptions.DecodeError %s" % str(error))
             # print("verify error", error)
             # raise UnauthorizedException(str(error))
             return None
@@ -127,7 +136,8 @@ class VerifyGuestToken:
             )
             # print("guest payload", payload)
 
-        except Exception:
+        except Exception as error:
+            logger.info("VerifyGuestToken: jwt.decode %s, credentials %s, signing_key %s" % (str(error), token.credentials, signing_key))
             # print("decode error", error)
             # raise UnauthorizedException(str(error))
             return None

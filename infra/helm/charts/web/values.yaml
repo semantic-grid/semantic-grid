@@ -1,0 +1,44 @@
+image:
+  registry: ""
+  repository: "web"
+  tag: "latest"
+  digest: ""
+  pullPolicy: "IfNotPresent"
+
+port: 3000
+
+api:
+  url: ""
+
+auth0:
+  baseUrl: ""
+  issuerBaseUrl: ""
+  clientId: ""
+  audience: ""
+  clientSecret: ""
+  ## @param auth0.clientSecret The AUTH0_SECRET value 
+  ## The key used to encrypt the session and transaction cookies. You can 
+  ## generate a secret using openssl: openssl rand -hex 32
+  secret: ""
+
+guestAuth:
+  issuer: ""
+
+## @param freeTierQuota Count of quest sessions 
+## default unset mean no sessions
+#freeTierQuota: 10000
+
+ingress:
+  enabled: true
+  certManager: true
+  hostname: "name1.example.com"
+  ingressClassName: nginx
+  annoannotations:
+    # - cert-manager.io/cluster-issuer: nameOfClusterIssuer
+  extraTls:
+
+## @param existingSecret Name of an existing secret to use for credentials
+## The secret must contain the keys: 
+## `AUTH0_CLIENT_SECRET` eq auth0.clientSecret
+## `AUTH0_SECRET` eq auth0.secret
+existingSecret:

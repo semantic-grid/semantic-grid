@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "common.names.fullname" . }}
+  labels:
+    {{- include "common.labels.standard" (dict "customLabels" .Values.commonLabels "context" $) | nindent 4}}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "common.labels.matchLabels" (dict "customLabels" .Values.podLabels "context" $) | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+      {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "common.labels.standard" (dict "customLabels" .Values.commonLabels "context" $) | nindent 8}}
+    spec:
+      containers:
+      - name: {{ include "common.names.fullname" . }}
+        envFrom:
+        - configMapRef:
+            name: {{ include "common.names.fullname" . }}
+        - secretRef:
+            name: {{ .Values.existingSecret | default (include "common.names.fullname" .) }}
+        image: "{{ include "common.images.image" ( dict "imageRoot" .Values.image "global" .Values.global "chart" .Chart ) }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }} 
+        ports:
+        - containerPort: 3000
+        volumeMounts:
+        {{- with .Values.customCA }}
+        - name: ca-crt
+          readOnly: true
+          mountPath: /usr/local/share/ca-certificates/semantic-grid/
+        {{- end }}
+        - name: secret-files
+          readOnly: true
+          mountPath: "/run/secrets/{{ include "common.names.fullname" . }}/"
+        {{- with .Values.customCA }}
+        lifecycle:
+          postStart:
+            exec:
+              command: ["update-ca-certificates"]
+        {{- end }}
+      volumes: 
+      {{- with .Values.customCA }}
+      - name: ca-crt
+        configMap:
+          name: {{ . | quote }}
+      {{- end }}
+      - name: secret-files
+        secret:
+          secretName: {{ include "common.names.fullname" . }}-files

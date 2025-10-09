@@ -2,9 +2,11 @@ secrets/
 .venv/
 .env
 .env.*
+.envrc
 __pycache__/
 *.pyc
 *.pyo
+*.egg-info
 
 .git/
 
@@ -18,3 +20,4 @@ tmp/
 
 
 volumes/
+

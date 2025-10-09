@@ -9,3 +9,6 @@ Dockerfile
 **/.turbo
 **/node_modules
 **/.next
+.task
+.aws*
+.kubeconfig.yaml

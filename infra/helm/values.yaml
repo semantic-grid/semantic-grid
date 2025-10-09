@@ -1,0 +1,68 @@
+db-meta:
+  enabled: true
+
+fm-app:
+  enabled: true
+  # auth0:
+  #   apiAudience:
+  #   domain: 
+  #   issuer: 
+  # guestAuth:
+  #   host: 
+  #   issuer: 
+  # ingress:
+  #   enabled: true
+  #   certManager: true
+  #   tls: true
+  #   hostname: 
+  #   ingressClassName: 
+  #   annotations:
+  #     cert-manager.io/cluster-issuer: 
+  # customCA: 
+
+web:
+  enabled: true
+  # auth0:
+  #   baseUrl: 
+  #   issuerBaseUrl: 
+  #   clientId: 
+  #   audience: 
+  # guestAuth:
+  #   issuer: 
+  # ingress:
+  #   enabled: true
+  #   certManager: true
+  #   tls: true
+  #   hostname: 
+  #   ingressClassName: 
+  #   annotations:
+  #     cert-manager.io/cluster-issuer: 
+  # customCA: 
+  
+rabbitmq:
+  enabled: true
+  # persistence:
+  #   size: 10Gi
+  # resources:
+  #   requests:
+  #     cpu: 500m
+  #     memory: 512Mi
+
+postgresql:
+  enabled: true
+  # primary:
+  #   persistence:
+  #     size: 200Gi
+
+milvus:
+  enabled: true
+  cluster:
+    enabled: false
+  etcd:
+    replicaCount: 1
+  pulsarv3:
+    enabled: false
+  pulsar:
+    enabled: false
+  minio:
+    mode: standalone

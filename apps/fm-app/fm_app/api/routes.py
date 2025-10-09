@@ -59,6 +59,7 @@ from fm_app.db.db import (
 from fm_app.stopwatch import stopwatch
 from fm_app.workers.worker import wrk_add_request
 
+
 token_auth_scheme = HTTPBearer()
 auth = VerifyToken()
 guest_auth = VerifyGuestToken()
@@ -131,6 +132,8 @@ async def create_session(
 async def get_sessions(
     db: AsyncSession = Depends(get_db), auth_result: dict = Depends(verify_any_token)
 ) -> list[GetSessionModel]:
+    if auth_result is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No token")
     user_owner = auth_result.get("sub")
     if user_owner is None:
         raise HTTPException(

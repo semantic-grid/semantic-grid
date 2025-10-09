@@ -38,5 +38,12 @@ yarn-error.log*
 # Misc
 .DS_Store
 *.pem
+*.crt
 
 secrets/
+
+.task
+.digest*
+
+.aws*
+.kubeconfig.yaml

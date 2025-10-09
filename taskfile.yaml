@@ -1,0 +1,226 @@
+# https://taskfile.dev
+
+version: "3"
+
+dotenv: [".env"]
+
+vars:
+  CONTAINER_ENGINE: '{{ .CONTAINER_ENGINE | default "docker" }}'
+  RELEASE_NAME: '{{ .RELEASE_NAME | default "semantic-grid" }}'
+  NAMESPACE: '{{ .NAMESPACE | default "default" }}'
+  DIGEST_DB_META_FILE: ".digest-db-meta"
+  DIGEST_FM_APP_FILE: ".digest-fm-app"
+  DIGEST_WEB_FILE: ".digest-web"
+  DIR_WEB_SECRET: "infra/helm/charts/web/secrets"
+  SECRET_WEB_GUEST_PRIV:
+    ref: printf `%s/%s` .DIR_WEB_SECRET "guest-web-jwt-secret-id-rsa"
+  SECRET_WEB_GUEST_PUB:
+    ref: printf `%s/%s` .DIR_WEB_SECRET "guest-web-jwt-secret-id-rsa.pub"
+  VALUES_YAML: '{{ .VALUES_YAML | default "infra/helm/values.yaml" }}'
+tasks:
+  # db-meta
+  db-meta/build:
+    requires:
+      vars: [IMAGE_REGISTRY]
+    sources:
+      - apps/db-meta/**/*
+    cmd: "{{ .CONTAINER_ENGINE }} build --tag {{ .IMAGE_REGISTRY }}/db-meta:latest --file apps/db-meta/Dockerfile ."
+
+  db-meta/push:
+    deps: [db-meta/build]
+    requires:
+      vars: [IMAGE_REGISTRY]
+    cmd: "{{ .CONTAINER_ENGINE }} push {{ .IMAGE_REGISTRY }}/db-meta:latest {{ .IMAGE_REGISTRY }}/db-meta:latest --tls-verify=false --digestfile={{ .DIGEST_DB_META_FILE }}"
+
+  db-meta/helm/debug:
+    cmds:
+      - task: helm/run
+        vars:
+          CMD: template
+          ARGS: |
+            --set=rabbitmq.enabled=false \
+            --set=postgresql.enabled=false \
+            --set=milvus.enabled=false \
+            --set=db-meta.enabled=true \
+            --set=fm-app.enabled=false \
+            --set=web.enabled=false \
+  # fm-app
+  fm-app/build:
+    sources:
+      - apps/fm-app/**/*
+    cmd: "{{ .CONTAINER_ENGINE }} build --tag {{ .IMAGE_REGISTRY }}/fm-app:latest --file apps/fm-app/Dockerfile ."
+
+  fm-app/push:
+    deps: [fm-app/build]
+    requires:
+      vars: [IMAGE_REGISTRY]
+    cmd: "{{ .CONTAINER_ENGINE }} push {{ .IMAGE_REGISTRY }}/fm-app:latest {{ .IMAGE_REGISTRY }}/fm-app:latest --tls-verify=false --digestfile={{ .DIGEST_FM_APP_FILE }}"
+
+  fm-app/helm/debug:
+    cmds:
+      - task: helm/run
+        vars:
+          CMD: template
+          ARGS: |
+            --set=rabbitmq.enabled=false \
+            --set=postgresql.enabled=false \
+            --set=milvus.enabled=false \
+            --set=db-meta.enabled=false \
+            --set=fm-app.enabled=true \
+            --set=web.enabled=false \
+
+  # web
+  web/build:
+    sources:
+      - apps/web/**/*
+    cmd: "{{ .CONTAINER_ENGINE }} build --tag {{ .IMAGE_REGISTRY }}/web:latest --file apps/web/Dockerfile ."
+
+  web/push:
+    deps: [web/build]
+    requires:
+      vars: [IMAGE_REGISTRY]
+    cmd: "{{ .CONTAINER_ENGINE }} push {{ .IMAGE_REGISTRY }}/web:latest {{ .IMAGE_REGISTRY }}/web:latest --tls-verify=false --digestfile={{ .DIGEST_WEB_FILE }}"
+
+  web/helm/debug:
+    deps: [web/helm/generate-guest-keys]
+    cmds:
+      - task: helm/run
+        vars:
+          CMD: template
+          ARGS: |
+            --set=rabbitmq.enabled=false \
+            --set=postgresql.enabled=false \
+            --set=milvus.enabled=false \
+            --set=db-meta.enabled=false \
+            --set=fm-app.enabled=false \
+            --set=web.enabled=true \
+
+  web/helm/generate-guest-keys:
+    cmds:
+      - mkdir -p {{ .DIR_WEB_SECRET }}
+      - openssl genrsa -out {{ .SECRET_WEB_GUEST_PRIV }} 4096
+      - openssl rsa -in {{ .SECRET_WEB_GUEST_PRIV }} -out {{ .SECRET_WEB_GUEST_PUB }} -outform PEM -pubout
+    status:
+      - test -f "{{ .SECRET_WEB_GUEST_PRIV }}"
+      - test -f "{{ .SECRET_WEB_GUEST_PUB }}"
+
+  web/helm/regenerate-guest-keys:
+    cmds:
+      - rm -rf {{ .DIR_WEB_SECRET }}
+      - task: web/helm/generate-guest-keys
+
+  # deploy
+  upgrade:
+    aliases: [install]
+    deps:
+      - helm/dependency/update
+      - db-meta/push
+      - fm-app/push
+      - web/push
+      - web/helm/generate-guest-keys
+    cmds:
+      - task: helm/run
+        vars:
+          CMD: upgrade
+          ARGS: "--install --timeout=20m --create-namespace"
+
+  helm/run:
+    internal: true
+    vars:
+      DB_META_IMAGE_LATEST_DIGEST:
+        sh: "cat {{ .DIGEST_DB_META_FILE }}"
+      FM_APP_IMAGE_LATEST_DIGEST:
+        sh: "cat {{ .DIGEST_FM_APP_FILE }}"
+      WEB_IMAGE_LATEST_DIGEST:
+        sh: "cat {{ .DIGEST_WEB_FILE }}"
+    requires:
+      vars:
+        - IMAGE_REGISTRY
+        - OPENAI_API_KEY
+    cmd: |
+      helm {{ .CMD }} {{ .RELEASE_NAME }} ./infra/helm {{ .ARGS }} \
+        --namespace={{ .NAMESPACE }} \
+        --set=db-meta.image.registry={{ .IMAGE_REGISTRY }} \
+        --set=db-meta.image.digest={{ .DB_META_IMAGE_LATEST_DIGEST }} \
+        --set=db-meta.openaiApiKey={{ .OPENAI_API_KEY }} \
+        --set=fm-app.image.registry={{ .IMAGE_REGISTRY }} \
+        --set=fm-app.image.digest={{ .FM_APP_IMAGE_LATEST_DIGEST }} \
+        --set=fm-app.openaiApiKey={{ .OPENAI_API_KEY }} \
+        --set=fm-app.anthropicApiKey={{ .ANTHROPIC_API_KEY }} \
+        --set=fm-app.deepSeekApiKey={{ .DEEPSEEK_AI_API_KEY }} \
+        --set=web.image.registry={{ .IMAGE_REGISTRY }} \
+        --set=web.image.digest={{ .WEB_IMAGE_LATEST_DIGEST }} \
+        --set=web.auth0.secret={{ .AUTH0_SECRET | quote }} \
+        --set=web.auth0.clientSecret={{ .AUTH0_CLIENT_SECRET | quote }} \
+        \
+        --set=global.semanticGrid.database.wh.server={{ .DATABASE_WH_SERVER | quote }} \
+        --set=global.semanticGrid.database.wh.port={{ .DATABASE_WH_PORT | quote }} \
+        --set=global.semanticGrid.database.wh.params={{ .DATABASE_WH_PARAMS | quote }} \
+        --set=global.semanticGrid.database.wh.name={{ .DATABASE_WH_NAME | quote }} \
+        --set=global.semanticGrid.database.wh.user={{ .DATABASE_WH_USER | quote }} \
+        --set=global.semanticGrid.database.wh.password={{ .DATABASE_WH_PASSWORD | quote }} \
+        \
+        --set=global.semanticGrid.database.whNew.server={{ .DATABASE_WH_SERVER | quote }} \
+        --set=global.semanticGrid.database.whNew.port={{ .DATABASE_WH_PORT | quote }} \
+        --set=global.semanticGrid.database.whNew.params={{ .DATABASE_WH_PARAMS | quote }} \
+        --set=global.semanticGrid.database.whNew.name={{ .DATABASE_WH_NAME | quote }} \
+        --set=global.semanticGrid.database.whNew.user={{ .DATABASE_WH_USER | quote }} \
+        --set=global.semanticGrid.database.whNew.password={{ .DATABASE_WH_PASSWORD | quote }} \
+        \
+        --set=global.semanticGrid.database.whV2.server={{ .DATABASE_WH_SERVER | quote }} \
+        --set=global.semanticGrid.database.whV2.port={{ .DATABASE_WH_PORT | quote }} \
+        --set=global.semanticGrid.database.whV2.params={{ .DATABASE_WH_PARAMS | quote }} \
+        --set=global.semanticGrid.database.whV2.name={{ .DATABASE_WH_NAME | quote }} \
+        --set=global.semanticGrid.database.whV2.user={{ .DATABASE_WH_USER | quote }} \
+        --set=global.semanticGrid.database.whV2.password={{ .DATABASE_WH_PASSWORD | quote }} \
+        -f {{ .VALUES_YAML }} \
+        {{.CLI_ARGS}}
+
+  all/helm/debug:
+    deps:
+      - web/helm/generate-guest-keys
+    cmds:
+      - task: helm/run
+        vars:
+          CMD: template
+          ARGS: ""
+
+  all/push:
+    deps:
+      - db-meta/push
+      - fm-app/push
+      - web/push
+
+  all/build:
+    deps:
+      - db-meta/build
+      - fm-app/build
+      - web/build
+
+  # helm
+  helm/dependency/update:
+    sources:
+      - ./infra/helm/Chart.yaml
+    cmd: helm dependency update infra/helm
+
+  # helm
+  helm/lint:
+    cmd: helm lint infra/helm --with-subcharts
+
+  upgrade/diff:
+    deps:
+      - db-meta/push
+      - fm-app/push
+      - web/push
+      - web/helm/generate-guest-keys
+    vars:
+    cmds:
+      - task: helm/run
+        vars:
+          CMD: diff upgrade
+          ARGS: --dry-run=server
+
+  aws/login:
+    cmds: 
+    - aws ecr get-login-password | {{ .CONTAINER_ENGINE }} login --username AWS --password-stdin {{ .IMAGE_REGISTRY }}
+    - aws eks update-kubeconfig --name {{ .PRIVATE_AWS_CLUSTER_NAME }}

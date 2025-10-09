@@ -1,0 +1,108 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "common.names.fullname" . }}
+  labels:
+    {{- include "common.labels.standard" (dict "customLabels" .Values.commonLabels "context" $) | nindent 4}}
+    app.kubernetes.io/component: app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "common.labels.matchLabels" (dict "customLabels" .Values.podLabels "context" $) | nindent 6 }}
+      app.kubernetes.io/component: app
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+      {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "common.labels.standard" (dict "customLabels" .Values.commonLabels "context" $) | nindent 8}}
+        app.kubernetes.io/component: app
+    spec:
+      containers:
+      - command:
+        - ./run.sh
+        envFrom:
+        - configMapRef:
+            name: {{ include "common.names.fullname" . }}
+        - secretRef:
+            name: {{ .Values.existingSecret | default (include "common.names.fullname" .) }}
+        env:
+          {{- include "fm-app.rabbitmq" . | nindent 8 }}
+          {{- include "fm-app.database.internal" . | nindent 8 }}
+        image: "{{ include "common.images.image" ( dict "imageRoot" .Values.image "global" .Values.global "chart" .Chart ) }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }} 
+        name: {{ include "common.names.fullname" . }}
+        ports:
+        - containerPort: 8080
+        volumeMounts:
+        {{- with .Values.customCA }}
+        - name: ca-crt
+          readOnly: true
+          mountPath: /usr/local/share/ca-certificates/semantic-grid/
+        {{- end }}
+        {{- with .Values.customCA }}
+        lifecycle:
+          postStart:
+            exec:
+              command: ["update-ca-certificates"]
+        {{- end }}
+      volumes:
+      {{- with .Values.customCA }}
+      - name: ca-crt
+        configMap:
+          name:  {{ . | quote }}
+      {{- end }}
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "common.names.fullname" . }}-celery
+  labels:
+    {{- include "common.labels.standard" (dict "customLabels" .Values.commonLabels "context" $) | nindent 4}}
+    app.kubernetes.io/component: celery
+spec:
+  replicas: {{ .Values.celery.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "common.labels.matchLabels" (dict "customLabels" .Values.podLabels "context" $) | nindent 6 }}
+      app.kubernetes.io/component: celery
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+      {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "common.labels.standard" (dict "customLabels" .Values.commonLabels "context" $) | nindent 8}}
+        app.kubernetes.io/component: celery
+    spec:
+      containers:
+      - command:
+        - ./celery_run.sh
+        envFrom:
+        - configMapRef:
+            name: {{ include "common.names.fullname" . }}
+        - secretRef:
+            name: {{ include "common.names.fullname" . }}
+        env:
+          {{- include "fm-app.rabbitmq" . | nindent 8 }}
+          {{- include "fm-app.database.internal" . | nindent 8 }}
+        image: "{{ include "common.images.image" ( dict "imageRoot" .Values.image "global" .Values.global "chart" .Chart ) }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }} 
+        name: {{ include "common.names.fullname" . }}-celery
+        volumeMounts:
+        - mountPath: /app/static/charts
+          name: charts-storage
+      volumes:
+      - name: charts-storage
+        persistentVolumeClaim:
+          claimName: {{ include "common.names.fullname" . }}

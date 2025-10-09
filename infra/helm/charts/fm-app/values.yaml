@@ -1,0 +1,84 @@
+image:
+  registry: ""
+  repository: "fm-app"
+  tag: "latest"
+  digest: ""
+  pullPolicy: "IfNotPresent"
+
+database:
+  internal:
+    name: postgres
+    params: ""
+    port: 5432
+    user: postgres
+    # leave empty to use RELEASE_NAME-postgresql
+    server: ""
+  wh:
+    name: ""
+    params: ""
+    port: ""
+    server: ""
+    user: ""
+    password: ""
+  whNew:
+    name: ""
+    params: ""
+    port: ""
+    server: ""
+  whV2:
+    name: ""
+    params: ""
+    port: ""
+    server: ""
+
+openAiLllmName: gpt-4.1-2025-04-14
+anthropicLlmName: claude-3-7-sonnet-20250219
+googleLlmName: gemini-2.5-pro-preview-05-06
+deepseekAiApiUrl: https://api.deepseek.com/v1
+
+openaiApiKey: ""
+anthropicApiKey: ""
+deepSeekApiKey: ""
+
+log:
+  level: INFO
+
+port: 8080
+
+## @param rabbitmqExternalConnection Connection string for external rabbitmq
+## rabbitmqExternalConnection: "amqp://RABBITMQ_USER:RABBITMQ_PASSWORD@RABBITMQ_HOST:RABBITMQ_PORT"
+rabbitmqExternalConnection:
+
+auth0:
+  apiAudience: ""
+  domain: ""
+  issuer: ""
+
+guestAuth:
+  host: ""
+  issuer: ""
+
+celery:
+  replicaCount: 1
+
+ingress:
+  enabled: true
+  certManager: true
+  hostname: "name1.example.com"
+  ingressClassName: nginx
+  annoannotations:
+    ## example for cert-manager.io 
+    ## - cert-manager.io/cluster-issuer: nameOfClusterIssuer
+  extraTls:
+
+customCA:
+
+## @param existingSecret Name of an existing secret to use for credentials
+## The secret must contain the keys: 
+## `DATABASE_WH_PASS`
+## `OPENAI_API_KEY`
+## `ANTHROPIC_API_KEY`
+## `DEEPSEEK_AI_API_KEY`
+## `DATABASE_PASS`
+## `WRK_BROKER_CONNECTION` eq `rabbitmqExternalConnection`
+existingSecret:

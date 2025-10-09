@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "common.names.fullname" . }}
+  labels:
+    {{- include "common.labels.standard" (dict "customLabels" .Values.commonLabels "context" $) | nindent 4}}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "common.labels.matchLabels" (dict "customLabels" .Values.podLabels "context" $) | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+      {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "common.labels.standard" (dict "customLabels" .Values.commonLabels "context" $) | nindent 8}}
+    spec:
+      initContainers:
+      - name: {{ include "common.names.fullname" . }}-milvus-fix  # FIXME: fix bug in db-meta app
+        image: "alpine/curl"
+        imagePullPolicy: IfNotPresent
+        envFrom:
+        - configMapRef:
+            name: {{ include "common.names.fullname" . }}
+        command:
+        - "curl"
+        - "--retry-delay"
+        - "10"
+        - "--retry" 
+        - "32"
+        - "--request" 
+        - "POST"
+        - "--url" 
+        - "http://{{ include "db-meta.milvus-host" . }}:{{ .Values.milvus.port }}/v2/vectordb/collections/create"
+        - "--header" 
+        - "Content-Type: application/json"
+        - "-d"
+        - "{\"collectionName\": \"prompts\", \"dimension\": 5}"
+      - name:  {{ include "common.names.fullname" . }}-etl
+        image: "{{ include "common.images.image" ( dict "imageRoot" .Values.image "global" .Values.global "chart" .Chart ) }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }} 
+        command: [ "python", "/app/dbmeta_app/etl/load.py" ]
+        envFrom:
+        - configMapRef:
+            name: {{ include "common.names.fullname" . }}
+        - secretRef:
+            name: {{ .Values.existingSecret | default (include "common.names.fullname" .) }}
+        volumeMounts:
+{{- if .Values.customFiles }}
+        - name: custom-files
+          mountPath: "/app/files"
+          readOnly: true
+{{- end }}
+      containers:
+      - name:  {{ include "common.names.fullname" . }}
+        image: "{{ include "common.images.image" ( dict "imageRoot" .Values.image "global" .Values.global "chart" .Chart ) }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }} 
+        command:
+        - ./run.sh
+        envFrom:
+        - configMapRef:
+            name:  {{ include "common.names.fullname" . }}
+        - secretRef:
+            name: {{ include "common.names.fullname" . }}
+        volumeMounts:
+{{- if .Values.customFiles }}
+        - name: custom-files
+          mountPath: "/app/files"
+          readOnly: true
+{{- end }}
+        ports:
+        - containerPort: 8080
+      volumes:
+{{- if .Values.customFiles }}
+      - name: custom-files
+        configMap:
+          name:  {{ include "common.names.fullname" . }}-custom-files
+{{- end }}

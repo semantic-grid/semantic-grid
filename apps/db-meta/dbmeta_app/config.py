@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     database_wh_db_v2: Optional[str] = "wh"
     vector_db_host: Optional[str] = None
     vector_db_port: Optional[str] = None
+    vector_db_timeout: Optional[float] = 10
     vector_db_connection_string: Optional[str] = None
     vector_db_collection_name: Optional[str] = "apegpt_prompts"
     vector_db_embeddings: Optional[str] = "all-MiniLM-L6-v2"

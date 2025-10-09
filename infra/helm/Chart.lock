@@ -1,0 +1,24 @@
+dependencies:
+- name: web
+  repository: ""
+  version: ~0.1.0
+- name: fm-app
+  repository: ""
+  version: ~0.1.0
+- name: db-meta
+  repository: ""
+  version: ~0.1.0
+- name: common
+  repository: https://charts.bitnami.com/bitnami
+  version: 2.31.4
+- name: rabbitmq
+  repository: https://charts.bitnami.com/bitnami
+  version: 16.0.14
+- name: postgresql
+  repository: https://charts.bitnami.com/bitnami
+  version: 16.7.27
+- name: milvus
+  repository: https://zilliztech.github.io/milvus-helm
+  version: 4.2.58
+digest: sha256:90c9cd78202a5be0c936fdbc2f6f9b9970800522d8e79d3b6e751cf1073d28c7
+generated: "2025-09-19T12:32:55.920810966+03:00"

@@ -1,0 +1,54 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "common.names.fullname" . }}
+  labels:
+    {{- include "common.labels.standard" (dict "customLabels" .Values.commonLabels "context" $) | nindent 4}}
+data:
+  DATA_EXAMPLES: "True"
+  DATABASE_WH_DB: {{ .Values.database.wh.name | default .Values.global.semanticGrid.database.wh.name | quote }}
+  DATABASE_WH_DB_NEW: {{ .Values.database.whNew.name | default .Values.global.semanticGrid.database.whNew.name | quote }}
+  DATABASE_WH_DB_V2: {{ .Values.database.whV2.name | default .Values.global.semanticGrid.database.whV2.name | quote }}
+  DATABASE_WH_PARAMS: {{ .Values.database.wh.params | default .Values.global.semanticGrid.database.wh.params | quote }}
+  DATABASE_WH_PARAMS_NEW: {{ .Values.database.whNew.params | default .Values.global.semanticGrid.database.whNew.params | quote }}
+  DATABASE_WH_PARAMS_V2: {{ .Values.database.whV2.params | default .Values.global.semanticGrid.database.whV2.params | quote }}
+  DATABASE_WH_PORT: {{ .Values.database.wh.port | default .Values.global.semanticGrid.database.wh.port | quote }}
+  DATABASE_WH_PORT_NEW: {{ .Values.database.whNew.port | default .Values.global.semanticGrid.database.whNew.port | quote }}
+  DATABASE_WH_PORT_V2: {{ .Values.database.whV2.port | default .Values.global.semanticGrid.database.whV2.port | quote }}
+  DATABASE_WH_SERVER: {{ .Values.database.wh.server | default .Values.global.semanticGrid.database.wh.server | quote }}
+  DATABASE_WH_SERVER_NEW: {{ .Values.database.whNew.server | default .Values.global.semanticGrid.database.whNew.server | quote }}
+  DATABASE_WH_SERVER_V2: {{ .Values.database.whV2.server | default .Values.global.semanticGrid.database.whV2.server | quote }}
+  DATABASE_WH_USER: {{ .Values.database.wh.user | default .Values.global.semanticGrid.database.wh.user | quote }}
+  LOG_LEVEL: "{{ .Values.log.level }}"
+  PORT: "{{ .Values.port }}"
+{{- if .Values.customFiles }}
+  ETL_FILE_NAME: "/app/files/query_examples.yaml"
+  PROMPT_INSTRUCTIONS_FILE: "/app/files/prompt_instructions.yaml"
+  QUERY_EXAMPLES_FILE: "/app/files/query_examples.yaml"
+  SCHEMA_DESCRIPTIONS_FILE: "/app/files/schema_descriptions.yaml"
+{{- else }}
+  ETL_FILE_NAME: "./dbmeta_app/query_examples.yaml"
+  PROMPT_INSTRUCTIONS_FILE: "./dbmeta_app/prompt_instructions.yaml"
+  QUERY_EXAMPLES_FILE: "./dbmeta_app/query_examples.yaml"
+  SCHEMA_DESCRIPTIONS_FILE: "./dbmeta_app/schema_descriptions.yaml"
+{{- end }}
+  ROOT_PATH: "/"
+  VECTOR_DB_COLLECTION_NAME: "prompts"
+  VECTOR_DB_EMBEDDINGS: "text-embedding-3-small"
+  VECTOR_DB_HOST: "{{ include "db-meta.milvus-host" . }}"
+  VECTOR_DB_TIMEOUT: "20"
+  VECTOR_DB_INDEX_TYPE: "HNSW"
+  VECTOR_DB_METRIC_TYPE: "L2"
+  VECTOR_DB_PARAMS: "{\"nprobe\": 15}"
+  VECTOR_DB_PORT: {{ .Values.milvus.port | quote }}
+{{- if .Values.customFiles }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "common.names.fullname" . }}-custom-files
+  labels:
+    {{- include "common.labels.standard" . | nindent 4 }}
+data:
+  {{- (.Files.Glob "files/**.yaml").AsConfig | nindent 2 }}
+{{- end }}

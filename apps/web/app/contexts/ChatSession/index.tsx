@@ -25,6 +25,7 @@ import React, {
 
 import { createRequest } from "@/app/actions";
 import { increaseTrialCount } from "@/app/chat/actions";
+import { StyledValue } from "@/app/components/StyledValue";
 import { AppContext } from "@/app/contexts/App";
 import { TutorialSteps, useTutorial } from "@/app/contexts/Tutorial";
 import { isSolanaAddress, isSolanaSignature } from "@/app/helpers/cell";
@@ -37,8 +38,6 @@ import type {
   TColumn,
   TResponseResult,
 } from "@/app/lib/types";
-
-import { StyledValue } from "@/app/components/StyledValue";
 
 export const options: Record<
   string,

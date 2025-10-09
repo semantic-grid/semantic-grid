@@ -1,0 +1,53 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "common.names.fullname" . }}
+  labels:
+    {{- include "common.labels.standard" (dict "customLabels" .Values.commonLabels "context" $) | nindent 4}}
+data:
+{{- with .Values.auth0 }}
+  AUTH0_ALGORITHMS: RS256
+  AUTH0_API_AUDIENCE: "{{ .apiAudience }}"
+  AUTH0_DOMAIN: "{{ .domain }}"
+  AUTH0_ISSUER: "{{ .issuer }}"
+{{- end }}
+{{- with .Values.guestAuth }}
+  GUEST_AUTH_HOST: "{{ .host }}"
+  GUEST_AUTH_ISSUER: "{{ .issuer }}"
+{{- end }}
+  DATABASE_DB: "{{ .Values.database.internal.name }}"
+  DATABASE_PORT: "{{ .Values.database.internal.port }}"
+  DATABASE_SERVER: "{{ include "fm-app.database.internal.server" . }}"
+  DATABASE_USER: "{{ .Values.database.internal.user }}"
+  
+  DATABASE_WH_DB: {{ .Values.database.wh.name | default .Values.global.semanticGrid.database.wh.name | quote }}
+  DATABASE_WH_DB_NEW: {{ .Values.database.whNew.name | default .Values.global.semanticGrid.database.whNew.name | quote }}
+  DATABASE_WH_DB_V2: {{ .Values.database.whV2.name | default .Values.global.semanticGrid.database.whV2.name | quote }}
+  DATABASE_WH_PARAMS: {{ .Values.database.wh.params | default .Values.global.semanticGrid.database.wh.params | quote }}
+  DATABASE_WH_PARAMS_NEW: {{ .Values.database.whNew.params | default .Values.global.semanticGrid.database.whNew.params | quote }}
+  DATABASE_WH_PARAMS_V2: {{ .Values.database.whV2.params | default .Values.global.semanticGrid.database.whV2.params | quote }}
+  # FIXME: app fail if ""
+  DATABASE_WH_PORT: {{ .Values.database.wh.port | default .Values.global.semanticGrid.database.wh.port | default 404 | quote }} 
+  # FIXME: app fail if ""
+  DATABASE_WH_PORT_NEW: {{ .Values.database.whNew.port | default .Values.global.semanticGrid.database.whNew.port | default 404 | quote }}
+  DATABASE_WH_PORT_V2: {{ .Values.database.whV2.port | default .Values.global.semanticGrid.database.whV2.port | quote }}
+  DATABASE_WH_SERVER: {{ .Values.database.wh.server | default .Values.global.semanticGrid.database.wh.server | quote }}
+  DATABASE_WH_SERVER_NEW: {{ .Values.database.whNew.server | default .Values.global.semanticGrid.database.whNew.server | quote }}
+  DATABASE_WH_SERVER_V2: {{ .Values.database.whV2.server | default .Values.global.semanticGrid.database.whV2.server | quote }}
+  DATABASE_WH_USER: {{ .Values.database.wh.user | default .Values.global.semanticGrid.database.wh.user | quote }}
+
+  DBMETA: "http://{{ include "fm-app.db-meta.fullname" . }}:8080/"
+
+  OPENAI_LLM_NAME: "{{ .Values.openAiLllmName }}"
+  ANTHROPIC_LLM_NAME: "{{ .Values.anthropicLlmName }}"
+  DEEPSEEK_AI_API_URL: "{{ .Values.deepseekAiApiUrl }}"
+
+  GOOGLE_PROJECT_ID: "" # FIXME: do we need that?
+  GOOGLE_CRED_FILE: "" # FIXME: do we need that?
+  GOOGLE_LLM_NAME: "{{ .Values.googleLlmName }}"
+
+  LOG_LEVEL: "{{ .Values.log.level }}"
+  ROOT_PATH: /
+
+  IRL_SLOTS: 'IRL_SLOTS_NONE_HOST' # FIXME: unused?
+  DBREF: 'DBREF_NONE_HOST' # FIXME: unused?

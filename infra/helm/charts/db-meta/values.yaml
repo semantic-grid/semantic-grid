@@ -1,0 +1,44 @@
+image:
+  registry: ""
+  repository: "db-meta"
+  tag: "latest"
+  digest: ""
+  pullPolicy: "IfNotPresent"
+
+database:
+  wh:
+    name: ""
+    params: ""
+    port: ""
+    server: ""
+    user: ""
+    password: ""
+  whNew:
+    name: ""
+    params: ""
+    port: ""
+    server: ""
+  whV2:
+    name: ""
+    params: ""
+    port: ""
+    server: ""
+
+log:
+  level: INFO
+
+port: 8080
+
+milvus:
+  host: ""
+  port: 19530
+
+customFiles: false
+
+openaiApiKey:
+
+## @param existingSecret Name of an existing secret to use for credentials
+## The secret must contain the keys: 
+## `DATABASE_WH_PASS` eq database.wh.password
+## `OPENAI_API_KEY` eq openaiApiKey
+existingSecret:

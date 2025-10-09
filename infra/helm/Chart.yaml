@@ -1,0 +1,35 @@
+apiVersion: v2
+name: semantic-grid
+description: A Helm chart for Kubernetes
+
+type: application
+
+version: 0.1.0
+
+appVersion: "0.1.0"
+
+dependencies:
+  - name: web
+    version: ~0.1.0
+    condition: web.enabled
+  - name: fm-app
+    version: ~0.1.0
+    condition: fm-app.enabled
+  - name: db-meta
+    version: ~0.1.0
+    condition: db-meta.enabled
+  - name: common
+    version: ~2.31.4
+    repository: https://charts.bitnami.com/bitnami
+  - name: rabbitmq
+    repository: https://charts.bitnami.com/bitnami
+    version: ~16.0.10
+    condition: rabbitmq.enabled
+  - name: postgresql
+    repository: https://charts.bitnami.com/bitnami
+    version: ~16.7.18
+    condition: postgresql.enabled
+  - name: milvus
+    repository: https://zilliztech.github.io/milvus-helm
+    version: ~4.2.56
+    condition: milvus.enabled

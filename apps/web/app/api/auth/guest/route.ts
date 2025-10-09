@@ -77,7 +77,7 @@ export const GET = async (req: NextRequest) => {
   const jwt = await new jose.SignJWT({ sub: guestId })
     .setProtectedHeader({ alg: "RS256", kid: "guest-key" })
     .setAudience(process.env.AUTH0_AUDIENCE!)
-    .setIssuer("https://apegpt.ai")
+    .setIssuer(process.env.GUEST_AUTH_ISSUER!)
     .setExpirationTime("365d")
     .sign(privateKey);
 

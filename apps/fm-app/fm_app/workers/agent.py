@@ -27,8 +27,8 @@ async def init_agent() -> (MCPServerSse, Agent[StructuredResponse]):
 
         _dbmeta_mcp = MCPServerSse(
             name="ApeGPT DB Metadata MCP Server",
-            # params={"url": f"{settings.dbmeta}sse"},
-            params={"url": "https://api.apegpt.ai/sse"},
+            params={"url": f"{settings.dbmeta}sse"},
+            # params={"url": "https://api.apegpt.ai/sse"},
             cache_tools_list=True,
         )
         await _dbmeta_mcp.connect()

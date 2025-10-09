@@ -5,6 +5,8 @@ import { NextResponse } from "next/server";
 
 import client from "@/app/lib/gptAPI";
 
+export const dynamic = "force-dynamic";
+
 const GET = async (req: NextRequest, res: NextResponse) => {
   try {
     const guestToken = cookies().get("uid")?.value;

@@ -18,3 +18,7 @@ tmp/
 
 
 volumes/
+
+.helm_ls_cache
+
+**/charts/*.tgz

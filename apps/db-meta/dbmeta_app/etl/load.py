@@ -71,11 +71,13 @@ def load_query_examples():
         connections.connect(
             host=settings.vector_db_host,
             port=settings.vector_db_port,
+            timeout=settings.vector_db_timeout
         )
     elif settings.vector_db_connection_string is not None:
         connections.connect(
             alias="default",
             uri=settings.vector_db_connection_string,
+            timeout=settings.vector_db_timeout
         )
         # connections.connect(alias="default", uri="sqlite:///:memory:")
         # Uses in-memory SQLite for testing

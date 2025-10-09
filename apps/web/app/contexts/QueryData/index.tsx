@@ -21,9 +21,9 @@ import React, {
   useState,
 } from "react";
 
+import { StyledValue } from "@/app/components/StyledValue";
 import { useInfiniteQuery } from "@/app/hooks/useInfiniteQuery";
 import type { TColumn } from "@/app/lib/types";
-import { StyledValue } from "@/app/components/StyledValue";
 
 export const options: Record<
   string,
