@@ -38,7 +38,7 @@ from fm_app.api.model import (
     InteractiveRequestType,
     FlowType,
     DBType,
-    QueryMetadata, ModelType,
+    QueryMetadata, ModelType, CreateQueryFromSqlModel,
 )
 from fm_app.db.admin_db import get_all_requests_admin, get_all_sessions_admin
 from fm_app.db.db import (
@@ -508,6 +508,111 @@ async def create_request_from_query(
     wrk_arg = wrk_req.model_dump()
     task = wrk_add_request.apply_async(args=[wrk_arg], task_id=task_id)
     logging.info("Send task for request from query", extra={"action": "send_task", "task_id": task, "query_id": query_id})
+
+    return response
+
+
+@api_router.post("/request/{session_id}/from_sql")
+async def create_request_from_sql(
+    session_id: UUID,
+    query_data: CreateQueryFromSqlModel,
+    db: AsyncSession = Depends(get_db),
+    auth_result: dict = Depends(verify_any_token),
+) -> GetRequestModel:
+    user_owner = auth_result.get("sub")
+    if user_owner is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="No user name"
+        )
+
+    # create a request from the query
+    # (response, task_id) = await add_request(
+    #    user_owner=user_owner,
+    #    session_id=session_id,
+    #    add_req=AddRequestModel(
+    #        version=Version.interactive,
+    #        request=query.request,
+    #        request_type=InteractiveRequestType.tbd,
+    #        flow=FlowType.interactive,
+    #        model=(
+    #            query.ai_context.get("model") if query.ai_context is not None else None
+    #        ),
+    #        db=DBType.v2,
+    #        refs=None,
+    #        query_id=query_id,  # link to the query
+    #    ),
+    #    db=db,
+    # )
+    # update the request with the query's SQL and summary
+    # await update_request(
+    #    db=db,
+    #    update=UpdateRequestModel(
+    #        request_id=response.request_id,
+    #        sql=query.sql,  # use the SQL from the query
+    #        intent=query.intent,
+    #        response=query.summary,
+    #    ),
+    # )
+    # update the session with the new request name
+    # await update_session(
+    #    user_owner=user_owner,
+    #    session_id=session_id,
+    #    session_patch=PatchSessionModel(name=f"request from query"),
+    #    db=db,
+    # )
+    # metadata = QueryMetadata(
+    #    id=uuid.uuid4(),
+    #    sql=query.sql,
+    #    summary=query.summary,
+    #    result=query.summary,
+    #    columns=query.columns,
+    #    row_count=query.row_count,
+    # )
+    # await update_query_metadata(
+    #    session_id=session_id,
+    #    user_owner=user_owner,
+    #    metadata=metadata.model_dump(),
+    #    db=db,
+    # )
+
+    (response, task_id) = await add_request(
+        user_owner=user_owner,
+        session_id=session_id,
+        add_req=AddRequestModel(
+            version=Version.interactive,
+            request=f"Generate query from SQL: {query_data.sql}", # query.request,
+            request_type=InteractiveRequestType.manual_query,
+            flow=FlowType.interactive,
+            model=(
+                query_data.ai_context.get("model") if query_data.ai_context is not None else ModelType.openai_default
+            ),
+            db=DBType.v2,
+            refs=None,
+            query_id=None,  # link to the query
+        ),
+        db=db
+    )
+    wrk_req = WorkerRequest(
+        session_id=session_id,
+        request_id=response.request_id,
+        user=user_owner,
+        request=f"Generate query from SQL: {query_data.sql}",  # query.request,
+        request_type=InteractiveRequestType.linked_query,
+        response=response.response,
+        status=response.status,
+        flow=FlowType.interactive,
+        model=(
+            query_data.ai_context.get(
+                "model") if query_data.ai_context is not None else ModelType.openai_default
+        ),
+        db=DBType.v2,
+        refs=None,
+        query=None,
+    )
+
+    wrk_arg = wrk_req.model_dump()
+    task = wrk_add_request.apply_async(args=[wrk_arg], task_id=task_id)
+    logging.info("Send task for request from SQL", extra={"action": "send_task", "task_id": task, "sql": query_data.sql})
 
     return response
 

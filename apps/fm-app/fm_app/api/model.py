@@ -37,6 +37,7 @@ class InteractiveRequestType(str, Enum):
     disambiguation = "disambiguation"
     linked_session = "linked_session"
     linked_query = "linked_query"
+    manual_query = "manual_query"
     # chart_request = "chart_request"
 
 
@@ -235,6 +236,14 @@ class CreateQueryModel(BaseModel):
     explanation: Optional[dict[str, Any]] = None
     parent_id: Optional[UUID] = None
     err: Optional[str] = None
+
+class CreateQueryFromSqlModel(BaseModel):
+    request: str
+    sql: str = None
+    ai_generated: bool = False
+    ai_context: Optional[dict[str, Any]] = None
+    data_source: Optional[str] = None
+    db_dialect: Optional[str] = None
 
 
 class UpdateQueryModel(BaseModel):

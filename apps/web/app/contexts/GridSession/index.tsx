@@ -582,7 +582,7 @@ export const GridSessionProvider = ({
 
   const onSortClick = (params: any) => (e: SyntheticEvent) => {
     e.preventDefault(); // prevent default behavior
-    // e.stopPropagation(); // prevent triggering other handlers
+    e.stopPropagation(); // prevent triggering other handlers
     const direction =
       sortModel[0]?.field === params.colDef.field &&
       sortModel[0]?.sort !== "asc"

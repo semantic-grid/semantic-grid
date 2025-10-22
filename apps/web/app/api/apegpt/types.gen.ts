@@ -83,8 +83,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create Request From Query */
-        post: operations["create_request_from_query_api_v1_request__session_id__for_query__query_id__post"];
+        /** Create Request For Query */
+        post: operations["create_request_for_query_api_v1_request__session_id__for_query__query_id__post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -102,6 +102,23 @@ export interface paths {
         put?: never;
         /** Create Request From Query */
         post: operations["create_request_from_query_api_v1_request__session_id__from_query__query_id__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/request/{session_id}/from_sql": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Request From Sql */
+        post: operations["create_request_from_sql_api_v1_request__session_id__from_sql_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -392,6 +409,26 @@ export interface components {
             /** Column Description */
             column_description?: string | null;
         };
+        /** CreateQueryFromSqlModel */
+        CreateQueryFromSqlModel: {
+            /** Request */
+            request: string;
+            /** Sql */
+            sql?: string;
+            /**
+             * Ai Generated
+             * @default false
+             */
+            ai_generated: boolean;
+            /** Ai Context */
+            ai_context?: {
+                [key: string]: unknown;
+            } | null;
+            /** Data Source */
+            data_source?: string | null;
+            /** Db Dialect */
+            db_dialect?: string | null;
+        };
         /** CreateSessionModel */
         CreateSessionModel: {
             /** Name */
@@ -412,24 +449,6 @@ export interface components {
          * @enum {string}
          */
         FlowType: "OpenAISimple" | "OpenAISimpleNWH" | "OpenAISimpleV2" | "GeminiSimple" | "GeminiSimpleNWH" | "GeminiSimpleV2" | "DeepseekSimple" | "DeepseekSimpleNWH" | "DeepseekSimpleV2" | "AnthropicSimple" | "AnthropicSimpleNWH" | "AnthropicSimpleV2" | "OpenAIMultisteps" | "OpenAIMultistep" | "GeminiMultistep" | "DeepseekMultistep" | "AnthropicMultistep" | "Simple" | "Multistep" | "DataOnly" | "MCP" | "Flex" | "LangGraph" | "Interactive";
-        /** GetDataResponse */
-        GetDataResponse: {
-            /**
-             * Query Id
-             * Format: uuid
-             */
-            query_id: string;
-            /** Limit */
-            limit: number;
-            /** Offset */
-            offset: number;
-            /** Rows */
-            rows: {
-                [key: string]: unknown;
-            }[];
-            /** Total Rows */
-            total_rows: number;
-        };
         /** GetQueryModel */
         GetQueryModel: {
             /** Request */
@@ -569,7 +588,7 @@ export interface components {
          * InteractiveRequestType
          * @enum {string}
          */
-        InteractiveRequestType: "tbd" | "interactive_query" | "data_analysis" | "general_chat" | "disambiguation" | "linked_session";
+        InteractiveRequestType: "tbd" | "interactive_query" | "data_analysis" | "general_chat" | "disambiguation" | "linked_session" | "linked_query" | "manual_query";
         /**
          * ModelType
          * @enum {string}
@@ -824,7 +843,7 @@ export interface operations {
             };
         };
     };
-    create_request_from_query_api_v1_request__session_id__for_query__query_id__post: {
+    create_request_for_query_api_v1_request__session_id__for_query__query_id__post: {
         parameters: {
             query?: never;
             header?: never;
@@ -871,6 +890,41 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GetRequestModel"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_request_from_sql_api_v1_request__session_id__from_sql_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateQueryFromSqlModel"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -1148,6 +1202,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /** @example {
+                     *       "detail": "Chart not found"
+                     *     } */
                     "application/json": unknown;
                 };
             };
@@ -1221,6 +1278,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /** @example {
+                     *       "detail": "Chart not found"
+                     *     } */
                     "application/json": unknown;
                 };
             };
@@ -1289,7 +1349,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["GetDataResponse"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
