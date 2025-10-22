@@ -74,6 +74,9 @@ WORKDIR /app/apps/cms
 COPY --from=builder --chown=nextjs:nodejs /repo/${APP_DIR}/.next/static ./.next/static
 COPY --from=deps /repo/node_modules ./node_modules
 
+# Copy migrations folder
+COPY --from=builder --chown=nextjs:nodejs /repo/${APP_DIR}/src/migrations ./src/migrations
+
 USER nextjs
 EXPOSE 3000
 
