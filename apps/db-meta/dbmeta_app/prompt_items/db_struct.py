@@ -311,10 +311,46 @@ def get_data_samples() -> dict[str, Any]:
 
 
 def query_preflight(query: str) -> PreflightResult:
+    """
+    Validate SQL query using database-specific EXPLAIN commands.
+
+    Different databases support different EXPLAIN syntax:
+    - ClickHouse: EXPLAIN (general), EXPLAIN SYNTAX (syntax only)
+    - PostgreSQL: EXPLAIN
+    - MySQL: EXPLAIN
+    - SQLite: EXPLAIN QUERY PLAN
+
+    Args:
+        query: SQL query to validate
+
+    Returns:
+        PreflightResult with explanation or error
+    """
     engine = get_db()
+    dialect = engine.dialect.name.lower()
+
+    # Determine appropriate EXPLAIN command for the dialect
+    if dialect == 'clickhouse':
+        # Use EXPLAIN instead of EXPLAIN ESTIMATE for better compatibility
+        # EXPLAIN SYNTAX would be even safer but doesn't return execution info
+        explain_command = "EXPLAIN"
+    elif dialect in ('postgresql', 'postgres'):
+        # PostgreSQL EXPLAIN
+        explain_command = "EXPLAIN"
+    elif dialect in ('mysql', 'mariadb'):
+        # MySQL EXPLAIN
+        explain_command = "EXPLAIN"
+    elif dialect == 'sqlite':
+        # SQLite uses EXPLAIN QUERY PLAN
+        explain_command = "EXPLAIN QUERY PLAN"
+    else:
+        # For unknown dialects, try standard EXPLAIN
+        explain_command = "EXPLAIN"
+
     with engine.connect() as conn:
         try:
-            res = conn.execute(text(f"EXPLAIN ESTIMATE {query}"))
+            # Execute EXPLAIN to validate query
+            res = conn.execute(text(f"{explain_command} {query}"))
             columns = res.keys()
             rows = [dict(zip(columns, row)) for row in res.fetchall()]
             return PreflightResult(explanation=rows)
