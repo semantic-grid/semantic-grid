@@ -5,7 +5,8 @@ on:
     types: [ opened, synchronize, reopened ]
   push:
     branches:
-      - master  # or your main branch name
+      - main
+      - master
 
 jobs:
   regression-test:
@@ -18,7 +19,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"  # match your project
+          python-version: "3.13"
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5

@@ -1,0 +1,109 @@
+name: Unit Tests
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+
+    env:
+      # Minimal environment variables needed for imports
+      DATABASE_USER: "postgres"
+      DATABASE_PASS: "postgres"
+      DATABASE_PORT: 5432
+      DATABASE_SERVER: "localhost"
+      DATABASE_DB: "test_db"
+      DATABASE_WH_USER: "test_user"
+      DATABASE_WH_PORT: "9000"
+      DATABASE_WH_SERVER: "localhost"
+      DATABASE_WH_DB: "test_db"
+      DATABASE_WH_PASS: "test_pass"
+      DATABASE_WH_PARAMS: ""
+      ANTHROPIC_API_KEY: "test_key"
+      OPEN_AI_API: "test_key"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        working-directory: apps/fm-app
+        run: uv sync
+
+      - name: Set PYTHONPATH
+        run: echo "PYTHONPATH=${{ github.workspace }}/apps/fm-app" >> $GITHUB_ENV
+
+      - name: Import sanity checks
+        working-directory: apps/fm-app
+        run: |
+          echo "Testing critical imports..."
+          uv run python -c "from fm_app.utils import get_cached_warehouse_dialect; print('✅ utils.dialect')"
+          uv run python -c "from fm_app.validators import MetadataValidator; print('✅ validators.metadata_validator')"
+          uv run python -c "from fm_app.api.model import QueryMetadata; print('✅ api.model')"
+          echo "All imports successful!"
+
+      - name: Run dialect detection tests
+        working-directory: apps/fm-app
+        run: |
+          echo "Running dialect detection tests..."
+          uv run python examples/test_dialect_detection.py
+
+      - name: Run column validation tests
+        working-directory: apps/fm-app
+        run: |
+          echo "Running column validation tests..."
+          uv run python examples/test_column_validation.py
+
+  security-scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        working-directory: apps/fm-app
+        run: uv sync
+
+      - name: Install security tools
+        run: |
+          pip install safety bandit[toml]
+
+      - name: Run Safety check (dependency vulnerabilities)
+        working-directory: apps/fm-app
+        run: |
+          echo "Checking for known security vulnerabilities in dependencies..."
+          safety check --json || echo "⚠️ Safety check found vulnerabilities"
+        continue-on-error: true
+
+      - name: Run Bandit security scan
+        working-directory: apps/fm-app
+        run: |
+          echo "Running Bandit security scan..."
+          bandit -r fm_app/ -ll -f screen || echo "⚠️ Bandit found security issues"
+        continue-on-error: true
+
+      - name: Security scan summary
+        run: |
+          echo "🔒 Security scans completed. Review warnings above if any."
