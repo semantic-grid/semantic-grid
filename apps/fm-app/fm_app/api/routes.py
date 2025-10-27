@@ -228,23 +228,50 @@ def build_sorted_paginated_sql(
 ) -> str:
     body = _strip_final_order_by_and_trailing(user_sql)
 
-    if include_total_count:
-        outer_select = "SELECT t.*, COUNT(*) OVER () AS total_count"
-    else:
-        outer_select = "SELECT t.*"
+    # Check if query starts with WITH (CTE)
+    # In ClickHouse, WITH cannot be inside FROM (), so we need to handle it differently
+    body_trimmed = body.strip()
+    starts_with_cte = body_trimmed.upper().startswith('WITH')
 
-    base = f"""
-        {outer_select}
-        FROM (
-        {body}
-        ) AS t
-    """
+    if starts_with_cte:
+        # For CTE queries, we need to wrap differently
+        # We'll add the outer SELECT as part of the CTE's final SELECT
+        # by creating a new CTE that wraps the original query
+        if include_total_count:
+            # Wrap the CTE query in another CTE to add total_count
+            base = f"""
+                WITH __original_query AS (
+                {body}
+                )
+                SELECT *, COUNT(*) OVER () AS total_count
+                FROM __original_query
+            """
+        else:
+            # Just use the query as-is, but we'll add ORDER BY and LIMIT at the end
+            base = body
+    else:
+        # Regular query (no CTE) - use the standard wrapping
+        if include_total_count:
+            outer_select = "SELECT t.*, COUNT(*) OVER () AS total_count"
+        else:
+            outer_select = "SELECT t.*"
+
+        base = f"""
+            {outer_select}
+            FROM (
+            {body}
+            ) AS t
+        """
 
     col = _sanitize_sort_by(sort_by)
     if col:
         direction = "ASC" if sort_order.lower() == "asc" else "DESC"
-        # Always anchor to outer alias to avoid ambiguity from CTEs/joins
-        base += f"\nORDER BY t.{col} {direction}"
+        if starts_with_cte:
+            # For CTE queries, reference column directly (no alias needed)
+            base += f"\nORDER BY {col} {direction}"
+        else:
+            # For subquery-wrapped queries, anchor to outer alias
+            base += f"\nORDER BY t.{col} {direction}"
 
     # Always page on the outer query
     base += "\nLIMIT :limit\nOFFSET :offset"
