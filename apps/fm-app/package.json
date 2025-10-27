@@ -3,7 +3,6 @@
   "scripts": {
     "dev": "uv run fastapi dev fm_app/main.py --host 0.0.0.0 --port 8000",
     "build": "uv build",
-    "lint": "echo 'Skipping fm-app linting for now'",
     "test": "uv run pytest -q",
     "setup": "uv sync --frozen --all-extras"
   }
