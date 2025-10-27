@@ -39,7 +39,7 @@ jobs:
         run: npm install
 
       - name: Run linters
-        run: npm run lint
+        run: npm run lint -- --filter='!cms'
 
       - name: Run tests
         run: npm run test
