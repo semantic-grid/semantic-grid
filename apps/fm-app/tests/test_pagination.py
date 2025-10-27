@@ -2,8 +2,8 @@
 Unit tests for SQL pagination with CTE support.
 """
 
-import sys
 import os
+import sys
 from unittest import mock
 
 # Set minimal environment variables before importing fm_app

@@ -1,9 +1,9 @@
 # mcp_async_providers.py
-from typing import Dict, Any
+from typing import Any, Dict
 
 from fm_app.mcp_servers.db_meta import (
-    get_db_meta_mcp_prompt_items,
     db_meta_mcp_analyze_query,
+    get_db_meta_mcp_prompt_items,
 )
 from fm_app.mcp_servers.db_ref import get_db_ref_prompt_items
 

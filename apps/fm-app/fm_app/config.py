@@ -1,10 +1,8 @@
 # settings.py (your parent file)
-import os
 from functools import lru_cache
-from pathlib import Path
 from typing import Optional
 
-from dotenv import load_dotenv, find_dotenv
+from dotenv import find_dotenv, load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # 1) Load .env from the project root (or nearest up the tree)

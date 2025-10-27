@@ -5,7 +5,7 @@ Example usage of MetadataValidator to check QueryMetadata consistency.
 from uuid import uuid4
 
 from fm_app.api.model import Column, QueryMetadata
-from fm_app.validators import MetadataValidator, MetadataValidationError
+from fm_app.validators import MetadataValidationError, MetadataValidator
 
 
 def example_valid_metadata():
@@ -98,7 +98,7 @@ def example_invalid_metadata_with_expressions():
     print(f"Valid: {result['valid']}")
     print(f"SQL columns: {result['sql_columns']}")
     print(f"Metadata columns: {result['metadata_columns']}")
-    print(f"Errors:")
+    print("Errors:")
     for error in result["errors"]:
         print(f"  - {error}")
     print()
@@ -137,7 +137,7 @@ def example_invalid_metadata_with_table_prefix():
     result = MetadataValidator.validate_metadata(metadata, dialect="clickhouse")
 
     print(f"Valid: {result['valid']}")
-    print(f"Errors:")
+    print("Errors:")
     for error in result["errors"]:
         print(f"  - {error}")
     print()

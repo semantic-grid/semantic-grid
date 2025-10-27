@@ -393,7 +393,7 @@ async def multistep_flow(
 
             elif wh_result.get("csv"):
                 req.structured_response.csv = wh_result.get("csv")
-                new_req = req.model_copy(
+                req.model_copy(
                     update={"request": wh_result.get("csv").replace(",", " ")}
                 )
 

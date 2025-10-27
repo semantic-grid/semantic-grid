@@ -146,7 +146,7 @@ async def simple_flow(
 
     if sql_match:
         extracted_sql = sql_match.group(1).strip()
-        analyzed = await db_meta_mcp_analyze_query(
+        await db_meta_mcp_analyze_query(
             req, extracted_sql, next(flow_step), settings, logger
         )
         req.structured_response.sql = extracted_sql

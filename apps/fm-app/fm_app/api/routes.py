@@ -3,7 +3,9 @@ import hashlib
 import json
 import logging
 import os
+import re
 import uuid
+from typing import Optional
 from uuid import UUID
 
 # TODO: do we need these imports here?
@@ -71,10 +73,6 @@ os.makedirs(IMAGE_DIR, exist_ok=True)
 os.makedirs(HTML_DIR, exist_ok=True)
 
 
-import re
-from typing import Optional
-
-
 def replace_order_by(sql: str, new_order_by: Optional[str]) -> str:
     sql = sql.strip().rstrip(";")
 
@@ -116,14 +114,13 @@ def replace_order_by(sql: str, new_order_by: Optional[str]) -> str:
         last = matches[-1]
         return sql[: last.start()] + " " + sql[last.end():]
 
-from typing import Optional
 
 # Trailing clauses we want to remove from the *inner* query:
 # - final ORDER BY (up to LIMIT/OFFSET/FETCH or end)
 # - trailing LIMIT/OFFSET/FETCH
 # We’ll remove them conservatively from the very end, not touching CTEs/subqueries.
 _ORDER_BY_TAIL_RE = re.compile(
-    r"""            # from the last ORDER BY to end (stopping before a nested clause isn't trivial, so do only tail)
+    r"""            # from the last ORDER BY to end
     (               # capture group for replacement
       \s+ORDER\s+BY\s+[^;]*?    # ORDER BY ... (non-greedy)
       (?=(\s+LIMIT\b|\s+OFFSET\b|\s+FETCH\b|$))  # up to LIMIT/OFFSET/FETCH or end
@@ -137,7 +134,8 @@ _TRAILING_LIMIT_OFFSET_FETCH_RE = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 
-# Accept bare identifiers or dotted (alias.column); we’ll keep only the column piece for the outer query.
+# Accept bare identifiers or dotted (alias.column)
+# We'll keep only the column piece for the outer query
 _IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)?$")
 
 def _strip_leading_comments(sql: str) -> str:
@@ -191,7 +189,10 @@ def _sanitize_sort_by(sort_by: Optional[str]) -> Optional[str]:
         return None
     sb = sort_by.strip()
     # allow quoted accidental inputs like "token"
-    if (sb.startswith('"') and sb.endswith('"')) or (sb.startswith('`') and sb.endswith('`')):
+    is_quoted = (sb.startswith('"') and sb.endswith('"')) or (
+        sb.startswith('`') and sb.endswith('`')
+    )
+    if is_quoted:
         sb = sb[1:-1].strip()
     if not _IDENTIFIER_RE.match(sb):
         return None
@@ -355,9 +356,9 @@ def build_sorted_paginated_sql(
     starts_with_cte = user_sql_no_comments.strip().upper().startswith('WITH')
 
     # Strip ORDER BY and optionally LIMIT/OFFSET
-    # For CTE queries, we only strip final ORDER BY, not LIMIT (to avoid matching LIMIT inside CTEs)
+    # For CTE queries, we only strip final ORDER BY, not LIMIT
+    # (to avoid matching LIMIT inside CTEs)
     body = _strip_final_order_by_and_trailing(user_sql, is_cte=starts_with_cte)
-    body_trimmed = body.strip()
 
     if starts_with_cte:
         dialect = get_cached_warehouse_dialect()
@@ -666,7 +667,9 @@ async def create_request_from_query(
             request_type=InteractiveRequestType.linked_query,
             flow=FlowType.interactive,
             model=(
-                query.ai_context.get("model") if query.ai_context is not None else ModelType.openai_default
+                query.ai_context.get("model")
+                if query.ai_context is not None
+                else ModelType.openai_default
             ),
             db=DBType.v2,
             refs=None,
@@ -694,7 +697,10 @@ async def create_request_from_query(
 
     wrk_arg = wrk_req.model_dump()
     task = wrk_add_request.apply_async(args=[wrk_arg], task_id=task_id)
-    logging.info("Send task for request from query", extra={"action": "send_task", "task_id": task, "query_id": query_id})
+    logging.info(
+        "Send task for request from query",
+        extra={"action": "send_task", "task_id": task, "query_id": query_id},
+    )
 
     return response
 
@@ -771,7 +777,9 @@ async def create_request_from_sql(
             request_type=InteractiveRequestType.manual_query,
             flow=FlowType.interactive,
             model=(
-                query_data.ai_context.get("model") if query_data.ai_context is not None else ModelType.openai_default
+                query_data.ai_context.get("model")
+                if query_data.ai_context is not None
+                else ModelType.openai_default
             ),
             db=DBType.v2,
             refs=None,
@@ -789,8 +797,9 @@ async def create_request_from_sql(
         status=response.status,
         flow=FlowType.interactive,
         model=(
-            query_data.ai_context.get(
-                "model") if query_data.ai_context is not None else ModelType.openai_default
+            query_data.ai_context.get("model")
+            if query_data.ai_context is not None
+            else ModelType.openai_default
         ),
         db=DBType.v2,
         refs=None,
@@ -799,7 +808,10 @@ async def create_request_from_sql(
 
     wrk_arg = wrk_req.model_dump()
     task = wrk_add_request.apply_async(args=[wrk_arg], task_id=task_id)
-    logging.info("Send task for request from SQL", extra={"action": "send_task", "task_id": task, "sql": query_data.sql})
+    logging.info(
+        "Send task for request from SQL",
+        extra={"action": "send_task", "task_id": task, "sql": query_data.sql},
+    )
 
     return response
 
@@ -947,7 +959,8 @@ async def delete_request(
     db: AsyncSession = Depends(get_db),
     auth_result: dict = Depends(verify_any_token),
 ):
-    """Delete a request and revert the session to the state before this request was added."""
+    """Delete a request and revert the session to the state
+    before this request was added."""
     user_owner = auth_result.get("sub")
     if user_owner is None:
         raise HTTPException(
@@ -1147,7 +1160,6 @@ async def get_query_data(
     sort_order: str = Query("asc", regex="^(asc|desc)$"),
     db: AsyncSession = Depends(get_db),
 ) -> Response:
-    original_sql = ""
     sql = ""
     current_view = View(sort_by=sort_by, sort_order=sort_order) if sort_by else None
 
@@ -1193,7 +1205,7 @@ async def get_query_data(
                     # Use canonical column name from metadata
                     sort_by = result
 
-                new_order_clause = (
+                (
                     f"{sort_by} {sort_order.upper()}"
                     if sort_by and sort_order
                     else None

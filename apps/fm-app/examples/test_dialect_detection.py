@@ -5,7 +5,7 @@ This test verifies that the dialect detection utility correctly identifies
 the warehouse database dialect from the SQLAlchemy engine or settings.
 """
 
-from fm_app.utils import get_warehouse_dialect, get_cached_warehouse_dialect
+from fm_app.utils import get_cached_warehouse_dialect, get_warehouse_dialect
 
 
 def test_get_warehouse_dialect():
@@ -56,8 +56,9 @@ def test_dialect_in_validator():
 
     try:
         import uuid
-        from fm_app.validators.metadata_validator import MetadataValidator
+
         from fm_app.api.model import QueryMetadata
+        from fm_app.validators.metadata_validator import MetadataValidator
 
         # Create simple metadata
         metadata = QueryMetadata(

@@ -6,23 +6,24 @@ import structlog
 from celery import Celery
 from celery.signals import setup_logging
 from celery.utils.log import get_task_logger
+
 # from pydantic import ValidationError
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from fm_app.ai_models.llm import AnthropicModel, DeepSeekModel, GeminiModel, OpenAIModel
 from fm_app.api.model import (
+    AddRequestModel,
     DBType,
     FlowType,
+    InteractiveRequestType,
     ModelType,
     RequestStatus,
-    WorkerRequest,
-    InteractiveRequestType,
-    AddRequestModel,
     UpdateRequestModel,
+    WorkerRequest,
 )
 from fm_app.config import get_settings
-from fm_app.db.db import update_request, update_request_failure, add_request
+from fm_app.db.db import add_request, update_request, update_request_failure
 from fm_app.stopwatch import stopwatch
 from fm_app.workers.agent import close_agent, init_agent
 from fm_app.workers.data_only_flow import data_only_flow

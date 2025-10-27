@@ -4,10 +4,11 @@ Test all query examples from client config YAML files.
 This ensures our pagination logic works correctly with real production queries.
 """
 
-import sys
 import os
+import sys
 from pathlib import Path
 from unittest import mock
+
 import yaml
 
 # Set minimal environment variables before importing fm_app
@@ -136,7 +137,7 @@ def main():
             success, error = test_query_example(example)
 
             if success:
-                print(f"  ✓ Passed")
+                print("  ✓ Passed")
                 passed += 1
             else:
                 print(f"  ✗ Failed: {error}")

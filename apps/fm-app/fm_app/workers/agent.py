@@ -5,8 +5,8 @@ from dotenv import load_dotenv
 from fm_app.api.model import StructuredResponse
 from fm_app.config import get_settings
 from fm_app.workers.prompt_elements import (
-    instruction_mcp,
     expertise_prefix,
+    instruction_mcp,
 )
 
 load_dotenv(".env")

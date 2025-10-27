@@ -234,7 +234,7 @@ async def flex_flow(
                     req.status = RequestStatus.done
                     return req
 
-                df_result = final_result.to_dict("records")
+                final_result.to_dict("records")
                 csv_buffer = io.StringIO()
                 final_result.to_csv(csv_buffer, index=False)
                 csv_string = csv_buffer.getvalue()

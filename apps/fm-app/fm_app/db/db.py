@@ -13,15 +13,15 @@ from uuid_extensions import uuid7
 
 from fm_app.api.model import (
     AddRequestModel,
+    CreateQueryModel,
     CreateSessionModel,
+    GetQueryModel,
     GetRequestModel,
     GetSessionModel,
     PatchSessionModel,
     RequestStatus,
-    UpdateRequestModel,
-    CreateQueryModel,
-    GetQueryModel,
     UpdateQueryModel,
+    UpdateRequestModel,
 )
 
 
@@ -583,7 +583,7 @@ async def update_request_failure(
             WHERE task_id=:task_id
         """
         )
-        result = await db.execute(
+        await db.execute(
             update_sql, params={"err": err, "status": status, "task_id": task_id}
         )
         # if result.mappings().fetchone().rowcount != 1:
@@ -929,11 +929,12 @@ def run_structured_wh_request(request: str, db: Session):
     return {"csv": csv_result, "rows": len(rows)}
 
 
+import logging
+from typing import Optional
+
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
-import logging
-from typing import Optional
 
 
 def count_wh_request(request: str, db: Session) -> Optional[int]:

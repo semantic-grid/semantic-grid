@@ -18,9 +18,9 @@ from fm_app.config import get_settings
 from fm_app.mcp_servers.db_meta import get_db_name
 from fm_app.mcp_servers.db_ref import get_db_ref_prompt_items
 from fm_app.workers.prompt_elements import (
-    instruction_mcp,
     expertise_prefix,
     instruction_clickhouse,
+    instruction_mcp,
 )
 
 server_script = "fm_app/mcp_servers/solana_db.py"  # Path to a Python server file

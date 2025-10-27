@@ -20,7 +20,7 @@ def test_valid_column():
 
     is_valid, result = validate_sort_column("wallet", columns)
 
-    print(f"Input: sort_by='wallet'")
+    print("Input: sort_by='wallet'")
     print(f"Valid: {is_valid}")
     print(f"Result: {result}")
     assert is_valid is True
@@ -41,7 +41,7 @@ def test_case_insensitive():
 
     is_valid, result = validate_sort_column("WALLET", columns)
 
-    print(f"Input: sort_by='WALLET'")
+    print("Input: sort_by='WALLET'")
     print(f"Valid: {is_valid}")
     print(f"Result: {result}")
     assert is_valid is True
@@ -62,7 +62,7 @@ def test_invalid_column():
 
     is_valid, result = validate_sort_column("nonexistent", columns)
 
-    print(f"Input: sort_by='nonexistent'")
+    print("Input: sort_by='nonexistent'")
     print(f"Valid: {is_valid}")
     print(f"Error message: {result}")
     assert is_valid is False
@@ -82,7 +82,7 @@ def test_no_columns():
 
     is_valid, result = validate_sort_column("wallet", columns)
 
-    print(f"Input: sort_by='wallet', columns=[]")
+    print("Input: sort_by='wallet', columns=[]")
     print(f"Valid: {is_valid}")
     print(f"Error message: {result}")
     assert is_valid is False
@@ -99,7 +99,7 @@ def test_none_columns():
 
     is_valid, result = validate_sort_column("wallet", None)
 
-    print(f"Input: sort_by='wallet', columns=None")
+    print("Input: sort_by='wallet', columns=None")
     print(f"Valid: {is_valid}")
     print(f"Error message: {result}")
     assert is_valid is False
@@ -121,7 +121,7 @@ def test_columns_without_column_name():
 
     # Should still work with valid columns
     is_valid, result = validate_sort_column("wallet", columns)
-    print(f"Input: sort_by='wallet'")
+    print("Input: sort_by='wallet'")
     print(f"Valid: {is_valid}")
     print(f"Result: {result}")
     assert is_valid is True
@@ -129,7 +129,7 @@ def test_columns_without_column_name():
 
     # Invalid column should show only valid ones
     is_valid, result = validate_sort_column("invalid", columns)
-    print(f"\nInput: sort_by='invalid'")
+    print("\nInput: sort_by='invalid'")
     print(f"Valid: {is_valid}")
     print(f"Error: {result}")
     assert is_valid is False
@@ -152,7 +152,7 @@ def test_dict_columns():
 
     is_valid, result = validate_sort_column("wallet", columns)
 
-    print(f"Input: sort_by='wallet', columns (as dicts)")
+    print("Input: sort_by='wallet', columns (as dicts)")
     print(f"Valid: {is_valid}")
     print(f"Result: {result}")
     assert is_valid is True

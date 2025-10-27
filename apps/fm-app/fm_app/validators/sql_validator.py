@@ -5,8 +5,9 @@ This is a FAST PRE-CHECK before explain_analyze, not a replacement.
 Always run explain_analyze as the source of truth.
 """
 
-import sqlglot
 from typing import Optional
+
+import sqlglot
 
 
 class SqlValidationResult:

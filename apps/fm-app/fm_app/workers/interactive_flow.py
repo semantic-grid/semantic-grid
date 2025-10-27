@@ -586,9 +586,6 @@ async def interactive_flow(
                 db=db,
             )
 
-        user_intent_instruction = (
-            f"User intent: {llm_response.intent}" if llm_response.intent is not None else ""
-        )
 
     ### LINKED SESSION QUERY ###
     if (

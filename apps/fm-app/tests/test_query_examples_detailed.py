@@ -2,15 +2,16 @@
 Detailed test showing query transformations for key examples.
 """
 
-import sys
 import os
+import sys
 from pathlib import Path
 from unittest import mock
+
 import yaml
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from fm_app.api.routes import build_sorted_paginated_sql, _strip_leading_comments
+from fm_app.api.routes import _strip_leading_comments, build_sorted_paginated_sql
 
 
 def load_query_examples():

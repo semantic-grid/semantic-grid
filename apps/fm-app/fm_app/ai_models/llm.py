@@ -9,7 +9,7 @@ from openai import OpenAI
 from vertexai.generative_models import Content, GenerationConfig, GenerativeModel, Part
 
 from fm_app.ai_models.model import AIModel, ChatMessage, InvestigationStep, schema
-from fm_app.api.model import QueryMetadata, IntentAnalysis
+from fm_app.api.model import IntentAnalysis, QueryMetadata
 
 
 def normalize_schema(sch):

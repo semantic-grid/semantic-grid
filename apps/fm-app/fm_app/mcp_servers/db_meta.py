@@ -5,8 +5,8 @@ from fastmcp import Client
 from fm_app.api.model import (
     DBType,
     FlowType,
-    WorkerRequest,
     McpServerRequest,
+    WorkerRequest,
 )
 
 

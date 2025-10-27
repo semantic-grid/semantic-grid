@@ -1,5 +1,6 @@
 import time
 
+
 class Stopwatch:
     def __init__(self):
         self._last = time.perf_counter()

@@ -3,7 +3,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
-from fm_app.api.model import QueryMetadata, IntentAnalysis
+from fm_app.api.model import IntentAnalysis, QueryMetadata
 from fm_app.config import Settings
 
 
