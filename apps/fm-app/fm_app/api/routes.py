@@ -1296,8 +1296,9 @@ async def get_query_data(
             )
             rows = result.mappings().fetchall()
 
+            # Extract total_count if present (may not be present for ClickHouse CTE queries)
             if rows:
-                total_count = rows[0]["total_count"]
+                total_count = rows[0].get("total_count", 0)
             else:
                 total_count = 0
 
