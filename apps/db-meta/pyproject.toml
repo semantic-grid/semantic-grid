@@ -109,7 +109,9 @@ exclude = [
     "venv",
     "alembic",
     "bulk_test",
-    "prompt_elements.py"
+    "prompt_elements.py",
+    "tests",
+    "examples"
 ]
 line-length = 88
 
