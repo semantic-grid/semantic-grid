@@ -492,6 +492,7 @@ export const ChatContainer = ({
         mt: hasData ? 0 : 0, // add margin-top only when no data
         pt: hasData ? 1 : 1, // add margin-top only when no data
         // mb: 2,
+        // eslint-disable-next-line no-nested-ternary
         height: isLarge
           ? hasData
             ? "calc(100vh - 50px)" // constrained when in split view
