@@ -41,7 +41,16 @@ Column object model is as follows:
 - **summary**: Optional[str] -- a short description of the column, distilled from the user request(s),
 - **id**: unique column indicator, could be based off of the column_name (if it's unique)
   or created as UUIDv4. Important!!!: Has to be unique across all columns in the query,
-- **column_name**: Optional[str] -- the name of the column exactly as it appears in the SQL statement ether via aliasing (if used) or directly if no aliasing is used,
+- **column_name**: str -- **REQUIRED** - The name by which this column can be referenced
+  in the query result set and in operations like ORDER BY, WHERE, GROUP BY.
+  - If the SELECT uses AS aliasing (e.g., "wallet_address AS wallet"), **always use the alias** ("wallet")
+  - If the SELECT has no AS keyword, use the simple column name itself
+  - **CRITICAL**: This must ALWAYS be a simple SQL identifier (letters, numbers, underscores), never an expression or function call.
+    Examples:
+    - For `SUM(amount) AS total_amount` → use "total_amount" ✓
+    - For `DATE(block_time) AS trade_date` → use "trade_date" ✓
+    - For `wallet_address` (no alias) → use "wallet_address" ✓
+    - **WRONG**: "SUM(amount)" ❌, "DATE(block_time)" ❌, "t.wallet_address" ❌
 - **column_alias**: Optional[str] -- the succinct version of the column name but no longer than 15 characters (for display purposes), could be not unique,
 - **column_type**: Optional[str] -- type of the column data (if known),
 - **column_description**: Optional[str] -- a human-readable description of the column,

@@ -12,29 +12,29 @@ from sqlalchemy.orm.session import Session
 
 from fm_app.ai_models.model import AIModel
 from fm_app.api.model import (
-    StructuredResponse,
-    WorkerRequest,
-    RequestStatus,
-    QueryMetadata,
+    CreateQueryModel,
+    CreateSessionModel,
     IntentAnalysis,
     InteractiveRequestType,
-    CreateSessionModel,
-    UpdateRequestModel,
-    CreateQueryModel,
     McpServerRequest,
+    QueryMetadata,
+    RequestStatus,
+    StructuredResponse,
+    UpdateRequestModel,
+    WorkerRequest,
 )
 from fm_app.config import get_settings
 from fm_app.db.db import (
-    update_query_metadata,
-    get_session_by_id,
-    update_request_status,
-    get_history,
-    update_session_name,
-    count_wh_request,
-    update_request,
     add_new_session,
-    get_all_requests,
+    count_wh_request,
     create_query,
+    get_all_requests,
+    get_history,
+    get_session_by_id,
+    update_query_metadata,
+    update_request,
+    update_request_status,
+    update_session_name,
 )
 from fm_app.mcp_servers.db_meta import (
     db_meta_mcp_analyze_query,
@@ -45,6 +45,8 @@ from fm_app.mcp_servers.mcp_async_providers import (
 )
 from fm_app.prompt_assembler.prompt_packs import PromptAssembler
 from fm_app.stopwatch import stopwatch
+from fm_app.utils import get_cached_warehouse_dialect
+from fm_app.validators import MetadataValidator
 
 
 async def interactive_flow(
@@ -55,6 +57,8 @@ async def interactive_flow(
     print(">>> FLOW START", stopwatch.lap())
 
     settings = get_settings()
+    # Detect warehouse database dialect
+    warehouse_dialect = get_cached_warehouse_dialect()
     structlog.contextvars.bind_contextvars(
         request_id=req.request_id, flow_name=ai_model.get_name() + "_interactive"
     )
@@ -212,6 +216,27 @@ async def interactive_flow(
                              {messages}\n
                              AI response: {llm_response}\n"""
 
+        # Validate QueryMetadata consistency
+        validation_result = MetadataValidator.validate_metadata(
+            llm_response, dialect=warehouse_dialect
+        )
+        if not validation_result["valid"]:
+            logger.warning(
+                "QueryMetadata validation failed (manual_query)",
+                flow_stage="metadata_validation",
+                flow_step_num=next(flow_step),
+                errors=validation_result["errors"],
+                warnings=validation_result["warnings"],
+                sql_columns=validation_result["sql_columns"],
+                metadata_columns=validation_result["metadata_columns"],
+            )
+        else:
+            logger.info(
+                "QueryMetadata validation passed (manual_query)",
+                flow_stage="metadata_validation",
+                flow_step_num=next(flow_step),
+            )
+
         # copy dict from request_session.metadata
         new_metadata = llm_response.model_dump()
 
@@ -291,7 +316,7 @@ async def interactive_flow(
                     ai_generated=True,
                     ai_context=None,
                     data_source=req.db,
-                    db_dialect="clickhouse",  # TODO: refactor to config / db_meta
+                    db_dialect=warehouse_dialect,
                     explanation=new_metadata.get("explanation"),
                     parent_id=(
                         req.query.query_id if req.query is not None else parent_id
@@ -703,6 +728,60 @@ async def interactive_flow(
                 flow_step_num=next(flow_step),
                 ai_response=llm_response,
             )
+
+            # Validate QueryMetadata consistency
+            validation_result = MetadataValidator.validate_metadata(
+                llm_response, dialect=warehouse_dialect
+            )
+            if not validation_result["valid"]:
+                logger.warning(
+                    "QueryMetadata validation failed",
+                    flow_stage="metadata_validation",
+                    flow_step_num=next(flow_step),
+                    errors=validation_result["errors"],
+                    warnings=validation_result["warnings"],
+                    sql_columns=validation_result["sql_columns"],
+                    metadata_columns=validation_result["metadata_columns"],
+                )
+                # Add validation errors to the repair loop
+                # This will help the LLM fix column_name issues before SQL execution
+                if attempt < 3:
+                    errors_list = "\n".join(
+                        f"  - {err}" for err in validation_result["errors"]
+                    )
+                    validation_error_msg = (
+                        "QueryMetadata validation errors detected:\n"
+                        f"{errors_list}\n\n"
+                        f"SQL result columns: {validation_result['sql_columns']}\n"
+                        f"Metadata column_name values: "
+                        f"{validation_result['metadata_columns']}\n\n"
+                        "Please fix the column_name values in the Column objects.\n"
+                        "Remember: column_name must be the alias "
+                        "(the name after AS), not the expression.\n"
+                        "For example: 'DATE(block_time) AS trade_date' -> "
+                        "column_name should be 'trade_date'"
+                    )
+
+                    messages.append(
+                        {
+                            "role": "system",
+                            "content": validation_error_msg,
+                        }
+                    )
+
+                    logger.info(
+                        "Added validation errors to repair loop",
+                        flow_stage="metadata_repair",
+                        flow_step_num=next(flow_step),
+                    )
+                    attempt += 1
+                    continue
+            else:
+                logger.info(
+                    "QueryMetadata validation passed",
+                    flow_stage="metadata_validation",
+                    flow_step_num=next(flow_step),
+                )
             await update_session_name(
                 req.session_id, req.user, llm_response.summary, db
             )
@@ -816,7 +895,7 @@ async def interactive_flow(
                         ai_generated=True,
                         ai_context=None,
                         data_source=req.db,
-                        db_dialect="clickhouse",  # TODO: refactor to config / db_meta
+                        db_dialect=warehouse_dialect,
                         explanation=new_metadata.get("explanation"),
                         parent_id=(
                             req.query.query_id if req.query is not None else parent_id

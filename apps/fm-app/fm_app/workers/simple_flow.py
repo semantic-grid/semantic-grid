@@ -14,13 +14,13 @@ from sqlalchemy.orm.session import Session
 
 from fm_app.ai_models.model import AIModel
 from fm_app.api.model import (
+    McpServerRequest,
     RequestStatus,
     StructuredResponse,
     WorkerRequest,
-    McpServerRequest,
 )
 from fm_app.config import get_settings
-from fm_app.db.db import update_request_status, run_structured_wh_request
+from fm_app.db.db import run_structured_wh_request, update_request_status
 from fm_app.mcp_servers.db_meta import (
     db_meta_mcp_analyze_query,
 )
@@ -29,6 +29,7 @@ from fm_app.mcp_servers.mcp_async_providers import (
     DbRefAsyncProvider,
 )
 from fm_app.prompt_assembler.prompt_packs import PromptAssembler
+from fm_app.utils import get_cached_warehouse_dialect
 
 
 async def simple_flow(
@@ -37,6 +38,7 @@ async def simple_flow(
     logger = structlog.wrap_logger(get_task_logger(__name__))
 
     settings = get_settings()
+    warehouse_dialect = get_cached_warehouse_dialect()
     structlog.contextvars.bind_contextvars(
         request_id=req.request_id, flow_name=ai_model.get_name() + "_simple"
     )
@@ -156,7 +158,7 @@ async def simple_flow(
         )
 
         try:
-            sqlglot.parse(extracted_sql, dialect="clickhouse")
+            sqlglot.parse(extracted_sql, dialect=warehouse_dialect)
         except sqlglot.errors.ParseError as e:
             logger.error(
                 "SQL syntax error",

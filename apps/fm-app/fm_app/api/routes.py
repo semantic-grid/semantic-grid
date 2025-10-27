@@ -18,45 +18,43 @@ from starlette import status
 from fm_app.api.auth0 import VerifyGuestToken, VerifyToken
 from fm_app.api.db_session import get_db, wh_session
 from fm_app.api.model import (
+    AddLinkedRequestModel,
     AddRequestModel,
     ChartRequest,
     ChartStructuredRequest,
     ChartType,
+    CreateQueryFromSqlModel,
     CreateSessionModel,
+    DBType,
+    FlowType,
+    GetDataResponse,
+    GetQueryModel,
     GetRequestModel,
     GetSessionModel,
+    InteractiveRequestType,
+    ModelType,
     PatchSessionModel,
     RequestStatus,
     UpdateRequestStatusModel,
-    WorkerRequest,
-    AddLinkedRequestModel,
-    GetDataResponse,
-    View,
-    UpdateRequestModel,
-    GetQueryModel,
     Version,
-    InteractiveRequestType,
-    FlowType,
-    DBType,
-    QueryMetadata, ModelType, CreateQueryFromSqlModel,
+    View,
+    WorkerRequest,
 )
 from fm_app.db.admin_db import get_all_requests_admin, get_all_sessions_admin
 from fm_app.db.db import (
     add_new_session,
     add_request,
+    delete_request_revert_session,
     get_all_requests,
     get_all_sessions,
+    get_queries,
+    get_query_by_id,
     get_request,
+    get_request_by_id,
     get_session_by_id,
+    update_request_status,
     update_review,
     update_session,
-    delete_request_revert_session,
-    update_query_metadata,
-    update_request_status,
-    get_query_by_id,
-    get_request_by_id,
-    update_request,
-    get_queries,
 )
 from fm_app.stopwatch import stopwatch
 from fm_app.workers.worker import wrk_add_request
@@ -118,8 +116,7 @@ def replace_order_by(sql: str, new_order_by: Optional[str]) -> str:
         last = matches[-1]
         return sql[: last.start()] + " " + sql[last.end():]
 
-import re
-from typing import Optional, Tuple
+from typing import Optional
 
 # Trailing clauses we want to remove from the *inner* query:
 # - final ORDER BY (up to LIMIT/OFFSET/FETCH or end)
@@ -170,6 +167,57 @@ def _sanitize_sort_by(sort_by: Optional[str]) -> Optional[str]:
         return None
     # Use only the last segment (the final SELECT alias)
     return sb.split(".")[-1]
+
+def validate_sort_column(
+    sort_by: str,
+    columns: Optional[list],
+) -> tuple[bool, str]:
+    """
+    Validate sort_by against QueryMetadata columns.
+
+    Args:
+        sort_by: Column name to sort by
+        columns: List of Column objects or dicts from QueryMetadata
+
+    Returns:
+        (is_valid, result_or_error)
+        - If valid: (True, canonical_column_name)
+        - If invalid: (False, error_message)
+    """
+    if not columns:
+        return False, "Query metadata not available - cannot validate sort column"
+
+    # Get valid column names from metadata (case-insensitive)
+    # Handle both Column objects and dicts (from session metadata)
+    valid_columns = {}
+    for col in columns:
+        column_name = None
+
+        # Handle Column objects
+        if hasattr(col, "column_name"):
+            column_name = col.column_name
+        # Handle dicts (from session metadata)
+        elif isinstance(col, dict):
+            column_name = col.get("column_name")
+
+        if column_name:
+            valid_columns[column_name.lower()] = column_name
+
+    if not valid_columns:
+        return False, "No columns found in query metadata"
+
+    # Check if sort_by matches (case-insensitive)
+    sort_by_lower = sort_by.lower()
+    if sort_by_lower not in valid_columns:
+        available = ", ".join(sorted(valid_columns.values()))
+        return (
+            False,
+            f"Invalid sort column '{sort_by}'. Available columns: {available}",
+        )
+
+    # Return the canonical column name (from metadata)
+    return True, valid_columns[sort_by_lower]
+
 
 def build_sorted_paginated_sql(
     user_sql: str,
@@ -475,7 +523,7 @@ async def create_request_from_query(
         session_id=session_id,
         add_req=AddRequestModel(
             version=Version.interactive,
-            request=f"Starting from existing query", # query.request,
+            request="Starting from existing query", # query.request,
             request_type=InteractiveRequestType.linked_query,
             flow=FlowType.interactive,
             model=(
@@ -969,7 +1017,16 @@ async def get_query_data(
     if query_response:
         sql = query_response.sql if query_response.sql else ""
         sql = sql.strip().rstrip(";")
-        # since we don't have any context except query_id, we don't store View
+
+        # Validate sort_by against QueryMetadata columns
+        if sort_by:
+            is_valid, result = validate_sort_column(
+                sort_by, query_response.columns
+            )
+            if not is_valid:
+                raise HTTPException(status_code=400, detail=result)
+            # Use canonical column name from metadata
+            sort_by = result
 
     else:
         request_response = await get_request_by_id(
@@ -986,6 +1043,17 @@ async def get_query_data(
                 sort_order = (
                     current_view.sort_order if current_view else (sort_order or "")
                 )
+
+                # Validate sort_by against QueryMetadata columns
+                if sort_by:
+                    is_valid, result = validate_sort_column(
+                        sort_by, request_response.query.columns
+                    )
+                    if not is_valid:
+                        raise HTTPException(status_code=400, detail=result)
+                    # Use canonical column name from metadata
+                    sort_by = result
+
                 new_order_clause = (
                     f"{sort_by} {sort_order.upper()}"
                     if sort_by and sort_order
@@ -1012,21 +1080,28 @@ async def get_query_data(
                     )
 
                 sql = session_response.metadata.get("sql", "").strip().rstrip(";")
-                # Determine whether to update stored SQL
+
+                # Get columns from session metadata for validation
+                columns = session_response.metadata.get("columns", [])
+
+                # Get saved view if no sort provided by user
+                saved_view = session_response.metadata.get("view")
+                if not sort_by and saved_view:
+                    # Use saved view if user didn't provide sort_by
+                    current_view = View(
+                        sort_by=saved_view.get("sort_by"),
+                        sort_order=saved_view.get("sort_order"),
+                    )
+                    sort_by = saved_view.get("sort_by")
+                    sort_order = saved_view.get("sort_order", "asc")
+
+                # Validate sort_by (whether from user or saved view)
                 if sort_by:
-                    saved_view = session_response.metadata.get("view")
-                    current_view = (
-                        View(
-                            sort_by=saved_view.get("sort_by"),
-                            sort_order=saved_view.get("sort_order"),
-                        )
-                        if saved_view
-                        else None
-                    )
-                    sort_by = current_view.sort_by if current_view else (sort_by or "")
-                    sort_order = (
-                        current_view.sort_order if current_view else (sort_order or "")
-                    )
+                    is_valid, result = validate_sort_column(sort_by, columns)
+                    if not is_valid:
+                        raise HTTPException(status_code=400, detail=result)
+                    # Use canonical column name from metadata
+                    sort_by = result
                     # new_order_clause = (
                     #    f"{sort_by} {sort_order.upper()}"
                     #    if sort_by and sort_order
@@ -1124,9 +1199,33 @@ async def get_query_data(
             )
 
         except Exception as e:
-            raise HTTPException(
-                status_code=500, detail=f"Error executing query: {str(e)}"
-            )
+            error_msg = str(e)
+            error_lower = error_msg.lower()
+
+            # Provide better error messages for common issues
+            if "unknown column" in error_lower or (
+                "column" in error_lower and "not found" in error_lower
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Column error: {error_msg}. "
+                    "This may indicate a mismatch between query and sort column.",
+                )
+            elif "syntax error" in error_lower:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"SQL syntax error: {error_msg}",
+                )
+            elif "timeout" in error_lower or "timed out" in error_lower:
+                raise HTTPException(
+                    status_code=504,
+                    detail=f"Query timeout: {error_msg}",
+                )
+            else:
+                # Generic error
+                raise HTTPException(
+                    status_code=500, detail=f"Error executing query: {error_msg}"
+                )
 
 
 @api_router.get("/query/{query_id}")

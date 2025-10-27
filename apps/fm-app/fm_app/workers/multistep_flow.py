@@ -13,10 +13,10 @@ from sqlalchemy.orm.session import Session
 
 from fm_app.ai_models.model import AIModel, InvestigationStep
 from fm_app.api.model import (
+    McpServerRequest,
     RequestStatus,
     StructuredResponse,
     WorkerRequest,
-    McpServerRequest,
 )
 from fm_app.config import get_settings
 from fm_app.db.db import (
@@ -31,7 +31,7 @@ from fm_app.mcp_servers.mcp_async_providers import (
 )
 from fm_app.prompt_assembler.prompt_packs import PromptAssembler
 from fm_app.services.charts import generate_chart_code, generate_chart_html
-
+from fm_app.utils import get_cached_warehouse_dialect
 
 #    intent_slots_suffix, intent_slots_prefix, verify_request_suffix,
 
@@ -41,6 +41,7 @@ async def multistep_flow(
 ):
     logger = structlog.wrap_logger(get_task_logger(__name__))
     settings = get_settings()
+    warehouse_dialect = get_cached_warehouse_dialect()
     structlog.contextvars.bind_contextvars(
         request_id=str(req.request_id), flow_name=ai_model.get_name() + "_multistep"
     )
@@ -307,7 +308,7 @@ async def multistep_flow(
             )
 
             try:
-                sqlglot.parse(result.sql_request, dialect="clickhouse")
+                sqlglot.parse(result.sql_request, dialect=warehouse_dialect)
             except sqlglot.errors.ParseError as e:
                 logger.error(
                     "SQL syntax error",

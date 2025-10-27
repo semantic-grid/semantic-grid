@@ -17,10 +17,10 @@ from sqlalchemy.orm.session import Session
 
 from fm_app.ai_models.model import AIModel
 from fm_app.api.model import (
+    McpServerRequest,
     RequestStatus,
     StructuredResponse,
     WorkerRequest,
-    McpServerRequest,
 )
 from fm_app.config import get_settings
 from fm_app.db.db import (
@@ -36,6 +36,7 @@ from fm_app.mcp_servers.mcp_async_providers import (
     DbRefAsyncProvider,
 )
 from fm_app.prompt_assembler.prompt_packs import PromptAssembler
+from fm_app.utils import get_cached_warehouse_dialect
 
 
 async def flex_flow(
@@ -45,6 +46,7 @@ async def flex_flow(
     flow_step = itertools.count(1)  # start from 1
 
     settings = get_settings()
+    warehouse_dialect = get_cached_warehouse_dialect()
     structlog.contextvars.bind_contextvars(
         request_id=req.request_id, flow_name=ai_model.get_name() + "_flex"
     )
@@ -312,7 +314,7 @@ async def flex_flow(
         )
 
         try:
-            sqlglot.parse(extracted_sql, dialect="clickhouse")
+            sqlglot.parse(extracted_sql, dialect=warehouse_dialect)
         except sqlglot.errors.ParseError as e:
             logger.error(
                 "SQL syntax error",
