@@ -13,6 +13,9 @@ alembic/versions/e7cf6ece9116_add_context_column_to_session_table.py
 alembic/versions/e806b209d0e9_add_query_table.py
 alembic/versions/e875a2bfeeb0_add_intent_to_request_status_type_enum.py
 alembic/versions/fcafb13134ea_add_refs_column_to_request_table.py
+examples/test_column_validation.py
+examples/test_dialect_detection.py
+examples/validate_metadata_example.py
 flow_manager.egg-info/PKG-INFO
 flow_manager.egg-info/SOURCES.txt
 flow_manager.egg-info/dependency_links.txt
@@ -22,6 +25,7 @@ fm_app/__init__.py
 fm_app/call_local.py
 fm_app/config.py
 fm_app/logs.py
+fm_app/stopwatch.py
 fm_app/ai_models/__init__.py
 fm_app/ai_models/llm.py
 fm_app/ai_models/model.py
@@ -46,6 +50,11 @@ fm_app/services/charts.py
 fm_app/services/model.py
 fm_app/slots/__init__.py
 fm_app/slots/schemas.py
+fm_app/utils/__init__.py
+fm_app/utils/dialect.py
+fm_app/validators/__init__.py
+fm_app/validators/metadata_validator.py
+fm_app/validators/sql_validator.py
 fm_app/workers/__init__.py
 fm_app/workers/agent.py
 fm_app/workers/data_only_flow.py
@@ -60,3 +69,6 @@ fm_app/workers/multistep_flow.py
 fm_app/workers/prompt_elements.py
 fm_app/workers/simple_flow.py
 fm_app/workers/worker.py
+tests/test_pagination.py
+tests/test_query_examples.py
+tests/test_query_examples_detailed.py

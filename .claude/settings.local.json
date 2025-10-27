@@ -11,7 +11,8 @@
       "Bash(git add:*)",
       "Bash(git stash:*)",
       "Bash(python tests/test_regex_debug.py:*)",
-      "Bash(npm run lint)"
+      "Bash(npm run lint)",
+      "Bash(uv run pytest:*)"
     ],
     "deny": [],
     "ask": []

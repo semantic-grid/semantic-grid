@@ -1,0 +1,18 @@
+# schema_descriptions.yaml
+# Base schema descriptions for database profiles.
+# Override or amend this file in client-configs overlays to customize behavior.
+
+version: 1.0.0
+description: Base database schema descriptions
+profiles:
+  # Default empty profile structure
+  # Client-specific overlays should provide actual table/column descriptions
+  wh:
+    whitelist: false
+    tables: {}
+  wh_new:
+    whitelist: false
+    tables: {}
+  wh_v2:
+    whitelist: false
+    tables: {}

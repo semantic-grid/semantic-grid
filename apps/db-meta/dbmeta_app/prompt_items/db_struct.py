@@ -103,6 +103,20 @@ def generate_schema_prompt(engine, settings, with_examples=False):
     tree = assemble_effective_tree(repo_root, profile, client, env)
 
     file = load_yaml(tree, "resources/schema_descriptions.yaml")
+
+    # Defensive: handle missing 'profiles' key or missing profile
+    if "profiles" not in file:
+        raise ValueError(
+            f"schema_descriptions.yaml missing 'profiles' key. "
+            f"File content: {file}"
+        )
+    if profile not in file["profiles"]:
+        available_profiles = list(file["profiles"].keys())
+        raise ValueError(
+            f"Profile '{profile}' not found in schema_descriptions.yaml. "
+            f"Available profiles: {available_profiles}"
+        )
+
     descriptions = file["profiles"][profile]
     schema_text = "The database contains the following tables:\n\n"
 
@@ -221,6 +235,20 @@ def get_db_schema() -> DbSchema:
     tree = assemble_effective_tree(repo_root, profile, client, env)
 
     file = load_yaml(tree, "resources/schema_descriptions.yaml")
+
+    # Defensive: handle missing 'profiles' key or missing profile
+    if "profiles" not in file:
+        raise ValueError(
+            f"schema_descriptions.yaml missing 'profiles' key. "
+            f"File content: {file}"
+        )
+    if profile not in file["profiles"]:
+        available_profiles = list(file["profiles"].keys())
+        raise ValueError(
+            f"Profile '{profile}' not found in schema_descriptions.yaml. "
+            f"Available profiles: {available_profiles}"
+        )
+
     descriptions = file["profiles"][profile]
 
     result: DbSchema = {}
