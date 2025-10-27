@@ -36,7 +36,7 @@ export const maybeDate = (value: string): Date | null => {
   let possibleDate = null;
   try {
     const val = Date.parse(value);
-    if (isNaN(val)) {
+    if (Number.isNaN(val)) {
       return null;
     }
     possibleDate = new Date(val);
