@@ -20,6 +20,11 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: '1.2.10'
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
