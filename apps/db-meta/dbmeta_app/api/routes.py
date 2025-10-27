@@ -118,6 +118,5 @@ async def preflight_query(req: TestSqlModel) -> PreflightResult:
     Returns an object which could contain **explanation** or **error** fields.
     Presence or absence of **error** field indicates if the query is invalid or not.
     """
-    db = req.db or get_settings().database_wh_db
     query = req.sql
     return query_preflight(query=query)

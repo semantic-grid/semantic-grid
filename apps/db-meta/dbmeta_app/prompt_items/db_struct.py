@@ -50,7 +50,8 @@ def get_sample_query(table: str, engine, limit: int = 5) -> str:
         # This gets rows in storage order, which is usually fine for sample data
         return f"SELECT * FROM {table} LIMIT {limit}"
     elif dialect == 'sqlite':
-        # SQLite: Simple LIMIT (RANDOM() is slow, but SQLite typically has small datasets)
+        # SQLite: Simple LIMIT (RANDOM() is slow, but SQLite typically
+        # has small datasets)
         return f"SELECT * FROM {table} LIMIT {limit}"
     elif dialect == 'mssql':
         # SQL Server: TABLESAMPLE can be used but syntax is different

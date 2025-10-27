@@ -1,14 +1,15 @@
 # from __future__ import annotations
 
+import copy
 import hashlib
 import pathlib
 import re
 from dataclasses import dataclass
-from typing import Dict, Any, List
+from typing import Any, Dict, List, Optional
 
 import yaml
-from jsonschema import validate, Draft202012Validator, exceptions as jsonschema_ex
-
+from jsonschema import Draft202012Validator, validate
+from jsonschema import exceptions as jsonschema_ex
 
 # ---------- Utilities
 
@@ -33,9 +34,6 @@ def write_text(path: pathlib.Path, s: str):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(s, encoding="utf-8")
 
-
-import copy
-from typing import Any, Optional
 
 # ---------- helpers
 
@@ -102,7 +100,8 @@ def json_merge_patch(
           * read per-child overrides: 'strategies', 'id_keys' (dicts of child->value)
           * meta-keys are not emitted in output
       - list vs list: merge using strategy/id_key
-      - list vs dict (overlay carries meta): if patch has '__list__' use it with strategy/id_key
+      - list vs dict (overlay carries meta): if patch has '__list__' use it
+        with strategy/id_key
       - anything else: replace
     """
 
@@ -353,9 +352,14 @@ def _collect_files(root: pathlib.Path) -> Dict[str, pathlib.Path]:
 
 
 def _read_overlay_json_if_exists(path: pathlib.Path) -> Optional[Dict[str, Any]]:
-    """If file ends with .json or .yaml and alongside there's a .patch.(json|yaml), apply patch."""
-    # Pattern: for JSON/YAML documents you can provide a sibling *.patch.json(yaml) with diff
-    # but default approach: we overlay by file replacement. JSON Merge Patch is best for *.json/*.yaml named exactly same in overlay.
+    """
+    If file ends with .json or .yaml and alongside there's a
+    .patch.(json|yaml), apply patch.
+    """
+    # Pattern: for JSON/YAML documents you can provide a sibling
+    # *.patch.json(yaml) with diff but default approach: we overlay
+    # by file replacement. JSON Merge Patch is best for *.json/*.yaml
+    # named exactly same in overlay.
     return None
 
 
@@ -447,7 +451,6 @@ def assemble_effective_tree(
 
     # If you need profile-specific subtrees in overlays, you can add them here
     # e.g., overlays/profile/<profile>/... placed after generic overlays:
-    prof_ov = None
     if client:
         cand = (
             REPO_ROOT
@@ -460,7 +463,6 @@ def assemble_effective_tree(
             / profile
         )
         if cand.exists():
-            prof_ov = cand
             overlay_dirs.append(cand)
 
     return assemble_tree(base_dir, overlay_dirs)
