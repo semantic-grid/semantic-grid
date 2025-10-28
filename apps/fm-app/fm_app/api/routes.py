@@ -1443,13 +1443,19 @@ async def stream_request_updates(
     async def event_generator():
         """Generate SSE events from PostgreSQL notifications."""
         conn = None
+        notify_queue = asyncio.Queue()
+
+        def notification_callback(connection, pid, channel, payload):
+            """Callback for PostgreSQL notifications."""
+            # Put notification into queue for async processing
+            notify_queue.put_nowait(payload)
+
         try:
             # Create asyncpg connection for LISTEN
             conn = await asyncpg.connect(db_url)
 
-            # Listen to the request_update channel
-            await conn.add_listener('request_update', lambda *args: None)
-            await conn.execute("LISTEN request_update;")
+            # Add listener with callback that puts notifications in queue
+            await conn.add_listener('request_update', notification_callback)
 
             logging.info(
                 "SSE connection established",
@@ -1485,16 +1491,15 @@ async def stream_request_updates(
 
                 # Wait for notification with timeout
                 try:
-                    # asyncpg doesn't have a built-in timeout for notifications,
-                    # so we use asyncio.wait_for with a short timeout to check
-                    # for disconnections periodically
-                    notification = await asyncio.wait_for(
-                        conn.notifies.get(),
+                    # Get notification from queue with timeout
+                    # to check for disconnections periodically
+                    payload_str = await asyncio.wait_for(
+                        notify_queue.get(),
                         timeout=5.0  # Check for disconnections every 5 seconds
                     )
 
                     # Parse the notification payload
-                    payload = json.loads(notification.payload)
+                    payload = json.loads(payload_str)
 
                     # Filter: only send notifications for this session
                     if payload.get("session_id") == session_id_str:
@@ -1554,7 +1559,7 @@ async def stream_request_updates(
             # Clean up: stop listening and close connection
             if conn is not None:
                 try:
-                    await conn.execute("UNLISTEN request_update;")
+                    await conn.remove_listener('request_update', notification_callback)
                     await conn.close()
                     logging.info(
                         "SSE connection closed",
