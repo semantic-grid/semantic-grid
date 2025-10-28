@@ -133,6 +133,7 @@ dev = [
     "black==25.1.0",
     "flake8==7.2.0",
     "ruff==0.11.6",
+    "pytest>=8.0.0",
 ]
 
 [project.scripts]
