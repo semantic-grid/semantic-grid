@@ -154,7 +154,10 @@ export const useSessionStatus = (
       updateConnectionStatus("connecting");
       console.log(`[SSE] Connecting to session ${sessionId}`);
 
-      const eventSource = new EventSource(`/api/apegpt/sse/${sessionId}`);
+      // Create EventSource with credentials to send cookies (Auth0/guest token)
+      const eventSource = new EventSource(`/api/apegpt/sse/${sessionId}`, {
+        withCredentials: true,
+      });
       eventSourceRef.current = eventSource;
 
       // Handle connection established

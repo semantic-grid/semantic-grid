@@ -26,12 +26,15 @@ export async function GET(
 
     try {
       token = await getAccessToken();
+      console.log("[SSE Proxy] Using Auth0 token");
     } catch (error: any) {
       // Fallback to guest token if Auth0 fails
+      console.log("[SSE Proxy] Auth0 failed, using guest token");
       token = { accessToken: guestToken };
     }
 
     if (!token || !token.accessToken) {
+      console.error("[SSE Proxy] No token available");
       return new Response("Unauthorized", { status: 401 });
     }
 
@@ -54,12 +57,17 @@ export async function GET(
     });
 
     if (!response.ok) {
+      const errorText = await response.text();
       console.error(
         `[SSE Proxy] Backend returned ${response.status}: ${response.statusText}`,
       );
-      return new Response(`Backend error: ${response.statusText}`, {
-        status: response.status,
-      });
+      console.error(`[SSE Proxy] Error body: ${errorText}`);
+      return new Response(
+        `Backend error: ${response.statusText} - ${errorText}`,
+        {
+          status: response.status,
+        },
+      );
     }
 
     if (!response.body) {
