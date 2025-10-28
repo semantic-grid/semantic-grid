@@ -37,6 +37,7 @@ import ShareQueryUrl from "@/app/components/ShareQueryUrl";
 import { useGridSession } from "@/app/contexts/GridSession";
 import { ThemeContext } from "@/app/contexts/Theme";
 import { StructuredText, structuredText } from "@/app/helpers/text";
+import { useSessionStatus } from "@/app/hooks/useSessionStatus";
 import { getSuggestions } from "@/app/lib/suggestions";
 import type { TChatMessage, TChatSection } from "@/app/lib/types";
 
@@ -285,6 +286,9 @@ export const ChatContainer = ({
   // const [followUps, setFollowUps] = useState<string[]>([]);
   const [showButton, setShowButton] = useState(false);
   const [inputHeight, setInputHeight] = useState(0);
+
+  const { connectionStatus, latestUpdate } = useSessionStatus(id);
+  console.log("*** session status ***", { connectionStatus, latestUpdate });
 
   const followUps = [
     "Show top traders by 24h PnL with their PnL, transaction count, and win rate.",
