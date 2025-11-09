@@ -359,6 +359,7 @@ export const ChatContainer = ({
                           sx={{
                             borderRadius: "12px",
                             padding: 2,
+                            pb: i % 2 === 0 ? 2 : 0.5,
                             bgcolor: getBgColor({ isBot: i % 2 !== 0 }),
                             width: "fit-content",
                             display: isVisible(msg.text) ? "block" : "none",
@@ -414,7 +415,7 @@ export const ChatContainer = ({
                             Boolean(requestId) &&
                             section.requestId === requestId && (
                               <Stack
-                                sx={{ width: "100%", mt: 0 }}
+                                sx={{ width: "100%", mt: 0.5 }}
                                 direction="row"
                                 spacing={1}
                                 alignItems="center"

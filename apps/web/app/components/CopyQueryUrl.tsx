@@ -1,5 +1,5 @@
 import { Check, ContentCopy } from "@mui/icons-material";
-import { IconButton, Tooltip } from "@mui/material";
+import { Box, IconButton, Tooltip } from "@mui/material";
 import { useState } from "react";
 
 import type { TChatSection } from "@/app/lib/types";
@@ -27,7 +27,14 @@ const CopyQueryUrl = ({ section }: { section: TChatSection }) => {
             });
         }}
       >
-        {copied ? <Check fontSize="small" /> : <ContentCopy fontSize="small" />}
+        <Box
+          component={copied ? Check : ContentCopy}
+          sx={{
+            width: 16,
+            height: 16,
+            color: "text.secondary",
+          }}
+        />
       </IconButton>
     </Tooltip>
   );

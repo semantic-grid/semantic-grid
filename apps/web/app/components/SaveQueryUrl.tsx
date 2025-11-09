@@ -39,8 +39,8 @@ const SaveQueryUrl = ({ section }: { section: TChatSection }) => {
           <Box
             component={saved ? Check : PlaylistAddIcon}
             sx={{
-              width: 23,
-              height: 23,
+              width: 16,
+              height: 16,
               color: "text.secondary",
             }}
           />
