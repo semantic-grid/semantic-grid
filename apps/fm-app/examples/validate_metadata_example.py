@@ -4,7 +4,7 @@ Example usage of MetadataValidator to check QueryMetadata consistency.
 
 from uuid import uuid4
 
-from fm_app.api.model import Column, QueryMetadata
+from fm_app.api.v1.model import Column, QueryMetadata
 from fm_app.validators import MetadataValidationError, MetadataValidator
 
 

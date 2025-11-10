@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 from uuid_extensions import uuid7
 
-from fm_app.api.model import (
+from fm_app.api.v1.model import (
     AddRequestModel,
     CreateQueryModel,
     CreateSessionModel,

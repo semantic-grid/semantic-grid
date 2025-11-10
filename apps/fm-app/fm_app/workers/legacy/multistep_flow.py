@@ -90,7 +90,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.session import Session
 
 from fm_app.ai_models.model import AIModel, InvestigationStep
-from fm_app.api.model import (
+from fm_app.api.v1.model import (
     McpServerRequest,
     RequestStatus,
     StructuredResponse,

@@ -57,7 +57,7 @@ def test_dialect_in_validator():
     try:
         import uuid
 
-        from fm_app.api.model import QueryMetadata
+        from fm_app.api.v1.model import QueryMetadata
         from fm_app.validators.metadata_validator import MetadataValidator
 
         # Create simple metadata

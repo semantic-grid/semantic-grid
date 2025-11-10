@@ -2,7 +2,7 @@
 Test script for column validation in data handler.
 """
 
-from fm_app.api.model import Column
+from fm_app.api.v1.model import Column
 from fm_app.api.routes import validate_sort_column
 
 

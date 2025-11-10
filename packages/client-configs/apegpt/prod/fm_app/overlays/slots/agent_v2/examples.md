@@ -1,0 +1,391 @@
+# Query Examples
+
+These examples demonstrate common query patterns used in our system. Use these as reference when generating SQL queries.
+
+## Wallet Balance Queries
+
+### Highest Token Holder at Specific Date
+**Request:** What wallet held the most $token tokens on $date?
+
+**SQL Pattern:**
+```sql
+WITH latest_balance_per_owner AS (
+  SELECT
+    owner,
+    argMax(post_balance_calculated, ts) AS latest_balance
+  FROM token_balance
+  WHERE
+    token_mint = '$token_mint'
+    AND post_balance_calculated IS NOT NULL
+    AND ts <= '$date'
+  GROUP BY owner
+)
+SELECT *
+FROM latest_balance_per_owner
+ORDER BY latest_balance DESC
+LIMIT 1;
+```
+
+### Balance at Specific Time in Past
+**Request:** What was the $token_symbol balance of account $wallet one $time_interval ago?
+
+**SQL Pattern:**
+```sql
+SELECT tb.post_balance_calculated AS $token_symbol_balance
+FROM token_balance AS tb
+WHERE tb.owner = '$wallet'
+  AND tb.token_mint = '$token_mint'
+  AND tb.ts < now() - INTERVAL $time_interval
+ORDER BY tb.ts DESC
+LIMIT 1;
+```
+
+### Total Token Supply Calculation
+**Request:** What is the full $token_symbol token supply for end of the day yesterday?
+
+**SQL Pattern:**
+```sql
+-- Full token supply = sum of all account balances at specific date
+SELECT SUM(latest_balance) AS total_$token_symbol_supply
+FROM (
+  SELECT
+    owner,
+    argMax(post_balance_calculated, ts) AS latest_balance
+  FROM token_balance
+  WHERE
+    token_mint = '$token_mint'
+    AND ts <= '$date'
+  GROUP BY owner
+);
+```
+
+### Token Holder Count
+**Request:** How many $token token holders existed on $date?
+
+**SQL Pattern:**
+```sql
+SELECT count() AS holder_count
+FROM (
+  SELECT
+    owner,
+    argMax(post_balance_calculated, ts) AS balance
+  FROM token_balance
+  WHERE
+    token_mint = '$token_mint'
+    AND ts <= '$date'
+  GROUP BY owner
+  HAVING balance > 0
+);
+```
+
+## Transaction History Queries
+
+### Recent Transactions for Wallet
+**Request:** What are the last $count $token transactions in $period completed by wallet $wallet?
+
+**SQL Pattern:**
+```sql
+SELECT
+  ts,
+  owner,
+  token_mint,
+  change_calculated AS amount
+FROM token_balance
+WHERE
+  owner = '$wallet'
+  AND token_mint = '$token_mint'
+  AND change_calculated > 0
+  AND ts >= '$period_start'
+  AND ts < '$period_end'
+ORDER BY ts DESC
+LIMIT $count;
+```
+
+### Wallets That Emptied Balance
+**Request:** Find the total number of wallets that sent their entire $token_symbol token balance to other wallets during $period?
+
+**SQL Pattern:**
+```sql
+SELECT COUNT(DISTINCT owner) AS wallet_count
+FROM token_balance
+WHERE token_mint = '$token_mint'
+  AND change_calculated < 0
+  AND post_balance_calculated = 0
+  AND ts >= '$period_start'
+  AND ts < '$period_end';
+```
+
+## Complex Multi-Step Queries
+
+### Most Active Wallet's End Balance
+**Request:** What was the calculated balance of the wallet with the highest number of $token token transactions in $date by the end of the month?
+
+**SQL Pattern:**
+```sql
+WITH wallet_activity AS (
+  SELECT
+    owner,
+    COUNT(*) AS tx_count
+  FROM token_balance
+  WHERE
+    token_mint = '$token_mint'
+    AND is_snapshot = FALSE
+    AND toYYYYMM(ts) = '$date'
+  GROUP BY owner
+  ORDER BY tx_count DESC
+  LIMIT 1
+),
+latest_snapshot AS (
+  SELECT
+    owner,
+    argMax(post_balance_calculated, ts) AS snapshot_balance
+  FROM token_balance
+  WHERE
+    token_mint = '$token_mint'
+    AND is_snapshot = TRUE
+    AND ts <= '$date_ts'
+    AND post_balance_calculated IS NOT NULL
+    AND owner IN (SELECT owner FROM wallet_activity)
+  GROUP BY owner
+),
+latest_change AS (
+  SELECT
+    owner,
+    argMax(post_balance_calculated, ts) AS final_balance
+  FROM token_balance
+  WHERE
+    token_mint = '$token_mint'
+    AND is_snapshot = FALSE
+    AND ts <= '$date_ts'
+    AND post_balance_calculated IS NOT NULL
+    AND owner IN (SELECT owner FROM wallet_activity)
+  GROUP BY owner
+)
+SELECT
+  c.owner,
+  COALESCE(c.final_balance, s.snapshot_balance) AS balance_by_end_of_period
+FROM latest_snapshot s
+FULL OUTER JOIN latest_change c USING (owner);
+```
+
+### Sender Balance from Transfer Event
+**Request:** What was the balance of the wallet that sent most recent transaction of $token_symbol in $period to the $wallet?
+
+**SQL Pattern:**
+```sql
+WITH src_owner AS (
+  SELECT ti.source_owner, ti.signature, destination_owner
+  FROM instruction AS ti
+  WHERE ti.destination_owner = '$wallet'
+    AND ti.mint = '$token_mint'
+    AND ti.ts >= '$period_start'
+    AND ti.ts <= '$period_end'
+    AND ti.instruction_type IN ('transfer', 'transferChecked')
+  ORDER BY ti.ts DESC
+  LIMIT 1
+)
+SELECT tb.pre_balance_calculated
+FROM token_balance AS tb
+JOIN src_owner ON tb.owner = src_owner.source_owner
+WHERE
+  tb.signature = src_owner.signature
+  AND tb.token_mint = '$token_mint';
+```
+
+### First Sender's Final Balance
+**Request:** What was the balance by the end of $period of the wallet that was the first wallet to send $token_symbol to the following address $wallet?
+
+**SQL Pattern:**
+```sql
+WITH first_sender AS (
+  SELECT
+    source_owner AS owner,
+    MIN(ts) AS first_transaction_time
+  FROM instruction
+  WHERE
+    instruction_type IN ('transfer', 'transferChecked')
+    AND mint = '$token_mint'
+    AND destination_owner = '$wallet'
+  GROUP BY source_owner
+  ORDER BY first_transaction_time ASC
+  LIMIT 1
+)
+SELECT
+  argMax(post_balance_calculated, ts) AS balance_at_end_of_period
+FROM token_balance
+WHERE
+  owner = (SELECT owner FROM first_sender)
+  AND ts <= '$period'
+GROUP BY owner;
+```
+
+## Trading Analysis Queries
+
+### Trade Copying Detection
+**Request:** Which wallets have copied the trades of other wallets most often for the $token?
+
+**SQL Pattern:**
+```sql
+SELECT
+  lead.source_account_owner AS leader,
+  follow.source_account_owner AS follower,
+  COUNT(*) AS times_copied
+FROM trades AS lead
+JOIN trades AS follow
+  ON lead.destination_ticker = follow.destination_ticker
+  AND follow.ts BETWEEN lead.ts AND lead.ts + INTERVAL 2 MINUTE
+  AND lead.source_ticker = '$token'
+  AND follow.source_ticker = '$token'
+WHERE
+  lead.source_account_owner != follow.source_account_owner
+GROUP BY leader, follower
+HAVING times_copied >= 2
+ORDER BY times_copied DESC;
+```
+
+### Profitable Wallets (Excluding High-Frequency Traders)
+**Request:** Provide a list of wallets that have profited from $token token trades (as measured against USD), excluding high-frequency trading accounts. For each wallet provide total USD gained, cost basis, and net profit.
+
+**SQL Pattern:**
+```sql
+-- Step 1: Identify Qualified Wallets (less than 100 trades per day)
+WITH qualified_wallets AS (
+  SELECT wallet
+  FROM (
+    SELECT
+      source_account_owner AS wallet,
+      toDate(ts) AS day,
+      count() AS daily_trades
+    FROM trades
+    WHERE source_account_owner IS NOT NULL
+    GROUP BY wallet, day
+  )
+  GROUP BY wallet
+  HAVING max(daily_trades) < 100
+),
+
+-- Step 2: $token/USD slot-level price
+token_usd_rate_per_slot AS (
+  SELECT
+    slot,
+    coalesce(
+      avgIf(source_calculated_amount / destination_calculated_amount,
+            destination_ticker = '$token' AND source_ticker IN ('USDC', 'USDT', 'USDH')),
+      avgIf(destination_calculated_amount / source_calculated_amount,
+            source_ticker = '$token' AND destination_ticker IN ('USDC', 'USDT', 'USDH'))
+    ) AS avg_price_usd
+  FROM trades
+  WHERE (source_ticker = '$token' OR destination_ticker = '$token')
+    AND (source_ticker IN ('USDC', 'USDT', 'USDH') OR destination_ticker IN ('USDC', 'USDT', 'USDH'))
+    AND source_calculated_amount IS NOT NULL
+    AND destination_calculated_amount IS NOT NULL
+  GROUP BY slot
+),
+
+-- Step 3: All $token buys for qualified wallets
+token_buys_all AS (
+  SELECT
+    d.slot,
+    d.ts,
+    d.source_account_owner AS wallet,
+    d.destination_calculated_amount AS token_received
+  FROM trades d
+  INNER JOIN qualified_wallets q ON d.source_account_owner = q.wallet
+  WHERE d.destination_ticker = '$token'
+    AND d.source_calculated_amount IS NOT NULL
+    AND d.destination_calculated_amount IS NOT NULL
+),
+
+estimated_usd_buys AS (
+  SELECT
+    b.*,
+    r.avg_price_usd,
+    b.token_received * r.avg_price_usd AS est_usd_spent
+  FROM token_buys_all b
+  LEFT JOIN token_usd_rate_per_slot r ON b.slot = r.slot
+  WHERE r.avg_price_usd IS NOT NULL
+),
+
+-- Step 4: All token sells for qualified wallets
+token_sells_all AS (
+  SELECT
+    d.slot,
+    d.ts,
+    d.source_account_owner AS wallet,
+    d.source_calculated_amount AS token_sold
+  FROM trades d
+  INNER JOIN qualified_wallets q ON d.source_account_owner = q.wallet
+  WHERE d.source_ticker = '$token'
+    AND d.source_calculated_amount IS NOT NULL
+),
+
+estimated_usd_sells AS (
+  SELECT
+    s.*,
+    r.avg_price_usd,
+    s.token_sold * r.avg_price_usd AS est_usd_received
+  FROM token_sells_all s
+  LEFT JOIN token_usd_rate_per_slot r ON s.slot = r.slot
+  WHERE r.avg_price_usd IS NOT NULL
+),
+
+-- Step 5: Match each sell with historical buys
+sell_with_buy_history AS (
+  SELECT
+    s.wallet,
+    s.ts AS sell_ts,
+    s.est_usd_received,
+    SUM(b.est_usd_spent) AS total_usd_spent,
+    SUM(b.token_received) AS total_token_bought,
+    total_usd_spent / total_token_bought AS avg_buy_price_usd
+  FROM estimated_usd_sells s
+  LEFT JOIN estimated_usd_buys b
+    ON s.wallet = b.wallet AND b.ts < s.ts
+  GROUP BY s.wallet, s.ts, s.est_usd_received
+),
+
+-- Step 6: Profitable sells only
+pnl_per_trade AS (
+  SELECT
+    wallet,
+    est_usd_received,
+    total_usd_spent,
+    est_usd_received - total_usd_spent AS pnl
+  FROM sell_with_buy_history
+  WHERE total_usd_spent > 0 AND est_usd_received > total_usd_spent
+),
+
+-- Step 7: Count of token buys per wallet
+buy_counts AS (
+  SELECT
+    wallet,
+    count() AS num_token_buys
+  FROM estimated_usd_buys
+  GROUP BY wallet
+)
+
+-- Step 8: Final result with PnL % and buy count
+SELECT
+  p.wallet,
+  SUM(p.est_usd_received) AS total_usd_gained,
+  SUM(p.total_usd_spent) AS total_usd_cost_basis,
+  SUM(p.pnl) AS net_pnl_usd,
+  ROUND(SUM(p.pnl) / SUM(p.total_usd_spent) * 100, 2) AS pnl_percent,
+  b.num_token_buys
+FROM pnl_per_trade p
+LEFT JOIN buy_counts b ON p.wallet = b.wallet
+GROUP BY p.wallet, b.num_token_buys
+ORDER BY net_pnl_usd DESC;
+```
+
+## Notes on Using These Examples
+
+- Replace `$token`, `$token_mint`, `$token_symbol`, `$wallet`, `$date`, `$period`, etc. with actual values
+- These patterns demonstrate proper use of:
+  - `argMax()` for latest values
+  - `DISTINCT signature` for unique transaction counts
+  - CTEs (WITH clauses) for complex multi-step analysis
+  - Proper filtering on `is_snapshot` for aggregated vs detailed data
+  - Time-based filtering with `ts` column
+  - Joins between tables using `signature` field
+- Always validate generated SQL before execution

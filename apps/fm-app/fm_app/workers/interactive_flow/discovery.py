@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from fm_app.api.model import (
+from fm_app.api.v1.model import (
     IntentAnalysis,
     McpServerRequest,
     RequestStatus,

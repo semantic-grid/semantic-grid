@@ -2,7 +2,7 @@ from agents import Agent, ModelSettings
 from agents.mcp import MCPServerSse
 from dotenv import load_dotenv
 
-from fm_app.api.model import StructuredResponse
+from fm_app.api.v1.model import StructuredResponse
 from fm_app.config import get_settings
 from fm_app.workers.experimental.prompt_elements import (
     expertise_prefix,

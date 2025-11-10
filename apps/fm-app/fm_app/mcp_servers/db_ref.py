@@ -1,6 +1,6 @@
 import requests
 
-from fm_app.api.model import GetPromptModel, McpServerRequest, PromptsSetModel
+from fm_app.api.v1.model import GetPromptModel, McpServerRequest, PromptsSetModel
 
 
 def get_db_ref_prompt_items(

@@ -12,7 +12,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from fm_app.ai_models.llm import AnthropicModel, DeepSeekModel, GeminiModel, OpenAIModel
-from fm_app.api.model import (
+from fm_app.api.v1.model import (
     AddRequestModel,
     DBType,
     FlowType,
@@ -431,3 +431,99 @@ async def _wrk_add_request(args):
 
     # finally:
     #    return request
+
+
+# ============================================================================
+# V2 Worker Task - Message-based agentic processing
+# ============================================================================
+
+from fm_app.workers.v2.model import WorkerMessageRequest
+from fm_app.workers.v2.worker_v2 import get_worker
+
+
+@app.task(
+    name="wrk_process_message_v2",
+    autoretry_for=(Exception,),
+    retry_kwargs={"max_retries": 3, "countdown": 5},
+    retry_backoff=True,
+    retry_backoff_max=300,  # Max 5 minutes between retries
+    retry_jitter=True,  # Add randomness to prevent thundering herd
+)
+def wrk_process_message_v2(args):
+    """
+    V2 worker task - processes a single user message using agentic approach.
+
+    Unlike v1 which processes entire requests, v2 processes individual messages
+    and emits multiple response messages.
+
+    Crash recovery:
+    - Automatically retries on any exception (up to 3 times)
+    - Uses exponential backoff with jitter
+    - If all retries fail, marks message as FAILED
+    """
+    return asyncio.get_event_loop().run_until_complete(_wrk_process_message_v2(args))
+
+
+async def _wrk_process_message_v2(args):
+    """Process a v2 message request."""
+    from fm_app.api.v2.model import MessageStatus
+    from fm_app.db.db_v2 import update_message_status
+
+    request = WorkerMessageRequest(**args)
+
+    try:
+        async for db in get_db():
+            logger.info(
+                "Processing v2 message",
+                session_id=str(request.session_id),
+                message_id=request.message_id,
+                kind=request.kind.value,
+                flow=request.flow.value,
+            )
+
+            # Get the global worker instance
+            worker = await get_worker()
+
+            # Process the message
+            response = await worker.process_message(request, db)
+
+            logger.info(
+                "V2 message processed",
+                session_id=str(request.session_id),
+                message_count=len(response.messages),
+                success=response.success,
+            )
+
+            return response
+
+    except Exception as e:
+        logger.error(
+            "Unhandled exception in v2 worker",
+            error=str(e),
+            session_id=str(request.session_id),
+            exc_info=True,
+        )
+
+        # Mark message as FAILED after max retries exhausted
+        # (Celery will handle retries, this only runs after all retries fail)
+        try:
+            async for db in get_db():
+                await update_message_status(
+                    message_id=request.message_id,
+                    status=MessageStatus.FAILED,
+                    error=f"Worker crash after retries: {str(e)}",
+                    db=db,
+                )
+                logger.info(
+                    "Marked message as FAILED after retry exhaustion",
+                    message_id=request.message_id,
+                )
+        except Exception as update_err:
+            logger.error(
+                "Failed to update message status",
+                error=str(update_err),
+                message_id=request.message_id,
+            )
+
+        # Re-raise for Celery
+        raise

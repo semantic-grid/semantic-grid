@@ -1,6 +1,6 @@
 """General response handler - chat and disambiguation."""
 
-from fm_app.api.model import (
+from fm_app.api.v1.model import (
     IntentAnalysis,
     InteractiveRequestType,
     RequestStatus,

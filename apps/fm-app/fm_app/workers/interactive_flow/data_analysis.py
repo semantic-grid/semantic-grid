@@ -1,6 +1,6 @@
 """Data analysis handler - analyze existing data without SQL generation."""
 
-from fm_app.api.model import (
+from fm_app.api.v1.model import (
     McpServerRequest,
     RequestStatus,
     StructuredResponse,

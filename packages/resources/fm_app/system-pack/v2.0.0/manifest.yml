@@ -1,0 +1,49 @@
+version: "2.0.0"
+description: "V2 Agentic Architecture - Message-based flexible processing"
+
+# Default model configuration
+model:
+  provider: "anthropic"
+  name: "claude-3-7-sonnet-20250219"
+  temperature: 0
+  max_tokens: 4096
+  parallel_tool_calls: true
+
+# MCP servers configuration
+mcp_servers:
+  dbmeta:
+    name: "Database Metadata"
+    url_template: "${DBMETA}/sse"
+    cache_tools: true
+    required: true
+    description: "Schema introspection, query validation, examples"
+
+  dbref:
+    name: "Reference Data"
+    url_template: "${DBREF}/sse"
+    cache_tools: true
+    required: false
+    description: "Reference data and lookup tables"
+
+# Agent capabilities
+capabilities:
+  - query_execution
+  - schema_discovery
+  - query_validation
+  - data_analysis
+  - error_recovery
+
+# Message types the agent can emit
+output_types:
+  - chat
+  - query_result
+  - table
+  - notification
+
+# Behavioral settings
+behavior:
+  max_turns_per_session: 50
+  auto_validate_sql: true
+  default_query_limit: 100
+  progressive_disclosure: true
+  context_window: 10  # Number of previous messages to include

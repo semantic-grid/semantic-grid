@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.session import Session
 
 from fm_app.ai_models.model import AIModel
-from fm_app.api.model import WorkerRequest
+from fm_app.api.v1.model import WorkerRequest
 from fm_app.config import Settings, get_settings
 from fm_app.db.db import get_query_by_id, get_session_by_id
 from fm_app.mcp_servers.mcp_async_providers import (

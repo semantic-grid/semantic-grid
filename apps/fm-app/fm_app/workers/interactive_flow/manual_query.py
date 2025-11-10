@@ -1,7 +1,7 @@
 """Manual query handler - user provides raw SQL."""
 
 
-from fm_app.api.model import (
+from fm_app.api.v1.model import (
     CreateQueryModel,
     McpServerRequest,
     QueryMetadata,

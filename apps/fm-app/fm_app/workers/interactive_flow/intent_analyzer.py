@@ -1,6 +1,6 @@
 """Intent analyzer - determine user's intent and next action."""
 
-from fm_app.api.model import (
+from fm_app.api.v1.model import (
     IntentAnalysis,
     McpServerRequest,
     RequestStatus,

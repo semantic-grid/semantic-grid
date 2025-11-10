@@ -2,7 +2,7 @@ import json
 
 from fastmcp import Client
 
-from fm_app.api.model import (
+from fm_app.api.v1.model import (
     DBType,
     FlowType,
     McpServerRequest,

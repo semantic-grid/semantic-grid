@@ -23,7 +23,7 @@ from starlette import status
 
 from fm_app.api.auth0 import VerifyGuestToken, VerifyToken
 from fm_app.api.db_session import get_db, wh_engine
-from fm_app.api.model import (
+from fm_app.api.v1.model import (
     AddLinkedRequestModel,
     AddRequestModel,
     ChartRequest,

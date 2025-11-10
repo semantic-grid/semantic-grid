@@ -4,7 +4,7 @@ import logging
 from dotenv import load_dotenv
 
 from fm_app.api.db_session import get_db
-from fm_app.api.model import AddRequestModel, FlowType, WorkerRequest
+from fm_app.api.v1.model import AddRequestModel, FlowType, WorkerRequest
 from fm_app.db.db import add_request
 from fm_app.workers.worker import wrk_add_request
 

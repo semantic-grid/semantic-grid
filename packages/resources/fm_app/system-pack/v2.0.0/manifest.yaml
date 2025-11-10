@@ -1,0 +1,22 @@
+pack_name: fm-app-v2-agent
+version: 2.0.0
+target_component: fm_app
+dependencies:
+  - name: db-meta-core
+    version: ">=1.0.0"
+slots:
+  agent_v2:
+    # V2 agent-based workflow using OpenAI Agents SDK
+    required: true
+    inputs: [client_id, user_message, conversation_history]
+    outputs: [response]
+    requires:
+      mcp:
+        - name: db-meta
+          vars: [db_meta_prompt_items]
+          resources:
+            - "db-meta://schema/summary"
+        # - name: db-ref
+        #   vars: [db_ref_prompt_items]
+        #   resources:
+        #     - "db-ref://entities/topk?k=50"

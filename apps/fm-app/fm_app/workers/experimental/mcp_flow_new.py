@@ -79,7 +79,7 @@ from openai.types.responses import EasyInputMessageParam
 from sqlalchemy.orm.session import Session
 
 from fm_app.ai_models.model import AIModel
-from fm_app.api.model import RequestStatus, StructuredResponse, WorkerRequest
+from fm_app.api.v1.model import RequestStatus, StructuredResponse, WorkerRequest
 from fm_app.config import get_settings
 from fm_app.mcp_servers.db_meta import get_db_name
 from fm_app.mcp_servers.db_ref import get_db_ref_prompt_items

@@ -81,7 +81,9 @@ export const GET = async (req: NextRequest) => {
     .setExpirationTime("365d")
     .sign(privateKey);
 
-  const response = NextResponse.redirect(`${schema}://${host}/`);
+  // Support returnTo query parameter for redirecting back to the original page
+  const returnTo = req.nextUrl.searchParams.get("returnTo") || "/";
+  const response = NextResponse.redirect(`${schema}://${host}${returnTo}`);
   response.cookies.set("uid", jwt, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",

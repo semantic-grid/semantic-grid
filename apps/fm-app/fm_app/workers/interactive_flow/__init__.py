@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.session import Session
 
 from fm_app.ai_models.model import AIModel
-from fm_app.api.model import InteractiveRequestType, RequestStatus, WorkerRequest
+from fm_app.api.v1.model import InteractiveRequestType, RequestStatus, WorkerRequest
 from fm_app.db.db import update_request_status
 from fm_app.stopwatch import stopwatch
 from fm_app.workers.interactive_flow.data_analysis import handle_data_analysis

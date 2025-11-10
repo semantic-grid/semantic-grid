@@ -8,7 +8,7 @@ from typing import Any, Optional
 import sqlglot
 from sqlglot import exp
 
-from fm_app.api.model import QueryMetadata
+from fm_app.api.v1.model import QueryMetadata
 from fm_app.utils import get_cached_warehouse_dialect
 
 

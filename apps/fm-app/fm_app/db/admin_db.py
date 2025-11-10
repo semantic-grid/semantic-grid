@@ -5,7 +5,7 @@ from pydantic import ValidationError
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from fm_app.api.model import GetRequestModel, GetSessionModel, RequestStatus
+from fm_app.api.v1.model import GetRequestModel, GetSessionModel, RequestStatus
 
 
 async def get_all_sessions_admin(
@@ -17,7 +17,7 @@ async def get_all_sessions_admin(
     )
     get_all_session_sql = text(
         """
-    SELECT * 
+    SELECT *
     FROM session
     ORDER BY created_at DESC
     LIMIT :limit OFFSET :offset;
@@ -46,7 +46,7 @@ async def get_all_requests_admin(
     )
     get_all_requests_sql = text(
         """
-        SELECT * 
+        SELECT *
         FROM request
         WHERE status = :status and sql is not null
         ORDER BY created_at DESC

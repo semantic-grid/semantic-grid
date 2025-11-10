@@ -28,7 +28,7 @@ refine queries and build on previous results.
 
 import re
 
-from fm_app.api.model import (
+from fm_app.api.v1.model import (
     CreateQueryModel,
     IntentAnalysis,
     McpServerRequest,
