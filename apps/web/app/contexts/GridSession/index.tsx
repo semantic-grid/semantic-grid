@@ -27,6 +27,7 @@ import { createRequest } from "@/app/actions";
 import { increaseTrialCount } from "@/app/chat/actions";
 import { StyledValue } from "@/app/components/StyledValue";
 import { AppContext } from "@/app/contexts/App";
+import { useDataFetch } from "@/app/contexts/DataFetchContext";
 import { useSessionContext } from "@/app/contexts/SessionStatus";
 import { isSolanaAddress, isSolanaSignature } from "@/app/helpers/cell";
 import { useInfiniteQuery } from "@/app/hooks/useInfiniteQuery";
@@ -112,6 +113,8 @@ export interface ChatSessionContextType {
   requestId: string | undefined;
   setRequestId: React.Dispatch<React.SetStateAction<string | undefined>>;
   error: any;
+  fetchEnabled: boolean;
+  onFetchData: () => void;
 }
 
 export const getDecision = async (
@@ -409,6 +412,9 @@ export const GridSessionProvider = ({
   const [selectedAction, setSelectedAction] =
     useState<keyof typeof options>("submit");
   const performanceWarningShown = useRef<string | null>(null);
+  const [fetchEnabled, setFetchEnabled] = useState(true); // Start with true to allow SWR to check cache
+  const lastQueryIdRef = useRef<string | undefined>(undefined);
+  const hasInitialized = useRef(false);
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const scrollToBottom = () => {
@@ -590,9 +596,91 @@ export const GridSessionProvider = ({
     sql: query?.sql || metadata?.sql,
     sortBy,
     sortOrder,
+    enabled: fetchEnabled,
   });
   const hasLoadedOnce = useRef(false);
   const triggered = useRef(false);
+  const dataFetchContext = useDataFetch();
+
+  // Initial check on mount - let SWR try to load from cache first
+  useEffect(() => {
+    if (!hasInitialized.current) {
+      hasInitialized.current = true;
+
+      // On first mount, check after a brief moment to let SWR hydrate
+      const timer = setTimeout(() => {
+        console.log("Initial cache check:", {
+          dataLength: data.length,
+          isLoading,
+        });
+        if (data.length === 0 && !isLoading) {
+          // No cached data available, disable fetch
+          setFetchEnabled(false);
+        }
+      }, 100);
+
+      return () => clearTimeout(timer);
+    }
+  }, [data.length, isLoading]);
+
+  // Detect query_id changes and check cache state
+  useEffect(() => {
+    const currentQueryId = requestId || sessionId;
+    const currentSql = query?.sql || metadata?.sql;
+
+    // Check if query_id has changed
+    if (currentQueryId !== lastQueryIdRef.current && hasInitialized.current) {
+      lastQueryIdRef.current = currentQueryId;
+
+      // Check if we have cached data for this query
+      if (currentQueryId && currentSql) {
+        // Check both EventSource cache and if we already have data loaded
+        const cacheStatus = dataFetchContext.getCacheStatus({
+          id: currentQueryId,
+          limit: 100,
+          offset: 0,
+          sortBy,
+          sortOrder,
+        });
+
+        // Enable fetch if we have cached data OR if we already have rows loaded
+        if (cacheStatus === "complete" || (data && data.length > 0)) {
+          setFetchEnabled(true);
+        } else {
+          // No cache, disable fetch and show confirmation
+          setFetchEnabled(false);
+        }
+      } else {
+        setFetchEnabled(false);
+      }
+    }
+  }, [
+    requestId,
+    sessionId,
+    query?.sql,
+    metadata?.sql,
+    sortBy,
+    sortOrder,
+    dataFetchContext,
+    data,
+  ]);
+
+  // On mount, wait for SWR to potentially hydrate from localStorage
+  useEffect(() => {
+    if (!hasInitialized.current) {
+      // Small delay to let SWR hydrate from localStorage
+      const timer = setTimeout(() => {
+        hasInitialized.current = true;
+
+        // After hydration, if no data loaded, disable fetch
+        if (data.length === 0 && !isLoading) {
+          setFetchEnabled(false);
+        }
+      }, 50);
+
+      return () => clearTimeout(timer);
+    }
+  }, [data.length, isLoading]);
 
   // Check for performance warnings and show confirmation dialog
   useEffect(() => {
@@ -790,6 +878,11 @@ export const GridSessionProvider = ({
   const rowCountRef = React.useRef(dataRowCount || metadata?.row_count || 0);
 
   const rowCount = React.useMemo(() => {
+    // If fetch is disabled, return 0 to show empty state
+    if (!fetchEnabled) {
+      return 0;
+    }
+
     if (dataRowCount !== undefined) {
       rowCountRef.current = dataRowCount;
     }
@@ -797,7 +890,7 @@ export const GridSessionProvider = ({
       rowCountRef.current = metadata.row_count;
     }
     return rowCountRef.current;
-  }, [dataRowCount]);
+  }, [dataRowCount, fetchEnabled]);
 
   const refs = useMemo(
     () => ({
@@ -1036,6 +1129,10 @@ export const GridSessionProvider = ({
     setNewCol(false);
   };
 
+  const onFetchData = () => {
+    setFetchEnabled(true);
+  };
+
   return (
     <Index.Provider
       value={{
@@ -1083,6 +1180,8 @@ export const GridSessionProvider = ({
         requestId,
         setRequestId,
         error: dataError,
+        fetchEnabled,
+        onFetchData,
       }}
     >
       {children}

@@ -41,6 +41,8 @@ interface DataFetchContextValue {
     params: FetchParams,
     callbacks: SubscriptionCallbacks,
   ) => () => void;
+  hasCache: (params: FetchParams) => boolean;
+  getCacheStatus: (params: FetchParams) => "none" | "complete" | "error";
 }
 
 const DataFetchContext = createContext<DataFetchContextValue | undefined>(
@@ -103,7 +105,9 @@ export const DataFetchProvider = ({ children }: { children: ReactNode }) => {
       });
 
       eventSource.addEventListener("error", (e: any) => {
-        const errorData = e.data ? JSON.parse(e.data) : { error: "Unknown error" };
+        const errorData = e.data
+          ? JSON.parse(e.data)
+          : { error: "Unknown error" };
         fetchState.status = "error";
         fetchState.error = errorData.error || "Failed to fetch data";
 
@@ -130,6 +134,30 @@ export const DataFetchProvider = ({ children }: { children: ReactNode }) => {
       return eventSource;
     },
     [],
+  );
+
+  const hasCache = useCallback(
+    (params: FetchParams): boolean => {
+      const url = buildUrl(params);
+      const fetchState = fetchMapRef.current.get(url);
+      return (
+        !!fetchState &&
+        (fetchState.status === "complete" || fetchState.status === "error")
+      );
+    },
+    [buildUrl],
+  );
+
+  const getCacheStatus = useCallback(
+    (params: FetchParams): "none" | "complete" | "error" => {
+      const url = buildUrl(params);
+      const fetchState = fetchMapRef.current.get(url);
+      if (!fetchState) return "none";
+      if (fetchState.status === "complete") return "complete";
+      if (fetchState.status === "error") return "error";
+      return "none";
+    },
+    [buildUrl],
   );
 
   const subscribe = useCallback(
@@ -202,7 +230,7 @@ export const DataFetchProvider = ({ children }: { children: ReactNode }) => {
   );
 
   return (
-    <DataFetchContext.Provider value={{ subscribe }}>
+    <DataFetchContext.Provider value={{ subscribe, hasCache, getCacheStatus }}>
       {children}
     </DataFetchContext.Provider>
   );

@@ -16,6 +16,8 @@ import React from "react";
 import { pulse } from "@/app/components/dancing-balls";
 import { useGridSession } from "@/app/contexts/GridSession";
 
+import { FetchDataOverlay, NoDataOverlay } from "./data-grid-overlays";
+
 const LoadingOverlay = () => (
   <Box
     position="absolute"
@@ -90,26 +92,21 @@ export const DataTable = () => {
     setSelectionModel,
     setNewCol,
     error: dataError,
+    fetchEnabled,
+    onFetchData,
   } = useGridSession();
   const apiRef = useGridApiRef();
-  // console.log("DataTable loading:", isLoading, "validating:", isValidating);
 
   // eslint-disable-next-line react/no-unstable-nested-components
-  const CustomNoRowsOverlay = () => (
-    <Box
-      sx={{
-        display: "flex",
-        height: "100%",
-        alignItems: "center",
-        justifyContent: "center",
-        fontSize: 18,
-      }}
-    >
-      <Typography variant="body2" color="textSecondary">
-        No data or no query
-      </Typography>
-    </Box>
-  );
+  const CustomNoRowsOverlay = () => {
+    // If fetch is disabled, show fetch button (waiting for user confirmation)
+    if (!fetchEnabled) {
+      return <FetchDataOverlay onFetch={onFetchData} isStale={false} />;
+    }
+
+    // If we have enabled fetch but still no rows, show "no results"
+    return <NoDataOverlay />;
+  };
 
   // eslint-disable-next-line react/no-unstable-nested-components
   const CustomErrorOverlay = () => (
@@ -167,7 +164,7 @@ export const DataTable = () => {
       rows={rows}
       rowCount={rowCount}
       columns={gridColumns}
-      loading={isLoading} // isLoading ? true : false
+      loading={isLoading && fetchEnabled} // Only show loading if fetch is enabled
       onColumnHeaderClick={(params) => {
         if (activeColumn?.field !== "__add_column__") {
           // setNewCol(false);
@@ -222,7 +219,7 @@ export const DataTable = () => {
         // eslint-disable-next-line react/no-unstable-nested-components,react/jsx-no-useless-fragment
         noRowsOverlay: dataError
           ? CustomErrorOverlay
-          : isLoading
+          : isLoading && fetchEnabled
             ? () => <></>
             : CustomNoRowsOverlay,
         // eslint-disable-next-line react/no-unstable-nested-components
