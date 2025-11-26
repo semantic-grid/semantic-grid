@@ -1538,7 +1538,7 @@ async def stream_data_fetch(
         )
 
     # TODO: temp return empty response !!!
-    raise HTTPException(status_code=204, detail="No content")
+    # raise HTTPException(status_code=204, detail="No content")
 
     # Get SQL from query metadata
     sql = ""
