@@ -83,6 +83,7 @@ class Settings(BaseSettings):
     aws_secret_access_key: Optional[str] = None
     ses_from_email: str = "notifications@apegpt.ai"
     notifications_enabled: bool = True  # Master switch for email notifications
+    app_base_url: str = "https://app.apegpt.ai"  # Base URL for links in emails
 
     # Query execution timeouts (in seconds, None = no timeout)
     query_soft_timeout: Optional[int] = 300  # 5 minutes soft limit

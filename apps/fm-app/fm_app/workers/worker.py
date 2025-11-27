@@ -577,18 +577,9 @@ def wrk_fetch_data(self, args):
 
             run_async(clear_running_task(query_id))
 
-            # Trigger notification if requested
-            if notify_on_complete and user_email and settings.notifications_enabled:
-                from fm_app.workers.tasks.notify import send_query_notification
-
-                send_query_notification.delay(query_id, user_email)
-            elif (
-                notify_on_complete and user_email and not settings.notifications_enabled
-            ):
-                logger.info(
-                    f"Notification requested but disabled via "
-                    f"NOTIFICATIONS_ENABLED=false for query {query_id}"
-                )
+            # Do NOT send notification for cached results - only for fresh queries
+            # Cache hits return immediately, so notifications aren't needed
+            logger.debug(f"Cache hit - notification not sent for query {query_id}")
 
             return result
     except Exception as e:

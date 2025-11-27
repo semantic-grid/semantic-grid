@@ -60,7 +60,7 @@ def send_email(
 
         logger.info(
             f"Email sent successfully to {to_email}",
-            message_id=response["MessageId"],
+            extra={"message_id": response["MessageId"]},
         )
         return True
 
@@ -97,7 +97,7 @@ def send_query_completion_email(
         subject = f"Your query '{query_name}' is ready"
 
     # Build query link - using /q/:query_id route
-    query_url = f"https://app.apegpt.ai/q/{query_id}"
+    query_url = f"{settings.app_base_url}/q/{query_id}"
 
     body_text = f"""Your query has completed successfully.
 
@@ -151,7 +151,7 @@ def send_query_timeout_email(
         subject = f"Your query '{query_name}' timed out"
 
     # Build query link
-    query_url = f"https://app.apegpt.ai/q/{query_id}"
+    query_url = f"{settings.app_base_url}/q/{query_id}"
 
     body_text = f"""Your query execution timed out after {timeout_minutes} minutes.
 
