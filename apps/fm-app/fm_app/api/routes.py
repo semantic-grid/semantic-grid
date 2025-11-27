@@ -1623,6 +1623,8 @@ async def stream_data_fetch(
             start_time = time.time()
             poll_interval = 0.5  # Poll every 500ms
             count_sent = False  # Track if count event was sent
+            busy_warning_sent = False  # Track if busy warning was sent
+            busy_warning_threshold = 5  # Warn if task pending for 5 seconds
 
             while time.time() - start_time < max_wait:
                 # Check if client disconnected
@@ -1633,6 +1635,23 @@ async def stream_data_fetch(
 
                 # Check task status
                 result = task
+
+                # Check if task is stuck in PENDING (workers busy)
+                if (
+                    result.state == "PENDING"
+                    and not busy_warning_sent
+                    and time.time() - start_time > busy_warning_threshold
+                ):
+                    yield {
+                        "event": "workers_busy",
+                        "data": json.dumps(
+                            {
+                                "status": "workers_busy",
+                                "message": "All workers are currently busy. Your query is queued and will start shortly.",
+                            }
+                        ),
+                    }
+                    busy_warning_sent = True
 
                 # Check for counting complete state (only send once)
                 if result.state == "COUNTING_COMPLETE" and not count_sent:

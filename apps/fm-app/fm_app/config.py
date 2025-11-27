@@ -84,6 +84,10 @@ class Settings(BaseSettings):
     ses_from_email: str = "notifications@apegpt.ai"
     notifications_enabled: bool = True  # Master switch for email notifications
 
+    # Query execution timeouts (in seconds, None = no timeout)
+    query_soft_timeout: Optional[int] = 300  # 5 minutes soft limit
+    query_hard_timeout: Optional[int] = 600  # 10 minutes hard limit
+
 
 @lru_cache()
 def get_settings() -> Settings:

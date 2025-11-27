@@ -125,3 +125,74 @@ You received this email because you requested a notification when your query com
 """
 
     return send_email(to_email, subject, body_text, body_html)
+
+
+def send_query_timeout_email(
+    to_email: str,
+    query_id: str,
+    timeout_minutes: int,
+    query_name: Optional[str] = None,
+) -> bool:
+    """
+    Send query timeout notification email.
+
+    Args:
+        to_email: Recipient email address
+        query_id: Query ID
+        timeout_minutes: Timeout duration in minutes
+        query_name: Optional query name/description
+
+    Returns:
+        True if email sent successfully
+    """
+    subject = "Your query timed out"
+
+    if query_name:
+        subject = f"Your query '{query_name}' timed out"
+
+    # Build query link
+    query_url = f"https://app.apegpt.ai/q/{query_id}"
+
+    body_text = f"""Your query execution timed out after {timeout_minutes} minutes.
+
+This usually means the query is processing too much data or is too complex.
+
+Suggestions to fix this:
+• Add a LIMIT clause to reduce the number of results
+• Add more WHERE filters to narrow down the data
+• Use aggregate functions instead of returning all rows
+• Break the query into smaller parts
+
+View and modify query: {query_url}
+
+---
+You received this email because you requested a notification for this query.
+"""
+
+    body_html = f"""
+<html>
+<head></head>
+<body>
+    <p><strong>Your query execution timed out after {timeout_minutes} minutes.</strong></p>
+
+    <p>This usually means the query is processing too much data or is too complex.</p>
+
+    <p><strong>Suggestions to fix this:</strong></p>
+    <ul>
+        <li>Add a LIMIT clause to reduce the number of results</li>
+        <li>Add more WHERE filters to narrow down the data</li>
+        <li>Use aggregate functions instead of returning all rows</li>
+        <li>Break the query into smaller parts</li>
+    </ul>
+
+    <p><a href="{query_url}">View and modify query</a></p>
+
+    <hr>
+    <p style="font-size: 12px; color: #666;">
+        You received this email because you requested a notification for this query.
+    </p>
+</body>
+</html>
+"""
+
+    return send_email(to_email, subject, body_text, body_html)

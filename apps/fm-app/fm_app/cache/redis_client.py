@@ -21,10 +21,14 @@ class RedisClient:
         """Get or create Redis client instance."""
         if cls._instance is None:
             try:
+                # Build Redis URL with authentication if password provided
+                if settings.redis_password:
+                    redis_url = f"redis://:{settings.redis_password}@{settings.redis_host}:{settings.redis_port}/{settings.redis_db}"
+                else:
+                    redis_url = f"redis://{settings.redis_host}:{settings.redis_port}/{settings.redis_db}"
+
                 cls._instance = await aioredis.from_url(
-                    f"redis://{settings.redis_host}:{settings.redis_port}",
-                    password=settings.redis_password or None,
-                    db=settings.redis_db,
+                    redis_url,
                     encoding="utf-8",
                     decode_responses=True,
                 )
@@ -35,7 +39,9 @@ class RedisClient:
                     f"{settings.redis_host}:{settings.redis_port}"
                 )
             except Exception as e:
-                logger.error(f"Failed to connect to Redis: {e}")
+                logger.warning(f"Failed to connect to Redis (caching disabled): {e}")
+                # Don't raise - allow app to continue without caching
+                cls._instance = None
                 raise
 
         return cls._instance

@@ -494,7 +494,12 @@ async def _wrk_add_request(args):
     #    return request
 
 
-@app.task(name="wrk_fetch_data", bind=True, soft_time_limit=300, time_limit=600)
+@app.task(
+    name="wrk_fetch_data",
+    bind=True,
+    soft_time_limit=settings.query_soft_timeout,
+    time_limit=settings.query_hard_timeout,
+)
 def wrk_fetch_data(self, args):
     """
     Background task for fetching data from warehouse with Redis caching.
@@ -671,14 +676,26 @@ def wrk_fetch_data(self, args):
         from celery.exceptions import SoftTimeLimitExceeded
 
         if isinstance(e, SoftTimeLimitExceeded):
+            timeout_minutes = (
+                settings.query_soft_timeout // 60 if settings.query_soft_timeout else 0
+            )
             logger.warning(
-                f"Query timeout (5 minute soft limit): {query_id}",
+                f"Query timeout ({timeout_minutes} minute soft limit): {query_id}",
                 query_id=query_id,
             )
+
+            # Send timeout notification if requested
+            if notify_on_complete and user_email and settings.notifications_enabled:
+                from fm_app.workers.tasks.notify import send_query_timeout_notification
+
+                send_query_timeout_notification.delay(
+                    query_id, user_email, timeout_minutes
+                )
+
             return {
                 "status": "error",
                 "query_id": query_id,
-                "error": "Query execution timed out (5 minute limit). Please simplify your query or add more filters.",
+                "error": f"Query execution timed out ({timeout_minutes} minute limit). Please simplify your query or add more filters.",
             }
 
         logger.error(
