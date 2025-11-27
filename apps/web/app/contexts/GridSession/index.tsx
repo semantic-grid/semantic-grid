@@ -117,6 +117,7 @@ export interface ChatSessionContextType {
   fetchEnabled: boolean;
   onFetchData: (withNotification?: boolean) => void;
   metadata?: any;
+  query: any;
 }
 
 export const getDecision = async (
@@ -594,8 +595,7 @@ export const GridSessionProvider = ({
     isValidating,
     abortController,
   } = useInfiniteQuery({
-    id: requestId || sessionId,
-    // todo: replace requestId with actual sql ??
+    id: query?.id || requestId || sessionId,
     sql: query?.sql || metadata?.sql,
     sortBy,
     sortOrder,
@@ -1136,6 +1136,7 @@ export const GridSessionProvider = ({
         error: dataError,
         fetchEnabled,
         onFetchData,
+        query,
       }}
     >
       {children}

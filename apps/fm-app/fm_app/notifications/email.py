@@ -173,7 +173,9 @@ You received this email because you requested a notification for this query.
 <html>
 <head></head>
 <body>
-    <p><strong>Your query execution timed out after {timeout_minutes} minutes.</strong></p>
+    <p><strong>
+        Your query execution timed out after {timeout_minutes} minutes.
+    </strong></p>
 
     <p>This usually means the query is processing too much data or is too complex.</p>
 

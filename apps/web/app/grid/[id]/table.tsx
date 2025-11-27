@@ -113,14 +113,15 @@ export const DataTable = () => {
     fetchEnabled,
     onFetchData,
     metadata,
+    query,
   } = useGridSession();
   const apiRef = useGridApiRef();
 
-  // Check if query has performance warning
-  const hasPerformanceWarning = metadata?.performance_warning === true;
-  const estimatedRows = metadata?.estimated_rows;
-  const estimatedSizeGb = metadata?.estimated_size_gb;
-  const queryIdentifier = metadata?.sql || metadata?.id; // Track query changes
+  // Check if query has performance warning (query-specific, not session metadata)
+  const hasPerformanceWarning = query?.performance_warning === true;
+  const estimatedRows = query?.estimated_rows;
+  const estimatedSizeGb = query?.estimated_size_gb;
+  const queryIdentifier = query?.id || query?.sql; // Track query changes
 
   // Memoize the fetch overlay wrapper to avoid creating new component on each render
   // eslint-disable-next-line react/display-name, react/no-unstable-nested-components

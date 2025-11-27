@@ -524,7 +524,6 @@ def wrk_fetch_data(self, args):
             - total_rows: int (if success)
             - error: str (if error)
     """
-    import asyncio
 
     from sqlalchemy import text
 
@@ -664,18 +663,21 @@ def wrk_fetch_data(self, args):
                 "from_cache": False,
             }
 
-            # Trigger notification if requested
-            if notify_on_complete and user_email and settings.notifications_enabled:
+            # Send notifications to all subscribers who requested them
+            if settings.notifications_enabled:
+                from fm_app.cache.task_tracker import get_task_subscribers
                 from fm_app.workers.tasks.notify import send_query_notification
 
-                send_query_notification.delay(query_id, user_email)
-            elif (
-                notify_on_complete and user_email and not settings.notifications_enabled
-            ):
-                logger.info(
-                    f"Notification requested but disabled via "
-                    f"NOTIFICATIONS_ENABLED=false for query {query_id}"
-                )
+                subscribers = run_async(get_task_subscribers(query_id))
+                if subscribers:
+                    logger.info(
+                        f"Sending notifications to {len(subscribers)} "
+                        f"subscriber(s) for query {query_id}"
+                    )
+                    for subscriber in subscribers:
+                        send_query_notification.delay(
+                            query_id, subscriber["user_email"]
+                        )
 
             return result
 
@@ -691,29 +693,42 @@ def wrk_fetch_data(self, args):
                 query_id=query_id,
             )
 
-            # Send timeout notification if requested (only once per query)
-            if notify_on_complete and user_email and settings.notifications_enabled:
-                from fm_app.cache.task_tracker import set_timeout_notified
+            # Send timeout notifications to all subscribers (only once per query)
+            if settings.notifications_enabled:
+                from fm_app.cache.task_tracker import (
+                    get_task_subscribers,
+                    set_timeout_notified,
+                )
 
-                # Check if we've already sent a timeout notification for this query
+                # Check if we've already sent timeout notifications for this query
                 should_notify = run_async(set_timeout_notified(query_id))
                 if should_notify:
                     from fm_app.workers.tasks.notify import (
                         send_query_timeout_notification,
                     )
 
-                    send_query_timeout_notification.delay(
-                        query_id, user_email, timeout_minutes
-                    )
+                    subscribers = run_async(get_task_subscribers(query_id))
+                    if subscribers:
+                        logger.info(
+                            f"Sending timeout notifications to {len(subscribers)} "
+                            f"subscriber(s) for query {query_id}"
+                        )
+                        for subscriber in subscribers:
+                            send_query_timeout_notification.delay(
+                                query_id, subscriber["user_email"], timeout_minutes
+                            )
                 else:
                     logger.debug(
-                        f"Timeout notification already sent for query {query_id}, skipping"
+                        f"Timeout notification already sent for query {query_id}"
                     )
 
             return {
                 "status": "error",
                 "query_id": query_id,
-                "error": f"Query execution timed out ({timeout_minutes} minute limit). Please simplify your query or add more filters.",
+                "error": (
+                    f"Query execution timed out ({timeout_minutes} minute limit). "
+                    "Please simplify your query or add more filters."
+                ),
             }
 
         logger.error(

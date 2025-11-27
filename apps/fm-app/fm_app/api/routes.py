@@ -1590,16 +1590,24 @@ async def stream_data_fetch(
         raise HTTPException(status_code=400, detail="Query has no SQL attached")
 
     # Check if there's already a running task for this query
-    from fm_app.cache.task_tracker import get_running_task, set_running_task
+    from fm_app.cache.task_tracker import (
+        add_task_subscriber,
+        get_running_task,
+        set_running_task,
+    )
     from fm_app.workers.worker import wrk_fetch_data
 
     running_task_info = await get_running_task(str(query_id))
 
     if running_task_info:
-        # Task already running - reconnect to it
+        # Task already running - reconnect to it and add this user as subscriber
         task_id = running_task_info["task_id"]
         task = wrk_fetch_data.AsyncResult(task_id)
         is_reconnecting = True
+
+        # Add this user as a subscriber
+        await add_task_subscriber(str(query_id), user_email, notify_on_complete)
+
         logger.info(f"Reconnecting to existing task {task_id} for query {query_id}")
     else:
         is_reconnecting = False
@@ -1618,7 +1626,7 @@ async def stream_data_fetch(
         task = wrk_fetch_data.apply_async(args=[task_args])
         task_id = task.id
 
-        # Store task info in Redis
+        # Store task info in Redis with initial subscriber
         await set_running_task(str(query_id), task_id, notify_on_complete, user_email)
         logger.info(f"Started new task {task_id} for query {query_id}")
 
@@ -1680,7 +1688,10 @@ async def stream_data_fetch(
                         "data": json.dumps(
                             {
                                 "status": "workers_busy",
-                                "message": "All workers are currently busy. Your query is queued and will start shortly.",
+                                "message": (
+                                    "All workers are currently busy. "
+                                    "Your query is queued and will start shortly."
+                                ),
                             }
                         ),
                     }
