@@ -1,5 +1,6 @@
 """Query result caching helpers."""
 
+import asyncio
 import json
 import logging
 from datetime import datetime
@@ -10,6 +11,23 @@ from fm_app.config import get_settings
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
+
+
+def run_async(coro):
+    """
+    Helper to run async functions in sync context.
+    Properly handles event loop creation/reuse.
+    """
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_closed():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+    return loop.run_until_complete(coro)
 
 
 def build_cache_key(

@@ -546,7 +546,9 @@ def wrk_fetch_data(self, args):
 
     # Check cache first
     try:
-        cached_result = asyncio.run(
+        from fm_app.cache.query_cache import run_async
+
+        cached_result = run_async(
             get_cached_query(query_id, limit, offset, sort_by, sort_order)
         )
         if cached_result:
@@ -633,7 +635,7 @@ def wrk_fetch_data(self, args):
 
             # Cache the results
             try:
-                asyncio.run(
+                run_async(
                     set_cached_query(
                         query_id,
                         limit,
