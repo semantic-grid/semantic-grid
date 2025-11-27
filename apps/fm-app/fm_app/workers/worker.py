@@ -205,6 +205,10 @@ SESSION_WH_V2 = sessionmaker(bind=ENGINE_WH_V2, expire_on_commit=False)
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
 
+# Import notification tasks to register them with Celery
+# Must happen after 'app' is created above
+from fm_app.workers.tasks import notify  # noqa: F401
+
 
 def add_fields_to_log(logger, log_method, event_dict):
     if isinstance(logger, logging.Logger):

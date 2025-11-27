@@ -42,7 +42,7 @@ async def set_running_task(
 
         # Store with 30 minute TTL (longer than query timeout)
         await redis.setex(key, 1800, json.dumps(task_info))
-        logger.info(f"Stored running task {task_id} for query {query_id}")
+        logger.debug(f"Stored running task {task_id} for query {query_id}")
         return True
     except Exception as e:
         logger.warning(f"Failed to store running task: {e}")
@@ -91,7 +91,7 @@ async def clear_running_task(query_id: str) -> bool:
         redis = await get_redis()
         key = f"running_task:{query_id}"
         await redis.delete(key)
-        logger.info(f"Cleared running task for query {query_id}")
+        logger.debug(f"Cleared running task for query {query_id}")
         return True
     except Exception as e:
         logger.warning(f"Failed to clear running task: {e}")
