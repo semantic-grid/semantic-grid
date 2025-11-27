@@ -45,9 +45,6 @@ export const FetchDataOverlay = ({
           mb: 1,
         }}
       >
-        <Typography variant="body2" sx={{ mb: 0.5 }}>
-          <strong>Large Query Warning</strong>
-        </Typography>
         <Typography variant="body2" sx={{ fontSize: "0.875rem" }}>
           This query will process{" "}
           {estimatedRows

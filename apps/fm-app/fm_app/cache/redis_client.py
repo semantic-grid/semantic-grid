@@ -34,7 +34,7 @@ class RedisClient:
                 )
                 # Test connection
                 await cls._instance.ping()
-                logger.info(
+                logger.debug(
                     f"Redis client connected: "
                     f"{settings.redis_host}:{settings.redis_port}"
                 )

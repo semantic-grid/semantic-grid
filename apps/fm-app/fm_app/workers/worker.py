@@ -535,13 +535,17 @@ def wrk_fetch_data(self, args):
     notify_on_complete = args.get("notify_on_complete", False)
     user_email = args.get("user_email")
 
-    logger.debug(
-        "Fetching data",
-        query_id=query_id,
-        limit=limit,
-        offset=offset,
-        sort_by=sort_by,
-        notify=notify_on_complete,
+    logger.info(
+        f"Starting data fetch for query {query_id}",
+        extra={
+            "query_id": query_id,
+            "limit": limit,
+            "offset": offset,
+            "sort_by": sort_by,
+            "sort_order": sort_order,
+            "notify_requested": notify_on_complete,
+            "has_email": bool(user_email),
+        },
     )
 
     # Check cache first
@@ -562,6 +566,12 @@ def wrk_fetch_data(self, args):
                 "offset": offset,
                 "from_cache": True,
             }
+
+            # Clear running task tracker
+            from fm_app.cache.query_cache import run_async
+            from fm_app.cache.task_tracker import clear_running_task
+
+            run_async(clear_running_task(query_id))
 
             # Trigger notification if requested
             if notify_on_complete and user_email and settings.notifications_enabled:

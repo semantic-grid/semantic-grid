@@ -65,10 +65,10 @@ async def get_cached_query(
 
         cached_data = await redis.get(cache_key)
         if cached_data:
-            logger.info(f"Cache HIT: {cache_key}")
+            logger.debug(f"Cache HIT: {cache_key}")
             return json.loads(cached_data)
 
-        logger.info(f"Cache MISS: {cache_key}")
+        logger.debug(f"Cache MISS: {cache_key}")
         return None
     except Exception as e:
         logger.error(f"Error getting cached query: {e}")
@@ -105,7 +105,7 @@ async def set_cached_query(
             json.dumps(cache_data),
         )
 
-        logger.info(
+        logger.debug(
             f"Cached query results: {cache_key} "
             f"(rows: {len(rows)}, ttl: {settings.cache_ttl_seconds}s)"
         )

@@ -1589,22 +1589,36 @@ async def stream_data_fetch(
     if not sql:
         raise HTTPException(status_code=400, detail="Query has no SQL attached")
 
-    # Launch Celery task
+    # Check if there's already a running task for this query
+    from fm_app.cache.task_tracker import get_running_task, set_running_task
     from fm_app.workers.worker import wrk_fetch_data
 
-    task_args = {
-        "query_id": str(query_id),
-        "sql": sql,
-        "limit": limit,
-        "offset": offset,
-        "sort_by": sort_by,
-        "sort_order": sort_order,
-        "notify_on_complete": notify_on_complete,
-        "user_email": user_email,
-    }
+    running_task_info = await get_running_task(str(query_id))
 
-    task = wrk_fetch_data.apply_async(args=[task_args])
-    task_id = task.id
+    if running_task_info:
+        # Task already running - reconnect to it
+        task_id = running_task_info["task_id"]
+        task = wrk_fetch_data.AsyncResult(task_id)
+        logger.info(f"Reconnecting to existing task {task_id} for query {query_id}")
+    else:
+        # Launch new Celery task
+        task_args = {
+            "query_id": str(query_id),
+            "sql": sql,
+            "limit": limit,
+            "offset": offset,
+            "sort_by": sort_by,
+            "sort_order": sort_order,
+            "notify_on_complete": notify_on_complete,
+            "user_email": user_email,
+        }
+
+        task = wrk_fetch_data.apply_async(args=[task_args])
+        task_id = task.id
+
+        # Store task info in Redis
+        await set_running_task(str(query_id), task_id, notify_on_complete, user_email)
+        logger.info(f"Started new task {task_id} for query {query_id}")
 
     async def event_generator():
         """Stream task progress via SSE."""
