@@ -120,6 +120,7 @@ export const DataTable = () => {
   const hasPerformanceWarning = metadata?.performance_warning === true;
   const estimatedRows = metadata?.estimated_rows;
   const estimatedSizeGb = metadata?.estimated_size_gb;
+  const queryIdentifier = metadata?.sql || metadata?.id; // Track query changes
 
   // Memoize the fetch overlay wrapper to avoid creating new component on each render
   // eslint-disable-next-line react/display-name, react/no-unstable-nested-components
@@ -133,7 +134,13 @@ export const DataTable = () => {
         estimatedSizeGb={estimatedSizeGb}
       />
     ),
-    [onFetchData, hasPerformanceWarning, estimatedRows, estimatedSizeGb],
+    [
+      onFetchData,
+      hasPerformanceWarning,
+      estimatedRows,
+      estimatedSizeGb,
+      queryIdentifier,
+    ],
   );
 
   // Determine which overlay to show based on state

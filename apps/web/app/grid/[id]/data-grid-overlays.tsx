@@ -32,10 +32,6 @@ export const FetchDataOverlay = ({
       px: 3,
     }}
   >
-    <Typography variant="body1" color="textSecondary" sx={{ mb: 1 }}>
-      {isStale ? "Data may be outdated" : "Ready to load data"}
-    </Typography>
-
     {showNotifyOption && (estimatedRows || estimatedSizeGb) && (
       <Alert
         severity="warning"
