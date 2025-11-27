@@ -67,6 +67,8 @@ from fm_app.db.db import (
 from fm_app.stopwatch import stopwatch
 from fm_app.workers.worker import wrk_add_request
 
+logger = logging.getLogger(__name__)
+
 token_auth_scheme = HTTPBearer()
 auth = VerifyToken()
 guest_auth = VerifyGuestToken()
@@ -1519,6 +1521,8 @@ async def stream_data_fetch(
     offset: int = 0,
     sort_by: Optional[str] = None,
     sort_order: str = Query("asc", regex="^(asc|desc)$"),
+    notify_on_complete: bool = Query(False),
+    user_email: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
     auth_result: dict = Depends(verify_any_token),
 ):
@@ -1595,6 +1599,8 @@ async def stream_data_fetch(
         "offset": offset,
         "sort_by": sort_by,
         "sort_order": sort_order,
+        "notify_on_complete": notify_on_complete,
+        "user_email": user_email,
     }
 
     task = wrk_fetch_data.apply_async(args=[task_args])

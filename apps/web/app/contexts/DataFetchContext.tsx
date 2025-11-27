@@ -2,10 +2,10 @@
 
 import React, {
   createContext,
+  type ReactNode,
+  useCallback,
   useContext,
   useRef,
-  useCallback,
-  type ReactNode,
 } from "react";
 
 type FetchParams = {
@@ -14,6 +14,8 @@ type FetchParams = {
   offset: number;
   sortBy?: string;
   sortOrder?: "asc" | "desc";
+  notifyOnComplete?: boolean;
+  userEmail?: string;
 };
 
 type SubscriptionCallbacks = {
@@ -69,6 +71,9 @@ export const DataFetchProvider = ({ children }: { children: ReactNode }) => {
     queryParams.append("offset", String(params.offset));
     if (params.sortBy) queryParams.append("sort_by", params.sortBy);
     if (params.sortOrder) queryParams.append("sort_order", params.sortOrder);
+    if (params.notifyOnComplete)
+      queryParams.append("notify_on_complete", "true");
+    if (params.userEmail) queryParams.append("user_email", params.userEmail);
     return `/api/apegpt/data/sse/${params.id}?${queryParams.toString()}`;
   }, []);
 

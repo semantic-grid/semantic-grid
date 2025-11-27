@@ -12,7 +12,6 @@ from fm_app.db.db import (
     update_request,
     update_request_status,
 )
-from fm_app.stopwatch import stopwatch
 from fm_app.workers.interactive_flow.setup import FlowContext, build_prompt_variables
 
 

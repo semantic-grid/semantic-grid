@@ -13,6 +13,8 @@ const createFetcher =
   (
     dataFetchContext: ReturnType<typeof useDataFetch>,
     abortController: AbortController,
+    notifyOnComplete?: boolean,
+    userEmail?: string,
   ) =>
   async (key: ReturnType<typeof getKey>): Promise<ApiResponse> => {
     // @ts-ignore
@@ -26,6 +28,8 @@ const createFetcher =
           offset: offset ?? 0,
           sortBy,
           sortOrder,
+          notifyOnComplete,
+          userEmail,
         },
         {
           onData: (data) => {
@@ -79,6 +83,8 @@ export const useInfiniteQuery = ({
   sortBy,
   sortOrder,
   enabled = true,
+  notifyOnComplete = false,
+  userEmail,
 }: {
   id?: string;
   sql?: string;
@@ -86,6 +92,8 @@ export const useInfiniteQuery = ({
   sortBy?: string;
   sortOrder?: "asc" | "desc";
   enabled?: boolean;
+  notifyOnComplete?: boolean;
+  userEmail?: string;
 }) => {
   // console.log("useInfiniteQuery req", id, sortBy, sortOrder);
   const dataFetchContext = useDataFetch();
@@ -97,7 +105,12 @@ export const useInfiniteQuery = ({
         ? (pageIndex, prevData) =>
             getKey(pageIndex, prevData, id!, limit, sortBy, sortOrder, sql)
         : () => null,
-      createFetcher(dataFetchContext, abortController),
+      createFetcher(
+        dataFetchContext,
+        abortController,
+        notifyOnComplete,
+        userEmail,
+      ),
       {
         revalidateIfStale: false,
         refreshInterval: 0,

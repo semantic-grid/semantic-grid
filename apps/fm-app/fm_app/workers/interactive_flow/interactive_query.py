@@ -49,7 +49,6 @@ from fm_app.db.db import (
     update_session_name,
 )
 from fm_app.mcp_servers.db_meta import db_meta_mcp_analyze_query
-from fm_app.stopwatch import stopwatch
 from fm_app.validators import MetadataValidator
 from fm_app.workers.interactive_flow.setup import FlowContext, build_prompt_variables
 

@@ -12,7 +12,6 @@ from fm_app.db.db import (
     update_request_status,
 )
 from fm_app.mcp_servers.db_meta import get_db_meta_database_overview
-from fm_app.stopwatch import stopwatch
 from fm_app.workers.interactive_flow.setup import FlowContext
 
 

@@ -18,6 +18,24 @@ import { useGridSession } from "@/app/contexts/GridSession";
 
 import { FetchDataOverlay, NoDataOverlay } from "./data-grid-overlays";
 
+const CustomErrorOverlay = () => (
+  <Box
+    sx={{
+      display: "flex",
+      height: "100%",
+      alignItems: "center",
+      justifyContent: "center",
+      fontSize: 18,
+    }}
+  >
+    <Typography variant="body2" color="textSecondary">
+      Query Execution Error
+    </Typography>
+  </Box>
+);
+
+const EmptyOverlay = () => <div />;
+
 const LoadingOverlay = () => (
   <Box
     position="absolute"
@@ -94,36 +112,40 @@ export const DataTable = () => {
     error: dataError,
     fetchEnabled,
     onFetchData,
+    metadata,
   } = useGridSession();
   const apiRef = useGridApiRef();
 
-  // eslint-disable-next-line react/no-unstable-nested-components
-  const CustomNoRowsOverlay = () => {
-    // If fetch is disabled, show fetch button (waiting for user confirmation)
-    if (!fetchEnabled) {
-      return <FetchDataOverlay onFetch={onFetchData} isStale={false} />;
-    }
+  // Check if query has performance warning
+  const hasPerformanceWarning = metadata?.performance_warning === true;
+  const estimatedRows = metadata?.estimated_rows;
+  const estimatedSizeGb = metadata?.estimated_size_gb;
 
-    // If we have enabled fetch but still no rows, show "no results"
-    return <NoDataOverlay />;
-  };
-
-  // eslint-disable-next-line react/no-unstable-nested-components
-  const CustomErrorOverlay = () => (
-    <Box
-      sx={{
-        display: "flex",
-        height: "100%",
-        alignItems: "center",
-        justifyContent: "center",
-        fontSize: 18,
-      }}
-    >
-      <Typography variant="body2" color="textSecondary">
-        Query Execution Error
-      </Typography>
-    </Box>
+  // Memoize the fetch overlay wrapper to avoid creating new component on each render
+  // eslint-disable-next-line react/display-name, react/no-unstable-nested-components
+  const FetchOverlayWrapper = React.useMemo(
+    () => () => (
+      <FetchDataOverlay
+        onFetch={onFetchData}
+        isStale={false}
+        showNotifyOption={hasPerformanceWarning}
+        estimatedRows={estimatedRows}
+        estimatedSizeGb={estimatedSizeGb}
+      />
+    ),
+    [onFetchData, hasPerformanceWarning, estimatedRows, estimatedSizeGb],
   );
+
+  // Determine which overlay to show based on state
+  let noRowsOverlayComponent = NoDataOverlay;
+
+  if (dataError) {
+    noRowsOverlayComponent = CustomErrorOverlay;
+  } else if (isLoading && fetchEnabled) {
+    noRowsOverlayComponent = EmptyOverlay;
+  } else if (!fetchEnabled) {
+    noRowsOverlayComponent = FetchOverlayWrapper;
+  }
 
   const customColumns = [
     ...gridColumns,
@@ -216,12 +238,7 @@ export const DataTable = () => {
         return activeColumn?.field === params.field ? "highlight-column" : "";
       }}
       slots={{
-        // eslint-disable-next-line react/no-unstable-nested-components,react/jsx-no-useless-fragment
-        noRowsOverlay: dataError
-          ? CustomErrorOverlay
-          : isLoading && fetchEnabled
-            ? () => <></>
-            : CustomNoRowsOverlay,
+        noRowsOverlay: noRowsOverlayComponent,
         // eslint-disable-next-line react/no-unstable-nested-components
         footer: () => (
           <CustomFooter isFetchingMore={isValidating && !isLoading} />

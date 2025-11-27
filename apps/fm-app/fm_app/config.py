@@ -69,6 +69,21 @@ class Settings(BaseSettings):
     system_version: str = "v1.0.0"
     packs_resources_dir: str = "/app/packages"
 
+    # Redis configuration
+    redis_host: str = "localhost"
+    redis_port: int = 6379
+    redis_password: Optional[str] = None
+    redis_db: int = 0
+    cache_ttl_seconds: int = 3600  # 1 hour
+    cache_enabled: bool = True
+
+    # AWS SES configuration for email notifications
+    aws_region: str = "us-east-1"
+    aws_access_key_id: Optional[str] = None
+    aws_secret_access_key: Optional[str] = None
+    ses_from_email: str = "notifications@apegpt.ai"
+    notifications_enabled: bool = True  # Master switch for email notifications
+
 
 @lru_cache()
 def get_settings() -> Settings:

@@ -30,6 +30,7 @@ import { AppContext } from "@/app/contexts/App";
 import { useDataFetch } from "@/app/contexts/DataFetchContext";
 import { useSessionContext } from "@/app/contexts/SessionStatus";
 import { isSolanaAddress, isSolanaSignature } from "@/app/helpers/cell";
+import { useAppUser } from "@/app/hooks/useAppUser";
 import { useInfiniteQuery } from "@/app/hooks/useInfiniteQuery";
 import { useUserSession } from "@/app/hooks/useUserSession";
 import type {
@@ -378,6 +379,7 @@ export const GridSessionProvider = ({
   const router = useRouter();
   const { model } = useContext(AppContext);
   const { mutate, data: userSession } = useUserSession(sessionId!);
+  const { user: appUser } = useAppUser();
   const [sections, setSections] = useState<TChatSection[]>([]);
   const [sects, setSects] = useState<TChatSection[]>([]);
   const [promptVal, setPromptVal] = useState("");
@@ -411,8 +413,8 @@ export const GridSessionProvider = ({
   );
   const [selectedAction, setSelectedAction] =
     useState<keyof typeof options>("submit");
-  const performanceWarningShown = useRef<string | null>(null);
   const [fetchEnabled, setFetchEnabled] = useState(true); // Start with true to allow SWR to check cache
+  const [notifyOnComplete, setNotifyOnComplete] = useState(false);
   const lastQueryIdRef = useRef<string | undefined>(undefined);
   const hasInitialized = useRef(false);
 
@@ -597,6 +599,8 @@ export const GridSessionProvider = ({
     sortBy,
     sortOrder,
     enabled: fetchEnabled,
+    notifyOnComplete,
+    userEmail: notifyOnComplete ? appUser?.email : undefined,
   });
   const hasLoadedOnce = useRef(false);
   const triggered = useRef(false);
@@ -681,58 +685,6 @@ export const GridSessionProvider = ({
       return () => clearTimeout(timer);
     }
   }, [data.length, isLoading]);
-
-  // Check for performance warnings and show confirmation dialog
-  useEffect(() => {
-    const hasPerformanceWarning = metadata?.performance_warning === true;
-    const estimatedRows = metadata?.estimated_rows;
-    const estimatedSizeGb = metadata?.estimated_size_gb;
-    const queryKey = `${sessionId}-${metadata?.sql}`;
-    const hasCachedData =
-      data && data.length > 0 && !isLoading && !isValidating;
-
-    if (
-      hasPerformanceWarning &&
-      performanceWarningShown.current !== queryKey &&
-      metadata?.sql &&
-      !hasCachedData
-    ) {
-      performanceWarningShown.current = queryKey;
-
-      const estimatedRowsText = estimatedRows
-        ? `${estimatedRows.toLocaleString()} rows`
-        : "a large number of rows";
-      const estimatedSizeText = estimatedSizeGb
-        ? ` (${estimatedSizeGb.toFixed(2)} GB)`
-        : "";
-
-      const message =
-        `This query will process ${estimatedRowsText}${estimatedSizeText}.\n` +
-        `It may take several minutes or timeout (5 minute limit).\n` +
-        `Suggestions:\n` +
-        `• Add LIMIT to get sample results faster\n` +
-        `• Add more WHERE filters to reduce data scanned\n` +
-        `• Use approx_distinct() for counts\n\n` +
-        `Do you want to proceed?`;
-
-      const userConfirmed = confirm(message);
-
-      if (!userConfirmed) {
-        // User cancelled - abort the fetch
-        abortController.abort();
-      }
-    }
-  }, [
-    metadata?.performance_warning,
-    metadata?.estimated_rows,
-    metadata?.estimated_size_gb,
-    metadata?.sql,
-    sessionId,
-    data,
-    isLoading,
-    isValidating,
-    abortController,
-  ]);
 
   useEffect(() => {
     if (activeRows && activeRows?.length < (data?.length || 0)) {
@@ -1129,7 +1081,8 @@ export const GridSessionProvider = ({
     setNewCol(false);
   };
 
-  const onFetchData = () => {
+  const onFetchData = (withNotification: boolean = false) => {
+    setNotifyOnComplete(withNotification);
     setFetchEnabled(true);
   };
 

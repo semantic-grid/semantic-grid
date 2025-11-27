@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import warnings
 from datetime import date, datetime
 from decimal import Decimal
 from logging.config import dictConfig
@@ -35,20 +34,16 @@ def serialize_value(value):
 from fm_app.ai_models.llm import AnthropicModel, DeepSeekModel, GeminiModel, OpenAIModel
 from fm_app.api.db_session import normalize_database_driver
 from fm_app.api.model import (
-    AddRequestModel,
     DBType,
     FlowType,
-    InteractiveRequestType,
     ModelType,
     RequestStatus,
     UpdateRequestModel,
     WorkerRequest,
 )
 from fm_app.config import get_settings
-from fm_app.db.db import add_request, update_request, update_request_failure
-from fm_app.stopwatch import stopwatch
+from fm_app.db.db import update_request, update_request_failure
 from fm_app.workers.db_session import get_db
-from fm_app.workers.experimental.agent import close_agent, init_agent
 from fm_app.workers.experimental.flex_flow import flex_flow
 from fm_app.workers.experimental.langgraph_flow import langgraph_flow
 from fm_app.workers.experimental.mcp_flow import mcp_flow
@@ -502,7 +497,7 @@ async def _wrk_add_request(args):
 @app.task(name="wrk_fetch_data", bind=True, soft_time_limit=300, time_limit=600)
 def wrk_fetch_data(self, args):
     """
-    Background task for fetching data from warehouse.
+    Background task for fetching data from warehouse with Redis caching.
     Args:
         args: dict with keys:
             - query_id: str (UUID)
@@ -511,6 +506,8 @@ def wrk_fetch_data(self, args):
             - offset: int
             - sort_by: Optional[str]
             - sort_order: str
+            - notify_on_complete: bool (optional)
+            - user_email: str (optional, for notifications)
     Returns:
         dict with keys:
             - status: "success" | "error"
@@ -518,7 +515,11 @@ def wrk_fetch_data(self, args):
             - total_rows: int (if success)
             - error: str (if error)
     """
+    import asyncio
+
     from sqlalchemy import text
+
+    from fm_app.cache.query_cache import get_cached_query, set_cached_query
 
     query_id = args.get("query_id")
     sql = args.get("sql")
@@ -526,6 +527,8 @@ def wrk_fetch_data(self, args):
     offset = args.get("offset", 0)
     sort_by = args.get("sort_by")
     sort_order = args.get("sort_order", "asc")
+    notify_on_complete = args.get("notify_on_complete", False)
+    user_email = args.get("user_email")
 
     logger.debug(
         "Fetching data",
@@ -533,7 +536,42 @@ def wrk_fetch_data(self, args):
         limit=limit,
         offset=offset,
         sort_by=sort_by,
+        notify=notify_on_complete,
     )
+
+    # Check cache first
+    try:
+        cached_result = asyncio.run(
+            get_cached_query(query_id, limit, offset, sort_by, sort_order)
+        )
+        if cached_result:
+            logger.info(f"Returning cached data for query {query_id}")
+            result = {
+                "status": "success",
+                "query_id": query_id,
+                "rows": cached_result["rows"],
+                "total_rows": cached_result["total_rows"],
+                "limit": limit,
+                "offset": offset,
+                "from_cache": True,
+            }
+
+            # Trigger notification if requested
+            if notify_on_complete and user_email and settings.notifications_enabled:
+                from fm_app.workers.tasks.notify import send_query_notification
+
+                send_query_notification.delay(query_id, user_email)
+            elif (
+                notify_on_complete and user_email and not settings.notifications_enabled
+            ):
+                logger.info(
+                    f"Notification requested but disabled via "
+                    f"NOTIFICATIONS_ENABLED=false for query {query_id}"
+                )
+
+            return result
+    except Exception as e:
+        logger.warning(f"Cache check failed, continuing with DB query: {e}")
 
     try:
         # Fetch actual data
@@ -579,21 +617,55 @@ def wrk_fetch_data(self, args):
                 total_count=total_count,
             )
 
-            return {
+            serialized_rows = [
+                {
+                    k: serialize_value(v)
+                    for k, v in row.items()
+                    if k.lower() != "total_count"
+                }
+                for row in rows
+            ]
+
+            # Cache the results
+            try:
+                asyncio.run(
+                    set_cached_query(
+                        query_id,
+                        limit,
+                        offset,
+                        serialized_rows,
+                        total_count,
+                        sort_by,
+                        sort_order,
+                    )
+                )
+            except Exception as cache_err:
+                logger.warning(f"Failed to cache query results: {cache_err}")
+
+            result = {
                 "status": "success",
                 "query_id": query_id,
-                "rows": [
-                    {
-                        k: serialize_value(v)
-                        for k, v in row.items()
-                        if k.lower() != "total_count"
-                    }
-                    for row in rows
-                ],
+                "rows": serialized_rows,
                 "total_rows": total_count,
                 "limit": limit,
                 "offset": offset,
+                "from_cache": False,
             }
+
+            # Trigger notification if requested
+            if notify_on_complete and user_email and settings.notifications_enabled:
+                from fm_app.workers.tasks.notify import send_query_notification
+
+                send_query_notification.delay(query_id, user_email)
+            elif (
+                notify_on_complete and user_email and not settings.notifications_enabled
+            ):
+                logger.info(
+                    f"Notification requested but disabled via "
+                    f"NOTIFICATIONS_ENABLED=false for query {query_id}"
+                )
+
+            return result
 
     except Exception as e:
         from celery.exceptions import SoftTimeLimitExceeded
