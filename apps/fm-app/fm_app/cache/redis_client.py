@@ -5,9 +5,10 @@ from typing import Optional
 
 import redis.asyncio as aioredis
 
-from fm_app.config import settings
+from fm_app.config import get_settings
 
 logger = logging.getLogger(__name__)
+settings = get_settings()
 
 
 class RedisClient:
