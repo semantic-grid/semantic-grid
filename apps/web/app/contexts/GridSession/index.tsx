@@ -115,7 +115,8 @@ export interface ChatSessionContextType {
   setRequestId: React.Dispatch<React.SetStateAction<string | undefined>>;
   error: any;
   fetchEnabled: boolean;
-  onFetchData: () => void;
+  onFetchData: (withNotification?: boolean) => void;
+  metadata?: any;
 }
 
 export const getDecision = async (

@@ -1599,8 +1599,10 @@ async def stream_data_fetch(
         # Task already running - reconnect to it
         task_id = running_task_info["task_id"]
         task = wrk_fetch_data.AsyncResult(task_id)
+        is_reconnecting = True
         logger.info(f"Reconnecting to existing task {task_id} for query {query_id}")
     else:
+        is_reconnecting = False
         # Launch new Celery task
         task_args = {
             "query_id": str(query_id),
@@ -1625,12 +1627,29 @@ async def stream_data_fetch(
         import time
 
         try:
-            yield {
-                "event": "started",
-                "data": json.dumps(
-                    {"task_id": task_id, "query_id": str(query_id), "status": "started"}
-                ),
-            }
+            if is_reconnecting:
+                yield {
+                    "event": "reconnected",
+                    "data": json.dumps(
+                        {
+                            "task_id": task_id,
+                            "query_id": str(query_id),
+                            "status": "reconnected",
+                            "message": "Reconnected to running query",
+                        }
+                    ),
+                }
+            else:
+                yield {
+                    "event": "started",
+                    "data": json.dumps(
+                        {
+                            "task_id": task_id,
+                            "query_id": str(query_id),
+                            "status": "started",
+                        }
+                    ),
+                }
 
             # Poll task status
             max_wait = 300  # 5 minutes max

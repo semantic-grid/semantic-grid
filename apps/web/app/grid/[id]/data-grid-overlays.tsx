@@ -106,3 +106,33 @@ export const NoDataOverlay = () => (
     </Typography>
   </Box>
 );
+
+export const QueryInProgressOverlay = () => (
+  <Box
+    sx={{
+      display: "flex",
+      flexDirection: "column",
+      height: "100%",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 2,
+    }}
+  >
+    <Alert
+      severity="info"
+      sx={{
+        maxWidth: 600,
+      }}
+    >
+      <Typography variant="body2" sx={{ fontSize: "0.875rem" }}>
+        Query is already running. Reconnecting...
+      </Typography>
+      <Typography
+        variant="body2"
+        sx={{ fontSize: "0.75rem", mt: 0.5, opacity: 0.8 }}
+      >
+        Your query is being processed. Results will appear when ready.
+      </Typography>
+    </Alert>
+  </Box>
+);

@@ -81,6 +81,17 @@ export const DataFetchProvider = ({ children }: { children: ReactNode }) => {
     (url: string, fetchState: FetchState) => {
       const eventSource = new EventSource(url);
 
+      eventSource.addEventListener("reconnected", (e) => {
+        const data = JSON.parse(e.data);
+        fetchState.status = "fetching";
+        console.log("Reconnected to running query:", data.message);
+      });
+
+      eventSource.addEventListener("workers_busy", (e) => {
+        const data = JSON.parse(e.data);
+        console.log("Workers busy:", data.message);
+      });
+
       eventSource.addEventListener("count", (e) => {
         const data = JSON.parse(e.data);
         fetchState.status = "counting";
