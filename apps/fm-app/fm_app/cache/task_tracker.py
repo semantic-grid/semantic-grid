@@ -96,3 +96,29 @@ async def clear_running_task(query_id: str) -> bool:
     except Exception as e:
         logger.warning(f"Failed to clear running task: {e}")
         return False
+
+
+async def set_timeout_notified(query_id: str) -> bool:
+    """
+    Mark that a timeout notification has been sent for this query.
+    Uses Redis NX flag to ensure only one notification is sent.
+
+    Args:
+        query_id: Query ID
+
+    Returns:
+        True if this is the first timeout notification (should send),
+        False if already sent (should skip)
+    """
+    try:
+        redis = await get_redis()
+        key = f"timeout_notified:{query_id}"
+        # Try to set the key only if it doesn't exist (NX flag)
+        # TTL of 1 hour to auto-cleanup
+        result = await redis.set(key, "1", ex=3600, nx=True)
+        return (
+            result is not None
+        )  # True if key was set (first time), False if already exists
+    except Exception as e:
+        logger.warning(f"Failed to check timeout notification status: {e}")
+        return True  # On error, allow notification to be sent

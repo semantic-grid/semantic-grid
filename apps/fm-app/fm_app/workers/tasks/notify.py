@@ -18,7 +18,8 @@ def send_query_notification(self, query_id: str, user_email: str):
         user_email: User email address (not persisted to DB)
     """
     logger.info(
-        f"Sending query completion notification to {user_email} for query {query_id}"
+        f"Sending query completion notification for query {query_id}",
+        extra={"query_id": query_id, "has_email": bool(user_email)},
     )
 
     try:
@@ -28,9 +29,15 @@ def send_query_notification(self, query_id: str, user_email: str):
         )
 
         if success:
-            logger.info(f"Notification sent successfully to {user_email}")
+            logger.info(
+                f"Notification sent successfully for query {query_id}",
+                extra={"query_id": query_id},
+            )
         else:
-            logger.warning(f"Notification failed for {user_email}, will retry")
+            logger.warning(
+                f"Notification failed for query {query_id}, will retry",
+                extra={"query_id": query_id},
+            )
             # Retry if email failed
             raise Exception("Email send failed")
 
@@ -53,7 +60,8 @@ def send_query_timeout_notification(
         timeout_minutes: Timeout duration in minutes
     """
     logger.info(
-        f"Sending query timeout notification to {user_email} for query {query_id}"
+        f"Sending query timeout notification for query {query_id}",
+        extra={"query_id": query_id, "timeout_minutes": timeout_minutes},
     )
 
     try:
@@ -66,9 +74,15 @@ def send_query_timeout_notification(
         )
 
         if success:
-            logger.info(f"Timeout notification sent successfully to {user_email}")
+            logger.info(
+                f"Timeout notification sent successfully for query {query_id}",
+                extra={"query_id": query_id},
+            )
         else:
-            logger.warning(f"Timeout notification failed for {user_email}, will retry")
+            logger.warning(
+                f"Timeout notification failed for query {query_id}, will retry",
+                extra={"query_id": query_id},
+            )
             raise Exception("Email send failed")
 
     except Exception as e:

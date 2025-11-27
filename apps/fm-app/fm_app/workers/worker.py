@@ -691,13 +691,24 @@ def wrk_fetch_data(self, args):
                 query_id=query_id,
             )
 
-            # Send timeout notification if requested
+            # Send timeout notification if requested (only once per query)
             if notify_on_complete and user_email and settings.notifications_enabled:
-                from fm_app.workers.tasks.notify import send_query_timeout_notification
+                from fm_app.cache.task_tracker import set_timeout_notified
 
-                send_query_timeout_notification.delay(
-                    query_id, user_email, timeout_minutes
-                )
+                # Check if we've already sent a timeout notification for this query
+                should_notify = run_async(set_timeout_notified(query_id))
+                if should_notify:
+                    from fm_app.workers.tasks.notify import (
+                        send_query_timeout_notification,
+                    )
+
+                    send_query_timeout_notification.delay(
+                        query_id, user_email, timeout_minutes
+                    )
+                else:
+                    logger.debug(
+                        f"Timeout notification already sent for query {query_id}, skipping"
+                    )
 
             return {
                 "status": "error",
