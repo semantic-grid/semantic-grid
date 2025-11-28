@@ -595,7 +595,7 @@ export const GridSessionProvider = ({
     isValidating,
     abortController,
   } = useInfiniteQuery({
-    id: query?.id || requestId || sessionId,
+    id: query?.query_id || requestId || sessionId,
     sql: query?.sql || metadata?.sql,
     sortBy,
     sortOrder,

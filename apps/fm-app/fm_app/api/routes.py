@@ -1555,11 +1555,16 @@ async def stream_data_fetch(
     # raise HTTPException(status_code=204, detail="No content")
 
     # Get SQL from query metadata
+    # Note: query_id parameter can be query_id, request_id, or session_id
+    # for backward compatibility. We extract the actual query_id to use throughout
     sql = ""
+    actual_query_id = None
+
     query_response = await get_query_by_id(query_id=query_id, db=db)
     if query_response:
         sql = query_response.sql if query_response.sql else ""
         sql = sql.strip().rstrip(";")
+        actual_query_id = query_response.query_id
 
         # Validate sort_by
         if sort_by:
@@ -1575,6 +1580,7 @@ async def stream_data_fetch(
         if request_response and request_response.query:
             sql = request_response.query.sql if request_response.query.sql else ""
             sql = sql.strip().rstrip(";")
+            actual_query_id = request_response.query.query_id
             if sort_by:
                 is_valid, result = validate_sort_column(
                     sort_by, request_response.query.columns
@@ -1593,11 +1599,18 @@ async def stream_data_fetch(
                     if not is_valid:
                         raise HTTPException(status_code=400, detail=result)
                     sort_by = result
+                # Session doesn't have a query_id
+                # (shouldn't be used for notifications)
+                actual_query_id = None
             else:
                 raise HTTPException(status_code=404, detail="Query not found")
 
     if not sql:
         raise HTTPException(status_code=400, detail="Query has no SQL attached")
+
+    # Use actual_query_id for tracking and notifications
+    # (fallback to input for backward compat)
+    tracking_id = str(actual_query_id) if actual_query_id else str(query_id)
 
     # Check if there's already a running task for this query
     from fm_app.cache.task_tracker import (
@@ -1607,7 +1620,7 @@ async def stream_data_fetch(
     )
     from fm_app.workers.worker import wrk_fetch_data
 
-    running_task_info = await get_running_task(str(query_id))
+    running_task_info = await get_running_task(tracking_id)
 
     if running_task_info:
         # Task already running - reconnect to it and add this user as subscriber
@@ -1616,14 +1629,14 @@ async def stream_data_fetch(
         is_reconnecting = True
 
         # Add this user as a subscriber
-        await add_task_subscriber(str(query_id), user_email, notify_on_complete)
+        await add_task_subscriber(tracking_id, user_email, notify_on_complete)
 
-        logger.info(f"Reconnecting to existing task {task_id} for query {query_id}")
+        logger.info(f"Reconnecting to existing task {task_id} for query {tracking_id}")
     else:
         is_reconnecting = False
         # Launch new Celery task
         task_args = {
-            "query_id": str(query_id),
+            "query_id": tracking_id,
             "sql": sql,
             "limit": limit,
             "offset": offset,
@@ -1637,12 +1650,12 @@ async def stream_data_fetch(
         task_id = task.id
 
         # Store task info in Redis with initial subscriber
-        await set_running_task(str(query_id), task_id, notify_on_complete, user_email)
+        await set_running_task(tracking_id, task_id, notify_on_complete, user_email)
         logger.info(
-            f"Started new task {task_id} for query {query_id}",
+            f"Started new task {task_id} for query {tracking_id}",
             extra={
                 "task_id": task_id,
-                "query_id": str(query_id),
+                "query_id": tracking_id,
                 "notify_on_complete": notify_on_complete,
                 "has_email": bool(user_email),
             },

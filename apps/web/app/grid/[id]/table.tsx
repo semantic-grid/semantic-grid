@@ -34,7 +34,21 @@ const CustomErrorOverlay = () => (
   </Box>
 );
 
-const EmptyOverlay = () => <div />;
+const EmptyOverlay = () => (
+  <Box
+    sx={{
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      height: "100%",
+    }}
+  >
+    <CircularProgress size={24} sx={{ mr: 2 }} />
+    <Typography variant="body2" color="text.secondary">
+      Loading data...
+    </Typography>
+  </Box>
+);
 
 const LoadingOverlay = () => (
   <Box

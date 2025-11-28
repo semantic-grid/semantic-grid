@@ -31,7 +31,13 @@ type Subscription = {
 
 type FetchState = {
   eventSource: EventSource;
-  status: "connecting" | "counting" | "fetching" | "complete" | "error";
+  status:
+    | "connecting"
+    | "counting"
+    | "fetching"
+    | "complete"
+    | "error"
+    | "workers_busy";
   totalRows?: number;
   data?: { rows: any[]; total_rows: number };
   error?: string;
@@ -89,6 +95,7 @@ export const DataFetchProvider = ({ children }: { children: ReactNode }) => {
 
       eventSource.addEventListener("workers_busy", (e) => {
         const data = JSON.parse(e.data);
+        fetchState.status = "workers_busy";
         console.log("Workers busy:", data.message);
       });
 
