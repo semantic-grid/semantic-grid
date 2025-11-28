@@ -416,12 +416,9 @@ export const GridSessionProvider = ({
   const [selectedAction, setSelectedAction] =
     useState<keyof typeof options>("submit");
 
-  // Check if query has performance warning to determine initial fetch state
-  const hasPerformanceWarning =
-    query?.explanation?.performance_warning ??
-    metadata?.performance_warning ??
-    false;
-  const [fetchEnabled, setFetchEnabled] = useState(!hasPerformanceWarning); // Don't auto-fetch if performance warning
+  // Always initialize fetchEnabled to false to prevent auto-fetch on mount
+  // We'll enable it in useEffect after checking for cached data and performance warnings
+  const [fetchEnabled, setFetchEnabled] = useState(false);
   const [notifyOnComplete, setNotifyOnComplete] = useState(false);
   const lastQueryIdRef = useRef<string | undefined>(undefined);
   const hasInitialized = useRef(false);
@@ -643,6 +640,19 @@ export const GridSessionProvider = ({
     if (currentQueryId !== lastQueryIdRef.current && hasInitialized.current) {
       lastQueryIdRef.current = currentQueryId;
 
+      // Check for performance warning
+      const hasPerformanceWarning =
+        query?.explanation?.performance_warning ??
+        metadata?.performance_warning ??
+        false;
+
+      // If performance warning exists, DON'T auto-fetch - wait for user button click
+      if (hasPerformanceWarning) {
+        console.log("Performance warning detected, disabling auto-fetch");
+        setFetchEnabled(false);
+        return;
+      }
+
       // Check if we have cached data for this query
       if (currentQueryId && currentSql) {
         // Check both EventSource cache and if we already have data loaded
@@ -669,7 +679,9 @@ export const GridSessionProvider = ({
     requestId,
     sessionId,
     query?.sql,
+    query?.explanation?.performance_warning,
     metadata?.sql,
+    metadata?.performance_warning,
     sortBy,
     sortOrder,
     dataFetchContext,
