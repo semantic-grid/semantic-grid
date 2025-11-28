@@ -47,7 +47,19 @@ async def set_running_task(
 
         # Store with 30 minute TTL (longer than query timeout)
         await redis.setex(key, 1800, json.dumps(task_info))
-        logger.debug(f"Stored running task {task_id} for query {query_id}")
+        logger.info(
+            f"Stored running task {task_id} for query {query_id}",
+            extra={
+                "task_id": task_id,
+                "query_id": query_id,
+                "notify_on_complete": notify_on_complete,
+                "has_email": bool(user_email),
+                "subscriber_count": len(subscribers),
+                "subscribers_want_notify": sum(
+                    1 for s in subscribers if s.get("notify")
+                ),
+            },
+        )
         return True
     except Exception as e:
         logger.warning(f"Failed to store running task: {e}")
@@ -157,11 +169,26 @@ async def get_task_subscribers(query_id: str) -> list[dict]:
     try:
         task_info = await get_running_task(query_id)
         if not task_info:
+            logger.info(
+                f"No task info found when getting subscribers for query {query_id}",
+                extra={"query_id": query_id},
+            )
             return []
 
         subscribers = task_info.get("subscribers", [])
+        notify_subscribers = [s for s in subscribers if s.get("notify", False)]
+
+        logger.info(
+            f"Retrieved subscribers for query {query_id}",
+            extra={
+                "query_id": query_id,
+                "total_subscribers": len(subscribers),
+                "notify_subscribers": len(notify_subscribers),
+            },
+        )
+
         # Return only subscribers who want notifications
-        return [s for s in subscribers if s.get("notify", False)]
+        return notify_subscribers
     except Exception as e:
         logger.warning(f"Failed to get task subscribers: {e}")
         return []

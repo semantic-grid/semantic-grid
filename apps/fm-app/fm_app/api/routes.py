@@ -1541,6 +1541,16 @@ async def stream_data_fetch(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="No user name"
         )
 
+    logger.info(
+        f"SSE data fetch request for query {query_id}",
+        extra={
+            "query_id": str(query_id),
+            "notify_on_complete": notify_on_complete,
+            "has_email": bool(user_email),
+            "user_email_provided": user_email is not None,
+        },
+    )
+
     # TODO: temp return empty response !!!
     # raise HTTPException(status_code=204, detail="No content")
 
@@ -1628,7 +1638,15 @@ async def stream_data_fetch(
 
         # Store task info in Redis with initial subscriber
         await set_running_task(str(query_id), task_id, notify_on_complete, user_email)
-        logger.info(f"Started new task {task_id} for query {query_id}")
+        logger.info(
+            f"Started new task {task_id} for query {query_id}",
+            extra={
+                "task_id": task_id,
+                "query_id": str(query_id),
+                "notify_on_complete": notify_on_complete,
+                "has_email": bool(user_email),
+            },
+        )
 
     async def event_generator():
         """Stream task progress via SSE."""
