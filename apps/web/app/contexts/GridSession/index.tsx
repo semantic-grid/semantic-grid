@@ -415,7 +415,13 @@ export const GridSessionProvider = ({
   );
   const [selectedAction, setSelectedAction] =
     useState<keyof typeof options>("submit");
-  const [fetchEnabled, setFetchEnabled] = useState(true); // Start with true to allow SWR to check cache
+
+  // Check if query has performance warning to determine initial fetch state
+  const hasPerformanceWarning =
+    query?.explanation?.performance_warning ??
+    metadata?.performance_warning ??
+    false;
+  const [fetchEnabled, setFetchEnabled] = useState(!hasPerformanceWarning); // Don't auto-fetch if performance warning
   const [notifyOnComplete, setNotifyOnComplete] = useState(false);
   const lastQueryIdRef = useRef<string | undefined>(undefined);
   const hasInitialized = useRef(false);
@@ -1083,6 +1089,7 @@ export const GridSessionProvider = ({
   };
 
   const onFetchData = (withNotification: boolean = false) => {
+    // Update both states together - React 18 batches these automatically
     setNotifyOnComplete(withNotification);
     setFetchEnabled(true);
   };
