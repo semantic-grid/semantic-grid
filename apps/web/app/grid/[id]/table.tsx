@@ -117,17 +117,18 @@ export const DataTable = () => {
   } = useGridSession();
   const apiRef = useGridApiRef();
 
-  // Check if query has performance warning - read from query.explanation with fallback to metadata
-  // Query object stores performance metrics in explanation.performance_warning
-  // Session metadata stores them directly for backwards compatibility
-  const hasPerformanceWarning =
-    query?.explanation?.performance_warning ??
-    metadata?.performance_warning ??
-    false;
-  const estimatedRows =
-    query?.explanation?.estimated_rows ?? metadata?.estimated_rows;
-  const estimatedSizeGb =
-    query?.explanation?.estimated_size_gb ?? metadata?.estimated_size_gb;
+  // Check if query has performance warning - prioritize query object over session metadata
+  // When a query object exists, use it exclusively (query-specific data)
+  // Only fall back to metadata when no query object exists (backwards compatibility)
+  const hasPerformanceWarning = query
+    ? (query.explanation?.performance_warning ?? false)
+    : (metadata?.performance_warning ?? false);
+  const estimatedRows = query
+    ? query.explanation?.estimated_rows
+    : metadata?.estimated_rows;
+  const estimatedSizeGb = query
+    ? query.explanation?.estimated_size_gb
+    : metadata?.estimated_size_gb;
   const queryIdentifier = query?.query_id || metadata?.id || metadata?.sql; // Track query changes
 
   // Memoize the fetch overlay wrapper to avoid creating new component on each render
