@@ -664,6 +664,7 @@ def wrk_fetch_data(self, args):
             }
 
             # Send notifications to all subscribers who requested them
+            subscribers = []
             if settings.notifications_enabled:
                 from fm_app.cache.task_tracker import get_task_subscribers
                 from fm_app.workers.tasks.notify import send_query_notification
@@ -678,6 +679,22 @@ def wrk_fetch_data(self, args):
                         send_query_notification.delay(
                             query_id, subscriber["user_email"]
                         )
+
+            # Clear running task tracker
+            from fm_app.cache.task_tracker import clear_running_task
+
+            run_async(clear_running_task(query_id))
+
+            logger.info(
+                f"Data fetch completed successfully for query {query_id}",
+                extra={
+                    "query_id": query_id,
+                    "rows_returned": len(serialized_rows),
+                    "total_rows": total_count,
+                    "from_cache": False,
+                    "notifications_sent": len(subscribers),
+                },
+            )
 
             return result
 
