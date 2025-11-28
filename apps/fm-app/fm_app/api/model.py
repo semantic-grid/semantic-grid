@@ -135,6 +135,10 @@ class QueryMetadata(BaseModel):
     refs: Optional[Refs] = None
     view: Optional[View] = None
     description: Optional[str] = None
+    # Performance metrics for query execution estimation
+    performance_warning: Optional[bool] = None
+    estimated_rows: Optional[int] = None
+    estimated_size_gb: Optional[float] = None
 
 
 class StructuredResponse(BaseModel):

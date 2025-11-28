@@ -133,14 +133,27 @@ async def handle_manual_query(ctx: FlowContext) -> None:
             extracted_sql=extracted_sql,
         )
 
-
         analyzed = await db_meta_mcp_analyze_query(
             req, extracted_sql, 5, settings, logger
         )
 
-
         if analyzed.get("explanation"):
-            explanation = analyzed.get("explanation")[0]
+            explain_output = analyzed.get("explanation")[0]
+
+            # Build explanation object with EXPLAIN output and performance metrics
+            explanation = {
+                "explain": explain_output,
+            }
+
+            # Add performance metrics if available
+            estimated_rows = analyzed.get("estimated_rows")
+            estimated_size_gb = analyzed.get("estimated_output_size_gb")
+
+            if estimated_rows is not None:
+                explanation["estimated_rows"] = estimated_rows
+            if estimated_size_gb is not None:
+                explanation["estimated_size_gb"] = estimated_size_gb
+
             new_metadata.update({"explanation": explanation})
         elif analyzed.get("error"):
             err = analyzed.get("error")
@@ -223,4 +236,3 @@ async def handle_manual_query(ctx: FlowContext) -> None:
             metadata=new_metadata,
             refs=req.refs,
         )
-

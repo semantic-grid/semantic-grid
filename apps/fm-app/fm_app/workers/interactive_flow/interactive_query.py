@@ -293,12 +293,23 @@ async def handle_interactive_query(ctx: FlowContext, intent: IntentAnalysis) -> 
             )
 
             if analyzed.get("explanation"):
-                explanation = analyzed.get("explanation")[0]
-                new_metadata.update({"explanation": explanation})
+                explain_output = analyzed.get("explanation")[0]
 
                 # Check for large result set estimates (Trino only)
                 estimated_rows = analyzed.get("estimated_rows")
                 estimated_size_gb = analyzed.get("estimated_output_size_gb")
+
+                # Build explanation object with EXPLAIN output and performance metrics
+                explanation = {
+                    "explain": explain_output,
+                }
+
+                if estimated_rows is not None:
+                    explanation["estimated_rows"] = estimated_rows
+                if estimated_size_gb is not None:
+                    explanation["estimated_size_gb"] = estimated_size_gb
+
+                new_metadata.update({"explanation": explanation})
 
                 if estimated_rows is not None:
                     logger.info(
@@ -360,7 +371,11 @@ async def handle_interactive_query(ctx: FlowContext, intent: IntentAnalysis) -> 
                             }
                         )
 
-                        # Store estimate in metadata
+                        # Store performance warning in explanation and metadata
+                        explanation["performance_warning"] = True
+                        new_metadata.update({"explanation": explanation})
+
+                        # Also store in metadata for backwards compatibility
                         new_metadata.update(
                             {
                                 "estimated_rows": estimated_rows,
