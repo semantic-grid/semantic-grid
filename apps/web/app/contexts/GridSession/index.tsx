@@ -432,6 +432,7 @@ export const GridSessionProvider = ({
   const hasInitialized = useRef(false);
   const userRequestedFetch = useRef(false);
   const prevFetchEnabledRef = useRef(false);
+  const lastProcessedQueryRef = useRef<string | undefined>(undefined);
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const scrollToBottom = () => {
@@ -637,6 +638,7 @@ export const GridSessionProvider = ({
   useEffect(() => {
     const currentQueryId = requestId || sessionId;
     const currentSql = query?.sql || metadata?.sql;
+    const queryKey = `${currentQueryId}-${currentSql}`;
 
     // Check if query_id has changed
     if (currentQueryId !== lastQueryIdRef.current && hasInitialized.current) {
@@ -646,10 +648,20 @@ export const GridSessionProvider = ({
       lastQueryIdRef.current = currentQueryId;
       // Reset user fetch flag when query changes
       userRequestedFetch.current = false;
+      // Reset last processed query to allow re-evaluation
+      lastProcessedQueryRef.current = undefined;
     }
 
-    // Determine if we should enable fetch based on current state
-    if (hasInitialized.current && currentQueryId && currentSql) {
+    // Only process if query context changed or if user explicitly requested fetch
+    const queryChanged = queryKey !== lastProcessedQueryRef.current;
+    const shouldProcess = queryChanged || userRequestedFetch.current;
+
+    if (
+      hasInitialized.current &&
+      currentQueryId &&
+      currentSql &&
+      shouldProcess
+    ) {
       let shouldEnableFetch = false;
 
       // If user explicitly requested fetch, always allow it
@@ -666,9 +678,10 @@ export const GridSessionProvider = ({
       // Only update state if it actually changed
       if (shouldEnableFetch !== prevFetchEnabledRef.current) {
         console.log(
-          `[FetchControl] Changing fetchEnabled from ${prevFetchEnabledRef.current} to ${shouldEnableFetch}`,
+          `[FetchControl] Changing fetchEnabled from ${prevFetchEnabledRef.current} to ${shouldEnableFetch} (queryChanged=${queryChanged}, userRequested=${userRequestedFetch.current})`,
         );
         prevFetchEnabledRef.current = shouldEnableFetch;
+        lastProcessedQueryRef.current = queryKey;
         setFetchEnabled(shouldEnableFetch);
       }
     }
