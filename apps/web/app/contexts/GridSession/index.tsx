@@ -632,22 +632,11 @@ export const GridSessionProvider = ({
     const currentQueryId = requestId || sessionId;
     const currentSql = query?.sql || metadata?.sql;
 
-    // Always check for performance warning first
-    const hasPerformanceWarning =
-      query?.explanation?.performance_warning ??
-      metadata?.performance_warning ??
-      false;
-
-    // If performance warning exists and user hasn't explicitly requested fetch, disable auto-fetch
-    if (hasPerformanceWarning && !userRequestedFetch.current) {
-      console.log("Performance warning detected, disabling auto-fetch");
-      setFetchEnabled(false);
-      return;
-    }
-
     // Check if query_id has changed
     if (currentQueryId !== lastQueryIdRef.current && hasInitialized.current) {
       lastQueryIdRef.current = currentQueryId;
+      // Reset user fetch flag when query changes
+      userRequestedFetch.current = false;
 
       // Check if we have cached data for this query
       if (currentQueryId && currentSql) {
@@ -660,12 +649,30 @@ export const GridSessionProvider = ({
           sortOrder,
         });
 
-        // Enable fetch if we have cached data OR if we already have rows loaded
-        if (cacheStatus === "complete" || (data && data.length > 0)) {
+        const hasCachedData =
+          cacheStatus === "complete" || (data && data.length > 0);
+
+        // Always enable fetch if we have cached data (to display it)
+        if (hasCachedData) {
+          console.log("Cached data available, enabling fetch to display it");
           setFetchEnabled(true);
         } else {
-          // No cache, disable fetch and show confirmation
-          setFetchEnabled(false);
+          // No cached data - check for performance warning
+          const hasPerformanceWarning =
+            query?.explanation?.performance_warning ??
+            metadata?.performance_warning ??
+            false;
+
+          if (hasPerformanceWarning) {
+            console.log(
+              "No cached data + performance warning, showing buttons",
+            );
+            setFetchEnabled(false);
+          } else {
+            // No warning, no cache - could auto-fetch or show buttons
+            // For now, show buttons (user must click)
+            setFetchEnabled(false);
+          }
         }
       } else {
         setFetchEnabled(false);
