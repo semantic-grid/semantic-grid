@@ -647,31 +647,30 @@ export const GridSessionProvider = ({
         if (!fetchEnabled) {
           setFetchEnabled(true);
         }
-        return;
-      }
-
-      // Check if SWR has cached data (data is defined and not loading)
-      // Cached data could be an empty array [] (0 rows) or have actual rows
-      const hasCachedData = data !== undefined && !isLoading;
-
-      if (hasCachedData) {
-        // Always enable fetch if we have cached data (to display it)
-        if (!fetchEnabled) {
-          console.log("Cached data available, enabling fetch to display it");
-          setFetchEnabled(true);
-        }
       } else {
-        // No cached data - check for performance warning
-        const hasPerformanceWarning =
-          query?.explanation?.performance_warning ??
-          metadata?.performance_warning ??
-          false;
+        // Check if SWR has cached data (data is defined and not loading)
+        // Cached data could be an empty array [] (0 rows) or have actual rows
+        const hasCachedData = data !== undefined && !isLoading;
 
-        if (hasPerformanceWarning || !hasCachedData) {
-          // Disable fetch if: performance warning OR no cached data
-          if (fetchEnabled) {
-            console.log("No cached data, showing buttons");
-            setFetchEnabled(false);
+        if (hasCachedData) {
+          // Always enable fetch if we have cached data (to display it)
+          if (!fetchEnabled) {
+            console.log("Cached data available, enabling fetch to display it");
+            setFetchEnabled(true);
+          }
+        } else {
+          // No cached data - check for performance warning
+          const hasPerformanceWarning =
+            query?.explanation?.performance_warning ??
+            metadata?.performance_warning ??
+            false;
+
+          if (hasPerformanceWarning || !hasCachedData) {
+            // Disable fetch if: performance warning OR no cached data
+            if (fetchEnabled) {
+              console.log("No cached data, showing buttons");
+              setFetchEnabled(false);
+            }
           }
         }
       }
