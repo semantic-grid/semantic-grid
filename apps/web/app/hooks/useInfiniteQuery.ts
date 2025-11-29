@@ -20,6 +20,16 @@ const createFetcher =
     // @ts-ignore
     const [url, id, offset, limit, sortBy, sortOrder] = key;
 
+    console.log("[useInfiniteQuery] Fetcher called", {
+      id,
+      offset,
+      limit,
+      sortBy,
+      sortOrder,
+      notifyOnComplete,
+      userEmail,
+    });
+
     return new Promise<ApiResponse>((resolve, reject) => {
       const unsubscribe = dataFetchContext.subscribe(
         {
