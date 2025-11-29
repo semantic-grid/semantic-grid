@@ -640,17 +640,9 @@ export const GridSessionProvider = ({
 
       // Check if we have cached data for this query
       if (currentQueryId && currentSql) {
-        // Check both EventSource cache and if we already have data loaded
-        const cacheStatus = dataFetchContext.getCacheStatus({
-          id: currentQueryId,
-          limit: 100,
-          offset: 0,
-          sortBy,
-          sortOrder,
-        });
-
-        const hasCachedData =
-          cacheStatus === "complete" || (data && data.length > 0);
+        // Check if SWR has cached data (data is defined and not loading)
+        // Cached data could be an empty array [] (0 rows) or have actual rows
+        const hasCachedData = data !== undefined && !isLoading;
 
         // Always enable fetch if we have cached data (to display it)
         if (hasCachedData) {
