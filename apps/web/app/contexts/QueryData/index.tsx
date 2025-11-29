@@ -70,9 +70,9 @@ export interface QueryDataContextType {
   isValidating: boolean;
   setSize: React.Dispatch<React.SetStateAction<number>>;
   abortController?: AbortController;
-  fetchEnabled: boolean;
   onFetchData: (withNotification?: boolean) => void;
   error: any;
+  hasCachedData: boolean;
 }
 
 const canonical = (metadata: any, field: string) =>
@@ -161,19 +161,7 @@ export const QueryDataProvider = ({
   const mergedSql = useMemo(() => query?.sql, [query]);
   const performanceWarningShown = useRef<string | null>(null);
 
-  // Fetch control state
-  const [fetchEnabled, setFetchEnabledInternal] = useState(false);
-  const setFetchEnabled = useCallback((value: boolean) => {
-    console.log(`[QueryData FetchEnabled] Setting fetchEnabled to ${value}`);
-    setFetchEnabledInternal(value);
-  }, []);
-
   const [notifyOnComplete, setNotifyOnComplete] = useState(false);
-  const lastQueryIdRef = useRef<string | undefined>(undefined);
-  const hasInitialized = useRef(false);
-  const userRequestedFetch = useRef(false);
-  const prevFetchEnabledRef = useRef(false);
-  const lastProcessedQueryRef = useRef<string | undefined>(undefined);
 
   const sortByCol = query?.columns?.find(
     (c: any) =>
@@ -192,12 +180,12 @@ export const QueryDataProvider = ({
     isLoading,
     isValidating,
     abortController,
+    mutate: mutateSWR,
   } = useInfiniteQuery({
     id: queryId,
     sql: query?.sql,
     sortBy,
     sortOrder,
-    enabled: fetchEnabled,
     notifyOnComplete,
     userEmail: notifyOnComplete ? appUser?.email : undefined,
   });
@@ -205,85 +193,10 @@ export const QueryDataProvider = ({
   const hasLoadedOnce = useRef(false);
   const triggered = useRef(false);
 
-  // Initial check on mount - mark as initialized
-  useEffect(() => {
-    if (!hasInitialized.current) {
-      hasInitialized.current = true;
-      console.log("[QueryData] Component initialized");
-    }
-  }, []);
-
-  // Compute cached data state in useMemo to prevent recalculation
+  // Simple cache check - SWR returns cached data immediately if available
   const hasCachedData = useMemo(() => {
-    return data !== undefined && !isLoading;
+    return data !== undefined && data.length > 0 && !isLoading;
   }, [data, isLoading]);
-
-  // Check for performance warning and control fetch state
-  useEffect(() => {
-    const currentQueryId = queryId;
-    const currentSql = query?.sql;
-    const queryKey = `${currentQueryId}-${currentSql}`;
-
-    // Check if query_id has changed
-    if (currentQueryId !== lastQueryIdRef.current && hasInitialized.current) {
-      console.log(
-        `[QueryData FetchControl] Query ID changed from ${lastQueryIdRef.current} to ${currentQueryId}`,
-      );
-      lastQueryIdRef.current = currentQueryId;
-      // Reset user fetch flag when query changes
-      userRequestedFetch.current = false;
-      // Reset last processed query to allow re-evaluation
-      lastProcessedQueryRef.current = undefined;
-      // Disable fetch immediately on query change - wait to see if SWR has cache
-      if (fetchEnabled) {
-        console.log(
-          "[QueryData FetchControl] Query changed - disabling fetch until cache check completes",
-        );
-        prevFetchEnabledRef.current = false;
-        setFetchEnabled(false);
-      }
-      return; // Don't process further on query change - let SWR update first
-    }
-
-    // Only process if this is a new query we haven't decided on yet
-    const queryChanged = queryKey !== lastProcessedQueryRef.current;
-
-    if (
-      hasInitialized.current &&
-      currentQueryId &&
-      currentSql &&
-      queryChanged
-    ) {
-      let shouldEnableFetch = false;
-
-      // If user explicitly requested fetch, always allow it
-      if (userRequestedFetch.current) {
-        shouldEnableFetch = true;
-      } else if (hasCachedData) {
-        // SWR has cached data for this query - enable fetch to display it
-        shouldEnableFetch = true;
-      } else {
-        // No cached data - show buttons (don't enable fetch)
-        shouldEnableFetch = false;
-      }
-
-      // Only update state if it actually changed
-      if (shouldEnableFetch !== prevFetchEnabledRef.current) {
-        console.log(
-          `[QueryData FetchControl] Changing fetchEnabled from ${prevFetchEnabledRef.current} to ${shouldEnableFetch} (hasCachedData=${hasCachedData}, userRequested=${userRequestedFetch.current})`,
-        );
-        prevFetchEnabledRef.current = shouldEnableFetch;
-        lastProcessedQueryRef.current = queryKey;
-        setFetchEnabled(shouldEnableFetch);
-      }
-    }
-  }, [
-    queryId,
-    query?.sql,
-    query?.explanation?.performance_warning,
-    hasCachedData,
-    fetchEnabled,
-  ]);
 
   // Check for performance warnings and show confirmation dialog
   useEffect(() => {
@@ -479,13 +392,17 @@ export const QueryDataProvider = ({
     setActiveColumn(col);
   };
 
-  const onFetchData = (withNotification: boolean = false) => {
-    // Mark that user explicitly requested fetch
-    userRequestedFetch.current = true;
-    // Update both states together - React 18 batches these automatically
-    setNotifyOnComplete(withNotification);
-    setFetchEnabled(true);
-  };
+  const onFetchData = useCallback(
+    (withNotification: boolean = false) => {
+      console.log(
+        `[QueryData onFetchData] User requested fetch, withNotification=${withNotification}`,
+      );
+      setNotifyOnComplete(withNotification);
+      // Trigger SWR to fetch data explicitly
+      mutateSWR();
+    },
+    [mutateSWR],
+  );
 
   return (
     <Index.Provider
@@ -511,9 +428,9 @@ export const QueryDataProvider = ({
         isValidating,
         setSize,
         abortController,
-        fetchEnabled,
         onFetchData,
         error: dataError,
+        hasCachedData,
       }}
     >
       {children}

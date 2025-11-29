@@ -109,7 +109,6 @@ export const useInfiniteQuery = ({
   limit = 100,
   sortBy,
   sortOrder,
-  enabled = true,
   notifyOnComplete = false,
   userEmail,
 }: {
@@ -118,7 +117,6 @@ export const useInfiniteQuery = ({
   limit?: number;
   sortBy?: string;
   sortOrder?: "asc" | "desc";
-  enabled?: boolean;
   notifyOnComplete?: boolean;
   userEmail?: string;
 }) => {
@@ -128,10 +126,8 @@ export const useInfiniteQuery = ({
 
   const { data, error, isLoading, size, setSize, mutate, isValidating } =
     useSWRInfinite<ApiResponse>(
-      enabled
-        ? (pageIndex, prevData) =>
-            getKey(pageIndex, prevData, id!, limit, sortBy, sortOrder, sql)
-        : () => null,
+      (pageIndex, prevData) =>
+        getKey(pageIndex, prevData, id!, limit, sortBy, sortOrder, sql),
       createFetcher(
         dataFetchContext,
         abortController,
@@ -145,6 +141,8 @@ export const useInfiniteQuery = ({
         revalidateOnMount: false,
         revalidateOnReconnect: false,
         shouldRetryOnError: false,
+        // Keep cache but never auto-fetch
+        // Fetching only happens via explicit mutate() calls
       },
     );
 

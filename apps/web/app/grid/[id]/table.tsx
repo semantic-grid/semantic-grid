@@ -124,10 +124,10 @@ export const DataTable = () => {
     setSelectionModel,
     setNewCol,
     error: dataError,
-    fetchEnabled,
     onFetchData,
     metadata,
     query,
+    hasCachedData,
   } = useGridSession();
   const apiRef = useGridApiRef();
 
@@ -157,32 +157,23 @@ export const DataTable = () => {
         estimatedSizeGb={estimatedSizeGb}
       />
     ),
-    [
-      onFetchData,
-      hasPerformanceWarning,
-      estimatedRows,
-      estimatedSizeGb,
-      queryIdentifier,
-    ],
+    [onFetchData, hasPerformanceWarning, estimatedRows, estimatedSizeGb],
   );
 
   // Determine which overlay to show based on state
   let noRowsOverlayComponent = NoDataOverlay;
 
-  // Check if we've actually fetched data
-  // We've fetched if: fetchEnabled was true AND we have a row count (even if 0)
-  const hasFetchedData = fetchEnabled && rowCount !== undefined && !isLoading;
-
   if (dataError) {
     noRowsOverlayComponent = CustomErrorOverlay;
-  } else if (isLoading && fetchEnabled) {
+  } else if (isLoading) {
+    // Currently fetching data
     noRowsOverlayComponent = EmptyOverlay;
-  } else if (!fetchEnabled) {
-    // Fetch is disabled - show fetch buttons
-    noRowsOverlayComponent = FetchOverlayWrapper;
-  } else if (hasFetchedData && rowCount === 0) {
-    // Data was fetched but returned 0 rows - show "No results found"
+  } else if (hasCachedData && rowCount === 0) {
+    // Have cached data but it's empty (0 rows)
     noRowsOverlayComponent = NoDataOverlay;
+  } else if (!hasCachedData) {
+    // No cached data - show fetch buttons
+    noRowsOverlayComponent = FetchOverlayWrapper;
   }
 
   const customColumns = [

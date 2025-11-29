@@ -94,8 +94,8 @@ export const DataTable = () => {
     selectionModel,
     setSelectionModel,
     error: dataError,
-    fetchEnabled,
     onFetchData,
+    hasCachedData,
   } = useQueryData();
 
   const apiRef = useGridApiRef();
@@ -108,19 +108,19 @@ export const DataTable = () => {
   );
 
   // Determine which overlay to show based on current state
-  let noRowsOverlayComponent;
-  const hasFetchedData = fetchEnabled && rowCount !== undefined && !isLoading;
+  let noRowsOverlayComponent = NoDataOverlay;
 
   if (dataError) {
     noRowsOverlayComponent = CustomErrorOverlay;
-  } else if (isLoading && fetchEnabled) {
+  } else if (isLoading) {
+    // Currently fetching data
     noRowsOverlayComponent = EmptyOverlay;
-  } else if (!fetchEnabled) {
-    // Fetch is disabled - show fetch buttons
-    noRowsOverlayComponent = FetchOverlayWrapper;
-  } else if (hasFetchedData && rowCount === 0) {
-    // Data was fetched but returned 0 rows - show "No results found"
+  } else if (hasCachedData && rowCount === 0) {
+    // Have cached data but it's empty (0 rows)
     noRowsOverlayComponent = NoDataOverlay;
+  } else if (!hasCachedData) {
+    // No cached data - show fetch buttons
+    noRowsOverlayComponent = FetchOverlayWrapper;
   }
 
   return (
