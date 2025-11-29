@@ -75,6 +75,7 @@ export const useQuery = ({
   offset,
   sortBy,
   sortOrder,
+  enabled = true,
 }: {
   id?: string;
   sql?: string; // not used
@@ -82,6 +83,7 @@ export const useQuery = ({
   offset?: number;
   sortBy?: string;
   sortOrder?: "asc" | "desc";
+  enabled?: boolean;
 }) => {
   const { mutate: mutateCache } = useSWRConfig();
   const [force, setForce] = useState<boolean>(false);
@@ -89,9 +91,10 @@ export const useQuery = ({
 
   // console.log("useQuery", id, limit, offset, sortBy, sortOrder);
   // const sqlHash = sql ? btoa(sanitize(sql)) : "";
-  const key = id
-    ? [`/api/apegpt/data/sse`, id, limit, offset, sortBy, sortOrder]
-    : null;
+  const key =
+    enabled && id
+      ? [`/api/apegpt/data/sse`, id, limit, offset, sortBy, sortOrder]
+      : null;
 
   const fetcher = useMemo(
     () => createFetcher(dataFetchContext),

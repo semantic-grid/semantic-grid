@@ -28,7 +28,6 @@ import {
   timeKey,
 } from "@/app/helpers/chart";
 import { useLocalStorage } from "@/app/hooks/useLocalStorage";
-import { useQuery } from "@/app/hooks/useQuery";
 import type { TColumn } from "@/app/lib/types";
 
 import { ChatContainer } from "./chat-container";
@@ -327,16 +326,15 @@ export const InteractiveDashboard = ({
     setPanel(newValue);
   };
 
-  const {
-    data,
-    error: dataError,
-    isLoading: dataLoading,
-  } = useQuery({
-    id: query?.query_id,
-    sql: query?.sql,
-    limit: 20,
-    offset: 0,
-  });
+  // Use data from GridSession instead of making a separate fetch
+  // Charts only need first 20 rows
+  const data = useMemo(() => {
+    if (!rows || rows.length === 0) return null;
+    return {
+      rows: rows.slice(0, 20),
+      total_rows: rows.length,
+    };
+  }, [rows]);
 
   const gridColumns: GridColDef[] = useMemo(() => {
     if (!query) return [];
