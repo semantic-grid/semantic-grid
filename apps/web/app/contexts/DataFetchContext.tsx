@@ -188,6 +188,14 @@ export const DataFetchProvider = ({ children }: { children: ReactNode }) => {
       const url = buildUrl(params);
       const subscriptionId = `${url}-${Date.now()}-${Math.random()}`;
 
+      console.log("[DataFetchContext] subscribe called", {
+        id: params.id,
+        offset: params.offset,
+        limit: params.limit,
+        notifyOnComplete: params.notifyOnComplete,
+        userEmail: params.userEmail,
+      });
+
       // Cancel any pending cleanup for this URL
       const cleanupTimer = cleanupTimersRef.current.get(url);
       if (cleanupTimer) {

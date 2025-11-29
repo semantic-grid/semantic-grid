@@ -72,11 +72,26 @@ const getKey = (
 ):
   | [string, string, number, number, string?, ("asc" | "desc")?, string?]
   | null => {
-  // console.log("getKey", pageIndex, limit);
-  if (!id || !sql) return null;
-  if (previousPageData && previousPageData.rows.length === 0) return null; // no more pages
+  console.log("[useInfiniteQuery] getKey called", {
+    pageIndex,
+    id,
+    limit,
+    sortBy,
+    sortOrder,
+    hasId: !!id,
+    hasSql: !!sql,
+  });
+
+  if (!id || !sql) {
+    console.log("[useInfiniteQuery] getKey returning null - no id or sql");
+    return null;
+  }
+  if (previousPageData && previousPageData.rows.length === 0) {
+    console.log("[useInfiniteQuery] getKey returning null - no more pages");
+    return null; // no more pages
+  }
   const offset = pageIndex * limit;
-  return [
+  const key = [
     `/api/apegpt/data/sse`,
     id,
     offset,
@@ -84,6 +99,8 @@ const getKey = (
     sortBy,
     sortOrder /* btoa(sql) */,
   ];
+  console.log("[useInfiniteQuery] getKey returning key", key);
+  return key;
 };
 
 export const useInfiniteQuery = ({
