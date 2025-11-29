@@ -161,19 +161,26 @@ export const DataTable = () => {
   );
 
   // Determine which overlay to show based on state
+  // We need to differentiate three states:
+  // 1. data === undefined → never fetched (show buttons)
+  // 2. data === [] → fetched but 0 rows (show "no results")
+  // 3. data === [...] → has rows (show data, handled by grid)
+
   let noRowsOverlayComponent = NoDataOverlay;
+  const neverFetched =
+    rows.length === 0 && !isLoading && !dataError && !hasCachedData;
 
   if (dataError) {
     noRowsOverlayComponent = CustomErrorOverlay;
   } else if (isLoading) {
     // Currently fetching data
     noRowsOverlayComponent = EmptyOverlay;
-  } else if (hasCachedData && rowCount === 0) {
-    // Have cached data but it's empty (0 rows)
-    noRowsOverlayComponent = NoDataOverlay;
-  } else if (!hasCachedData) {
-    // No cached data - show fetch buttons
+  } else if (neverFetched) {
+    // Never fetched - show fetch buttons
     noRowsOverlayComponent = FetchOverlayWrapper;
+  } else if (rowCount === 0) {
+    // Fetched but got 0 rows - show "no results"
+    noRowsOverlayComponent = NoDataOverlay;
   }
 
   const customColumns = [

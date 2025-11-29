@@ -141,8 +141,11 @@ export const useInfiniteQuery = ({
         revalidateOnMount: false,
         revalidateOnReconnect: false,
         shouldRetryOnError: false,
-        // Keep cache but never auto-fetch
-        // Fetching only happens via explicit mutate() calls
+        fallbackData: undefined, // Return undefined until data is fetched
+        // This prevents auto-fetch while allowing us to differentiate:
+        // - data === undefined → no fetch yet (show buttons)
+        // - data === [] → fetched but 0 results (show "no results")
+        // - data === [...] → has results (show data)
       },
     );
 
