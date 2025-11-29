@@ -650,17 +650,25 @@ export const GridSessionProvider = ({
       userRequestedFetch.current = false;
       // Reset last processed query to allow re-evaluation
       lastProcessedQueryRef.current = undefined;
+      // Disable fetch immediately on query change - wait to see if SWR has cache
+      if (fetchEnabled) {
+        console.log(
+          "[FetchControl] Query changed - disabling fetch until cache check completes",
+        );
+        prevFetchEnabledRef.current = false;
+        setFetchEnabled(false);
+      }
+      return; // Don't process further on query change - let SWR update first
     }
 
-    // Only process if query context changed or if user explicitly requested fetch
+    // Only process if this is a new query we haven't decided on yet
     const queryChanged = queryKey !== lastProcessedQueryRef.current;
-    const shouldProcess = queryChanged || userRequestedFetch.current;
 
     if (
       hasInitialized.current &&
       currentQueryId &&
       currentSql &&
-      shouldProcess
+      queryChanged
     ) {
       let shouldEnableFetch = false;
 
@@ -668,7 +676,7 @@ export const GridSessionProvider = ({
       if (userRequestedFetch.current) {
         shouldEnableFetch = true;
       } else if (hasCachedData) {
-        // Always enable fetch if we have cached data (to display it)
+        // SWR has cached data for this query - enable fetch to display it
         shouldEnableFetch = true;
       } else {
         // No cached data - show buttons (don't enable fetch)
@@ -678,7 +686,7 @@ export const GridSessionProvider = ({
       // Only update state if it actually changed
       if (shouldEnableFetch !== prevFetchEnabledRef.current) {
         console.log(
-          `[FetchControl] Changing fetchEnabled from ${prevFetchEnabledRef.current} to ${shouldEnableFetch} (queryChanged=${queryChanged}, userRequested=${userRequestedFetch.current})`,
+          `[FetchControl] Changing fetchEnabled from ${prevFetchEnabledRef.current} to ${shouldEnableFetch} (hasCachedData=${hasCachedData}, userRequested=${userRequestedFetch.current})`,
         );
         prevFetchEnabledRef.current = shouldEnableFetch;
         lastProcessedQueryRef.current = queryKey;
@@ -693,6 +701,7 @@ export const GridSessionProvider = ({
     metadata?.sql,
     metadata?.performance_warning,
     hasCachedData,
+    fetchEnabled,
   ]);
 
   useEffect(() => {

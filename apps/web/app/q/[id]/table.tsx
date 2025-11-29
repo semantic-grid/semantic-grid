@@ -1,4 +1,4 @@
-import { Box, styled, Typography } from "@mui/material";
+import { Box, CircularProgress, styled, Typography } from "@mui/material";
 import type { GridCellParams, MuiEvent } from "@mui/x-data-grid-pro";
 import {
   DataGridPro,
@@ -11,12 +11,48 @@ import React from "react";
 
 import { pulse } from "@/app/components/dancing-balls";
 import { useQueryData } from "@/app/contexts/QueryData";
+import {
+  FetchDataOverlay,
+  NoDataOverlay,
+} from "@/app/grid/[id]/data-grid-overlays";
 
 const PulsingMonoText = styled(Typography)(({ theme }) => ({
   // color: theme.palette.grey[500],
   fontFamily: theme.typography.caption.fontFamily,
   animation: `${pulse} 1.5s ease-in-out infinite`,
 }));
+
+const CustomErrorOverlay = () => (
+  <Box
+    sx={{
+      display: "flex",
+      height: "100%",
+      alignItems: "center",
+      justifyContent: "center",
+      fontSize: 18,
+    }}
+  >
+    <Typography variant="body2" color="textSecondary">
+      Query Execution Error
+    </Typography>
+  </Box>
+);
+
+const EmptyOverlay = () => (
+  <Box
+    sx={{
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      height: "100%",
+    }}
+  >
+    <CircularProgress size={24} sx={{ mr: 2 }} />
+    <Typography variant="body2" color="text.secondary">
+      Loading data...
+    </Typography>
+  </Box>
+);
 
 const CustomFooter = ({ isFetchingMore }: { isFetchingMore: boolean }) => {
   const apiRef = useGridApiContext();
@@ -57,27 +93,35 @@ export const DataTable = () => {
     isValidating,
     selectionModel,
     setSelectionModel,
+    error: dataError,
+    fetchEnabled,
+    onFetchData,
   } = useQueryData();
 
   const apiRef = useGridApiRef();
-  // console.log("DataTable loading:", isLoading, "validating:", isValidating);
 
-  // eslint-disable-next-line react/no-unstable-nested-components
-  const CustomNoRowsOverlay = () => (
-    <Box
-      sx={{
-        display: "flex",
-        height: "100%",
-        alignItems: "center",
-        justifyContent: "center",
-        fontSize: 18,
-      }}
-    >
-      <Typography variant="body2" color="textSecondary">
-        No data or no query
-      </Typography>
-    </Box>
+  // Memoize the fetch overlay wrapper to avoid creating new component on each render
+  // eslint-disable-next-line react/display-name, react/no-unstable-nested-components
+  const FetchOverlayWrapper = React.useMemo(
+    () => () => <FetchDataOverlay onFetchData={onFetchData} />,
+    [onFetchData],
   );
+
+  // Determine which overlay to show based on current state
+  let noRowsOverlayComponent;
+  const hasFetchedData = fetchEnabled && rowCount !== undefined && !isLoading;
+
+  if (dataError) {
+    noRowsOverlayComponent = CustomErrorOverlay;
+  } else if (isLoading && fetchEnabled) {
+    noRowsOverlayComponent = EmptyOverlay;
+  } else if (!fetchEnabled) {
+    // Fetch is disabled - show fetch buttons
+    noRowsOverlayComponent = FetchOverlayWrapper;
+  } else if (hasFetchedData && rowCount === 0) {
+    // Data was fetched but returned 0 rows - show "No results found"
+    noRowsOverlayComponent = NoDataOverlay;
+  }
 
   return (
     <DataGridPro
@@ -153,8 +197,7 @@ export const DataTable = () => {
         return activeColumn?.field === params.field ? "highlight-column" : "";
       }}
       slots={{
-        // eslint-disable-next-line react/no-unstable-nested-components,react/jsx-no-useless-fragment
-        noRowsOverlay: isLoading ? () => <></> : CustomNoRowsOverlay,
+        noRowsOverlay: noRowsOverlayComponent,
         // eslint-disable-next-line react/no-unstable-nested-components
         footer: () => (
           <CustomFooter isFetchingMore={isValidating && !isLoading} />
