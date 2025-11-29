@@ -125,7 +125,7 @@ export const useInfiniteQuery = ({
         revalidateIfStale: false,
         refreshInterval: 0,
         revalidateOnFocus: false,
-        // revalidateOnMount: false,
+        revalidateOnMount: false,
         revalidateOnReconnect: false,
         shouldRetryOnError: false,
       },
