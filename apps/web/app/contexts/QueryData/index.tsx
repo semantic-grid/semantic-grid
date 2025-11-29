@@ -162,6 +162,7 @@ export const QueryDataProvider = ({
   const performanceWarningShown = useRef<string | null>(null);
 
   const [notifyOnComplete, setNotifyOnComplete] = useState(false);
+  const [fetchEnabled, setFetchEnabled] = useState(false);
 
   const sortByCol = query?.columns?.find(
     (c: any) =>
@@ -188,6 +189,7 @@ export const QueryDataProvider = ({
     sortOrder,
     notifyOnComplete,
     userEmail: notifyOnComplete ? appUser?.email : undefined,
+    enabled: fetchEnabled, // Only enable if user clicked button
   });
   console.log("QueryDataProvider data", queryId, data, "error", dataError);
   const hasLoadedOnce = useRef(false);
@@ -397,6 +399,7 @@ export const QueryDataProvider = ({
       console.log(
         `[QueryData onFetchData] User requested fetch, withNotification=${withNotification}`,
       );
+      setFetchEnabled(true);
       setNotifyOnComplete(withNotification);
       // Trigger SWR to fetch data explicitly
       mutateSWR();

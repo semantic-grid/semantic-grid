@@ -418,6 +418,7 @@ export const GridSessionProvider = ({
     useState<keyof typeof options>("submit");
 
   const [notifyOnComplete, setNotifyOnComplete] = useState(false);
+  const [fetchEnabled, setFetchEnabled] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const scrollToBottom = () => {
@@ -601,6 +602,7 @@ export const GridSessionProvider = ({
     sortOrder,
     notifyOnComplete,
     userEmail: notifyOnComplete ? appUser?.email : undefined,
+    enabled: fetchEnabled, // Only enable if user clicked button
   });
   const hasLoadedOnce = useRef(false);
   const triggered = useRef(false);
@@ -1010,6 +1012,7 @@ export const GridSessionProvider = ({
       console.log(
         `[onFetchData] User requested fetch, withNotification=${withNotification}`,
       );
+      setFetchEnabled(true);
       setNotifyOnComplete(withNotification);
       // Trigger SWR to fetch data explicitly
       mutateSWR();

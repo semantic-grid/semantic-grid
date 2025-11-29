@@ -20,15 +20,19 @@ const createFetcher =
     // @ts-ignore
     const [url, id, offset, limit, sortBy, sortOrder] = key;
 
-    console.log("[useInfiniteQuery] Fetcher called", {
-      id,
-      offset,
-      limit,
-      sortBy,
-      sortOrder,
-      notifyOnComplete,
-      userEmail,
-    });
+    console.log(
+      "[useInfiniteQuery] Fetcher called - THIS SHOULD ONLY HAPPEN ON BUTTON CLICK!",
+      {
+        id,
+        offset,
+        limit,
+        sortBy,
+        sortOrder,
+        notifyOnComplete,
+        userEmail,
+        stack: new Error().stack,
+      },
+    );
 
     return new Promise<ApiResponse>((resolve, reject) => {
       const unsubscribe = dataFetchContext.subscribe(
@@ -111,6 +115,7 @@ export const useInfiniteQuery = ({
   sortOrder,
   notifyOnComplete = false,
   userEmail,
+  enabled = false,
 }: {
   id?: string;
   sql?: string;
@@ -119,6 +124,7 @@ export const useInfiniteQuery = ({
   sortOrder?: "asc" | "desc";
   notifyOnComplete?: boolean;
   userEmail?: string;
+  enabled?: boolean;
 }) => {
   // console.log("useInfiniteQuery req", id, sortBy, sortOrder);
   const dataFetchContext = useDataFetch();
@@ -126,8 +132,10 @@ export const useInfiniteQuery = ({
 
   const { data, error, isLoading, size, setSize, mutate, isValidating } =
     useSWRInfinite<ApiResponse>(
-      (pageIndex, prevData) =>
-        getKey(pageIndex, prevData, id!, limit, sortBy, sortOrder, sql),
+      enabled
+        ? (pageIndex, prevData) =>
+            getKey(pageIndex, prevData, id!, limit, sortBy, sortOrder, sql)
+        : () => null,
       createFetcher(
         dataFetchContext,
         abortController,
@@ -141,11 +149,7 @@ export const useInfiniteQuery = ({
         revalidateOnMount: false,
         revalidateOnReconnect: false,
         shouldRetryOnError: false,
-        fallbackData: undefined, // Return undefined until data is fetched
-        // This prevents auto-fetch while allowing us to differentiate:
-        // - data === undefined → no fetch yet (show buttons)
-        // - data === [] → fetched but 0 results (show "no results")
-        // - data === [...] → has results (show data)
+        keepPreviousData: true, // Keep showing old data while fetching new data
       },
     );
 
