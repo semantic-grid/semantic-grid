@@ -423,16 +423,14 @@ export const GridSessionProvider = ({
 
   // Wrap setFetchEnabled to add logging
   const setFetchEnabled = useCallback((value: boolean) => {
-    console.log(
-      `[FetchEnabled] Setting fetchEnabled to ${value}`,
-      new Error().stack,
-    );
+    console.log(`[FetchEnabled] Setting fetchEnabled to ${value}`);
     setFetchEnabledInternal(value);
   }, []);
 
   const [notifyOnComplete, setNotifyOnComplete] = useState(false);
   const lastQueryIdRef = useRef<string | undefined>(undefined);
   const hasInitialized = useRef(false);
+  const userRequestedFetch = useRef(false);
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const scrollToBottom = () => {
@@ -640,8 +638,8 @@ export const GridSessionProvider = ({
       metadata?.performance_warning ??
       false;
 
-    // If performance warning exists, ALWAYS disable fetch
-    if (hasPerformanceWarning) {
+    // If performance warning exists and user hasn't explicitly requested fetch, disable auto-fetch
+    if (hasPerformanceWarning && !userRequestedFetch.current) {
       console.log("Performance warning detected, disabling auto-fetch");
       setFetchEnabled(false);
       return;
@@ -1099,6 +1097,8 @@ export const GridSessionProvider = ({
   };
 
   const onFetchData = (withNotification: boolean = false) => {
+    // Mark that user explicitly requested fetch
+    userRequestedFetch.current = true;
     // Update both states together - React 18 batches these automatically
     setNotifyOnComplete(withNotification);
     setFetchEnabled(true);
