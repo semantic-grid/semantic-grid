@@ -418,7 +418,17 @@ export const GridSessionProvider = ({
 
   // Always initialize fetchEnabled to false to prevent auto-fetch on mount
   // We'll enable it in useEffect after checking for cached data and performance warnings
-  const [fetchEnabled, setFetchEnabled] = useState(false);
+  const [fetchEnabled, setFetchEnabledInternal] = useState(false);
+
+  // Wrap setFetchEnabled to add logging
+  const setFetchEnabled = useCallback((value: boolean) => {
+    console.log(
+      `[FetchEnabled] Setting fetchEnabled to ${value}`,
+      new Error().stack,
+    );
+    setFetchEnabledInternal(value);
+  }, []);
+
   const [notifyOnComplete, setNotifyOnComplete] = useState(false);
   const lastQueryIdRef = useRef<string | undefined>(undefined);
   const hasInitialized = useRef(false);
