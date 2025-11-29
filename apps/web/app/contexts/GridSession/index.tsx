@@ -610,48 +610,35 @@ export const GridSessionProvider = ({
   const triggered = useRef(false);
   const dataFetchContext = useDataFetch();
 
-  // Initial check on mount - let SWR try to load from cache first
+  // Initial check on mount - mark as initialized
   useEffect(() => {
     if (!hasInitialized.current) {
       hasInitialized.current = true;
-
-      // On first mount, check after a brief moment to let SWR hydrate
-      const timer = setTimeout(() => {
-        console.log("Initial cache check:", {
-          dataLength: data.length,
-          isLoading,
-        });
-        if (data.length === 0 && !isLoading) {
-          // No cached data available, disable fetch
-          setFetchEnabled(false);
-        }
-      }, 100);
-
-      return () => clearTimeout(timer);
+      console.log("Component initialized");
     }
-  }, [data.length, isLoading]);
+  }, []);
 
-  // Detect query_id changes and check cache state
+  // Check for performance warning and control fetch state
   useEffect(() => {
     const currentQueryId = requestId || sessionId;
     const currentSql = query?.sql || metadata?.sql;
 
+    // Always check for performance warning first
+    const hasPerformanceWarning =
+      query?.explanation?.performance_warning ??
+      metadata?.performance_warning ??
+      false;
+
+    // If performance warning exists, ALWAYS disable fetch
+    if (hasPerformanceWarning) {
+      console.log("Performance warning detected, disabling auto-fetch");
+      setFetchEnabled(false);
+      return;
+    }
+
     // Check if query_id has changed
     if (currentQueryId !== lastQueryIdRef.current && hasInitialized.current) {
       lastQueryIdRef.current = currentQueryId;
-
-      // Check for performance warning
-      const hasPerformanceWarning =
-        query?.explanation?.performance_warning ??
-        metadata?.performance_warning ??
-        false;
-
-      // If performance warning exists, DON'T auto-fetch - wait for user button click
-      if (hasPerformanceWarning) {
-        console.log("Performance warning detected, disabling auto-fetch");
-        setFetchEnabled(false);
-        return;
-      }
 
       // Check if we have cached data for this query
       if (currentQueryId && currentSql) {
