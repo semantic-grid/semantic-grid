@@ -638,34 +638,42 @@ export const GridSessionProvider = ({
       // Reset user fetch flag when query changes
       userRequestedFetch.current = false;
 
+      // When query changes, temporarily disable fetch until we check for cache
+      // This prevents auto-fetch while we determine if cached data exists
+      setFetchEnabled(false);
+
       // Check if we have cached data for this query
       if (currentQueryId && currentSql) {
-        // Check if SWR has cached data (data is defined and not loading)
-        // Cached data could be an empty array [] (0 rows) or have actual rows
-        const hasCachedData = data !== undefined && !isLoading;
+        // Small delay to let SWR update with new query's data
+        // After this, we can check if cached data exists for THIS query
+        setTimeout(() => {
+          // Check if SWR has cached data (data is defined and not loading)
+          // Cached data could be an empty array [] (0 rows) or have actual rows
+          const hasCachedData = data !== undefined && !isLoading;
 
-        // Always enable fetch if we have cached data (to display it)
-        if (hasCachedData) {
-          console.log("Cached data available, enabling fetch to display it");
-          setFetchEnabled(true);
-        } else {
-          // No cached data - check for performance warning
-          const hasPerformanceWarning =
-            query?.explanation?.performance_warning ??
-            metadata?.performance_warning ??
-            false;
-
-          if (hasPerformanceWarning) {
-            console.log(
-              "No cached data + performance warning, showing buttons",
-            );
-            setFetchEnabled(false);
+          // Always enable fetch if we have cached data (to display it)
+          if (hasCachedData) {
+            console.log("Cached data available, enabling fetch to display it");
+            setFetchEnabled(true);
           } else {
-            // No warning, no cache - could auto-fetch or show buttons
-            // For now, show buttons (user must click)
-            setFetchEnabled(false);
+            // No cached data - check for performance warning
+            const hasPerformanceWarning =
+              query?.explanation?.performance_warning ??
+              metadata?.performance_warning ??
+              false;
+
+            if (hasPerformanceWarning) {
+              console.log(
+                "No cached data + performance warning, showing buttons",
+              );
+              setFetchEnabled(false);
+            } else {
+              // No warning, no cache - could auto-fetch or show buttons
+              // For now, show buttons (user must click)
+              setFetchEnabled(false);
+            }
           }
-        }
+        }, 50); // Small delay to let SWR process the new query
       } else {
         setFetchEnabled(false);
       }
