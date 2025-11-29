@@ -431,6 +431,7 @@ export const GridSessionProvider = ({
   const lastQueryIdRef = useRef<string | undefined>(undefined);
   const hasInitialized = useRef(false);
   const userRequestedFetch = useRef(false);
+  const prevFetchEnabledRef = useRef(false);
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const scrollToBottom = () => {
@@ -627,6 +628,11 @@ export const GridSessionProvider = ({
     }
   }, []);
 
+  // Compute cached data state in useMemo to prevent recalculation
+  const hasCachedData = useMemo(() => {
+    return data !== undefined && !isLoading;
+  }, [data, isLoading]);
+
   // Check for performance warning and control fetch state
   useEffect(() => {
     const currentQueryId = requestId || sessionId;
@@ -634,45 +640,36 @@ export const GridSessionProvider = ({
 
     // Check if query_id has changed
     if (currentQueryId !== lastQueryIdRef.current && hasInitialized.current) {
+      console.log(
+        `[FetchControl] Query ID changed from ${lastQueryIdRef.current} to ${currentQueryId}`,
+      );
       lastQueryIdRef.current = currentQueryId;
       // Reset user fetch flag when query changes
       userRequestedFetch.current = false;
     }
 
     // Determine if we should enable fetch based on current state
-    // This runs on every render to react to SWR data changes
     if (hasInitialized.current && currentQueryId && currentSql) {
+      let shouldEnableFetch = false;
+
       // If user explicitly requested fetch, always allow it
       if (userRequestedFetch.current) {
-        if (!fetchEnabled) {
-          setFetchEnabled(true);
-        }
+        shouldEnableFetch = true;
+      } else if (hasCachedData) {
+        // Always enable fetch if we have cached data (to display it)
+        shouldEnableFetch = true;
       } else {
-        // Check if SWR has cached data (data is defined and not loading)
-        // Cached data could be an empty array [] (0 rows) or have actual rows
-        const hasCachedData = data !== undefined && !isLoading;
+        // No cached data - show buttons (don't enable fetch)
+        shouldEnableFetch = false;
+      }
 
-        if (hasCachedData) {
-          // Always enable fetch if we have cached data (to display it)
-          if (!fetchEnabled) {
-            console.log("Cached data available, enabling fetch to display it");
-            setFetchEnabled(true);
-          }
-        } else {
-          // No cached data - check for performance warning
-          const hasPerformanceWarning =
-            query?.explanation?.performance_warning ??
-            metadata?.performance_warning ??
-            false;
-
-          if (hasPerformanceWarning || !hasCachedData) {
-            // Disable fetch if: performance warning OR no cached data
-            if (fetchEnabled) {
-              console.log("No cached data, showing buttons");
-              setFetchEnabled(false);
-            }
-          }
-        }
+      // Only update state if it actually changed
+      if (shouldEnableFetch !== prevFetchEnabledRef.current) {
+        console.log(
+          `[FetchControl] Changing fetchEnabled from ${prevFetchEnabledRef.current} to ${shouldEnableFetch}`,
+        );
+        prevFetchEnabledRef.current = shouldEnableFetch;
+        setFetchEnabled(shouldEnableFetch);
       }
     }
   }, [
@@ -682,28 +679,8 @@ export const GridSessionProvider = ({
     query?.explanation?.performance_warning,
     metadata?.sql,
     metadata?.performance_warning,
-    sortBy,
-    sortOrder,
-    dataFetchContext,
-    data,
+    hasCachedData,
   ]);
-
-  // On mount, wait for SWR to potentially hydrate from localStorage
-  useEffect(() => {
-    if (!hasInitialized.current) {
-      // Small delay to let SWR hydrate from localStorage
-      const timer = setTimeout(() => {
-        hasInitialized.current = true;
-
-        // After hydration, if no data loaded, disable fetch
-        if (data.length === 0 && !isLoading) {
-          setFetchEnabled(false);
-        }
-      }, 50);
-
-      return () => clearTimeout(timer);
-    }
-  }, [data.length, isLoading]);
 
   useEffect(() => {
     if (activeRows && activeRows?.length < (data?.length || 0)) {
