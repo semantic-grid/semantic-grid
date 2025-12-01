@@ -76,20 +76,25 @@ const getKey = (
   | null => {
   // Return null if fetch is disabled - prevents SWR from fetching
   if (!enabled) {
+    console.log("disabled");
     return null;
   }
   // Only return null if we don't have the minimum required data
   if (!id || !sql) {
+    console.log("missing id or sql");
     return null;
   }
 
   // Stop pagination if previous page was empty
   if (previousPageData && previousPageData.rows.length === 0) {
+    console.log("no more pages");
     return null; // no more pages
   }
 
   const offset = pageIndex * limit;
   const key = [`/api/apegpt/data/sse`, id, offset, limit, sortBy, sortOrder];
+  console.log("key", key);
+
   return key;
 };
 
@@ -112,7 +117,7 @@ export const useInfiniteQuery = ({
   userEmail?: string;
   enabled?: boolean;
 }) => {
-  // console.log("useInfiniteQuery req", id, sortBy, sortOrder);
+  console.log("useInfiniteQuery req", id, sortBy, sortOrder);
   const dataFetchContext = useDataFetch();
   const abortController = new AbortController();
 

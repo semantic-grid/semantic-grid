@@ -432,8 +432,17 @@ export const GridSessionProvider = ({
     ? (fetchEnabledMap[query.query_id] ?? false)
     : false;
   const setFetchEnabled = (enabled: boolean) => {
+    console.log("[setFetchEnabled]", {
+      enabled,
+      queryId: query?.query_id,
+      query,
+    });
     if (query?.query_id) {
       setFetchEnabledMap((prev) => ({ ...prev, [query.query_id]: enabled }));
+    } else {
+      console.warn(
+        "[setFetchEnabled] No query_id available, cannot enable fetch",
+      );
     }
   };
 
