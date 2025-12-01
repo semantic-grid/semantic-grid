@@ -60,7 +60,6 @@ engine = create_async_engine(
     pool_pre_ping=True,  # Verify connections before use
     pool_recycle=3600,  # Recycle connections after 1 hour (was 360s/6min)
     pool_timeout=30,  # Fail fast if no connections available after 30s
-    connect_args={"application_name": "semantic_grid"},
 )
 
 SESSION = sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
