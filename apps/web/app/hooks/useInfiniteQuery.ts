@@ -21,13 +21,6 @@ const createFetcher =
     // @ts-ignore
     const [url, id, offset, limit, sortBy, sortOrder] = key;
 
-    // If not enabled, return a promise that never resolves
-    // This prevents the fetch but allows SWR to check cache
-    if (!enabled) {
-      console.log("[useInfiniteQuery] Fetcher blocked - enabled=false");
-      return new Promise(() => {}); // Never resolves, SWR will show cached data if available
-    }
-
     console.log("[useInfiniteQuery] Fetcher called - User requested fetch!", {
       id,
       offset,
@@ -77,9 +70,14 @@ const getKey = (
   sortBy?: string,
   sortOrder?: "asc" | "desc",
   sql?: string,
+  enabled?: boolean,
 ):
   | [string, string, number, number, string?, ("asc" | "desc")?, string?]
   | null => {
+  // Return null if fetch is disabled - prevents SWR from fetching
+  if (!enabled) {
+    return null;
+  }
   // Only return null if we don't have the minimum required data
   if (!id || !sql) {
     return null;
@@ -121,13 +119,22 @@ export const useInfiniteQuery = ({
   const { data, error, isLoading, size, setSize, mutate, isValidating } =
     useSWRInfinite<ApiResponse>(
       (pageIndex, prevData) =>
-        getKey(pageIndex, prevData, id!, limit, sortBy, sortOrder, sql),
+        getKey(
+          pageIndex,
+          prevData,
+          id!,
+          limit,
+          sortBy,
+          sortOrder,
+          sql,
+          enabled,
+        ),
       createFetcher(
         dataFetchContext,
         abortController,
         notifyOnComplete,
         userEmail,
-        enabled, // Pass enabled to fetcher
+        enabled,
       ),
       {
         revalidateIfStale: false,
