@@ -1037,14 +1037,37 @@ export const GridSessionProvider = ({
     (withNotification: boolean = false) => {
       console.log(
         `[onFetchData] User requested fetch, withNotification=${withNotification}`,
+        { queryId: query?.query_id },
       );
       setFetchEnabled(true);
       setNotifyOnComplete(withNotification);
-      // Trigger SWR to fetch data explicitly
-      mutateSWR();
+      // Note: mutateSWR will be triggered by useEffect when fetchEnabled changes
     },
-    [mutateSWR],
+    [query?.query_id],
   );
+
+  // Trigger SWR fetch when fetchEnabled becomes true
+  useEffect(() => {
+    if (fetchEnabled && query?.query_id) {
+      console.log("[GridSession] fetchEnabled changed, triggering mutate", {
+        queryId: query.query_id,
+      });
+      mutateSWR();
+    }
+  }, [fetchEnabled, query?.query_id, mutateSWR]);
+
+  // Reset fetchEnabled when fetch completes (success or error)
+  useEffect(() => {
+    if (fetchEnabled && !isLoading && !isValidating) {
+      // Fetch completed - reset fetchEnabled so user must click again for fresh data
+      console.log("[GridSession] Fetch completed, resetting fetchEnabled", {
+        queryId: query?.query_id,
+        hasData: data && data.length > 0,
+        hasError: !!dataError,
+      });
+      setFetchEnabled(false);
+    }
+  }, [fetchEnabled, isLoading, isValidating, query?.query_id, data, dataError]);
 
   return (
     <Index.Provider
