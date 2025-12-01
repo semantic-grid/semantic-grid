@@ -395,10 +395,15 @@ export const GridSessionProvider = ({
   const [requestId, setRequestId] = useState<string>();
 
   const query = useMemo(() => {
-    if (!requestId || !sections || sections.length === 0) {
+    if (!sections || sections.length === 0) {
       return null;
     }
-    return sections.find((s) => s.requestId === requestId)?.query || null;
+    // If requestId is set, find that specific section's query
+    // Otherwise default to the last (most recent) section's query
+    if (requestId) {
+      return sections.find((s) => s.requestId === requestId)?.query || null;
+    }
+    return sections[sections.length - 1]?.query || null;
   }, [sections, requestId]);
 
   const [sortModel, setSortModel] = useState<GridSortItem[]>([]);
@@ -419,7 +424,18 @@ export const GridSessionProvider = ({
     useState<keyof typeof options>("submit");
 
   const [notifyOnComplete, setNotifyOnComplete] = useState(false);
-  const [fetchEnabled, setFetchEnabled] = useState(false);
+  // Track fetch state per query_id so users can switch sections and return to in-progress fetches
+  const [fetchEnabledMap, setFetchEnabledMap] = useState<
+    Record<string, boolean>
+  >({});
+  const fetchEnabled = query?.query_id
+    ? (fetchEnabledMap[query.query_id] ?? false)
+    : false;
+  const setFetchEnabled = (enabled: boolean) => {
+    if (query?.query_id) {
+      setFetchEnabledMap((prev) => ({ ...prev, [query.query_id]: enabled }));
+    }
+  };
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const scrollToBottom = () => {
