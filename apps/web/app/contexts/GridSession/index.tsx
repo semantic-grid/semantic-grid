@@ -597,13 +597,13 @@ export const GridSessionProvider = ({
     abortController,
     mutate: mutateSWR,
   } = useInfiniteQuery({
-    id: query?.query_id || requestId || sessionId,
+    id: query?.query_id,
     sql: query?.sql || metadata?.sql,
     sortBy,
     sortOrder,
     notifyOnComplete,
     userEmail: notifyOnComplete ? appUser?.email : undefined,
-    enabled: fetchEnabled, // Only enable if user clicked button
+    enabled: fetchEnabled && !!query?.query_id, // Only enable if user clicked button AND we have a query_id
   });
   const hasLoadedOnce = useRef(false);
   const triggered = useRef(false);
