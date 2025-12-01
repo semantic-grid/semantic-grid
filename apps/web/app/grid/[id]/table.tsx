@@ -128,6 +128,7 @@ export const DataTable = () => {
     metadata,
     query,
     hasCachedData,
+    fetchEnabled,
   } = useGridSession();
   const apiRef = useGridApiRef();
 

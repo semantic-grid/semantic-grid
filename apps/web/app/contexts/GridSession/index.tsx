@@ -119,6 +119,7 @@ export interface ChatSessionContextType {
   metadata?: any;
   query: any;
   hasCachedData: boolean;
+  fetchEnabled: boolean;
 }
 
 export const getDecision = async (
@@ -1070,6 +1071,7 @@ export const GridSessionProvider = ({
         onFetchData,
         query,
         hasCachedData,
+        fetchEnabled,
       }}
     >
       {children}
