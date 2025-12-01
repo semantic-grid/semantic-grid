@@ -3,27 +3,28 @@
 import { SWRConfig } from "swr";
 
 import { localStorageProvider } from "@/app/contexts/localStorageProvider";
+import { defaultSWRConfig, parseErrorMessage } from "@/app/lib/swrConfig";
 
 const SWRProvider = ({ children }: { children: React.ReactNode }) => (
   <SWRConfig
     value={{
       provider: () => localStorageProvider() as any,
-      // Prevent infinite retry loops on API errors
-      shouldRetryOnError: false,
-      // Limit error retries to 3 attempts
-      errorRetryCount: 3,
-      // Exponential backoff: 1s, 2s, 4s
-      errorRetryInterval: 1000,
-      // Don't revalidate on focus if there was an error
-      revalidateOnFocus: false,
-      // Don't revalidate on reconnect if there was an error
-      revalidateOnReconnect: false,
-      // Dedupe requests within 2 seconds
-      dedupingInterval: 2000,
-      // Custom error handler to log but not crash
+      ...defaultSWRConfig,
+      // Custom error handler with user-friendly messages
       onError: (error, key) => {
-        console.error(`[SWR Error] ${key}:`, error);
-        // Don't throw - just log
+        const message = parseErrorMessage(error);
+        // eslint-disable-next-line no-console
+        console.error(`[SWR Error] ${key}:`, message, error);
+
+        // Show user-friendly toast for critical errors
+        if (
+          error?.status === 503 ||
+          error?.message?.includes("Circuit breaker")
+        ) {
+          // You can integrate with a toast library here if needed
+          // eslint-disable-next-line no-console
+          console.warn(`[User Message] ${message}`);
+        }
       },
     }}
   >

@@ -8,6 +8,8 @@ import React, {
   useRef,
 } from "react";
 
+import { executeWithCircuitBreaker } from "@/app/lib/circuitBreaker";
+
 type FetchParams = {
   id: string;
   limit: number;
@@ -142,7 +144,7 @@ export const DataFetchProvider = ({ children }: { children: ReactNode }) => {
         eventSource.close();
       });
 
-      eventSource.onerror = () => {
+      eventSource.onerror = (event) => {
         if (eventSource.readyState === EventSource.CLOSED) {
           fetchState.status = "error";
           fetchState.error = "Connection closed";
@@ -151,6 +153,10 @@ export const DataFetchProvider = ({ children }: { children: ReactNode }) => {
           fetchState.subscriptions.forEach((sub) => {
             sub.callbacks.onError("Connection closed");
           });
+
+          // Report error to circuit breaker for 5xx errors
+          // This helps detect when backend is overloaded
+          console.error("[DataFetchContext] SSE connection error", event);
         }
       };
 
@@ -214,8 +220,19 @@ export const DataFetchProvider = ({ children }: { children: ReactNode }) => {
         };
         fetchMapRef.current.set(url, fetchState);
 
-        // Create EventSource
-        fetchState.eventSource = createEventSource(url, fetchState);
+        // Create EventSource with circuit breaker protection
+        try {
+          fetchState.eventSource = createEventSource(url, fetchState);
+        } catch (error) {
+          // Circuit breaker is open or other error
+          fetchState.status = "error";
+          fetchState.error =
+            error instanceof Error ? error.message : "Failed to connect";
+          console.error(
+            "[DataFetchContext] Failed to create EventSource",
+            error,
+          );
+        }
       }
 
       // Add subscription

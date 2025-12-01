@@ -15,24 +15,28 @@ const createFetcher =
     abortController: AbortController,
     notifyOnComplete?: boolean,
     userEmail?: string,
+    enabled?: boolean,
   ) =>
   async (key: ReturnType<typeof getKey>): Promise<ApiResponse> => {
     // @ts-ignore
     const [url, id, offset, limit, sortBy, sortOrder] = key;
 
-    console.log(
-      "[useInfiniteQuery] Fetcher called - THIS SHOULD ONLY HAPPEN ON BUTTON CLICK!",
-      {
-        id,
-        offset,
-        limit,
-        sortBy,
-        sortOrder,
-        notifyOnComplete,
-        userEmail,
-        stack: new Error().stack,
-      },
-    );
+    // If not enabled, return a promise that never resolves
+    // This prevents the fetch but allows SWR to check cache
+    if (!enabled) {
+      console.log("[useInfiniteQuery] Fetcher blocked - enabled=false");
+      return new Promise(() => {}); // Never resolves, SWR will show cached data if available
+    }
+
+    console.log("[useInfiniteQuery] Fetcher called - User requested fetch!", {
+      id,
+      offset,
+      limit,
+      sortBy,
+      sortOrder,
+      notifyOnComplete,
+      userEmail,
+    });
 
     return new Promise<ApiResponse>((resolve, reject) => {
       const unsubscribe = dataFetchContext.subscribe(
@@ -76,34 +80,18 @@ const getKey = (
 ):
   | [string, string, number, number, string?, ("asc" | "desc")?, string?]
   | null => {
-  console.log("[useInfiniteQuery] getKey called", {
-    pageIndex,
-    id,
-    limit,
-    sortBy,
-    sortOrder,
-    hasId: !!id,
-    hasSql: !!sql,
-  });
-
+  // Only return null if we don't have the minimum required data
   if (!id || !sql) {
-    console.log("[useInfiniteQuery] getKey returning null - no id or sql");
     return null;
   }
+
+  // Stop pagination if previous page was empty
   if (previousPageData && previousPageData.rows.length === 0) {
-    console.log("[useInfiniteQuery] getKey returning null - no more pages");
     return null; // no more pages
   }
+
   const offset = pageIndex * limit;
-  const key = [
-    `/api/apegpt/data/sse`,
-    id,
-    offset,
-    limit,
-    sortBy,
-    sortOrder /* btoa(sql) */,
-  ];
-  console.log("[useInfiniteQuery] getKey returning key", key);
+  const key = [`/api/apegpt/data/sse`, id, offset, limit, sortBy, sortOrder];
   return key;
 };
 
@@ -132,15 +120,14 @@ export const useInfiniteQuery = ({
 
   const { data, error, isLoading, size, setSize, mutate, isValidating } =
     useSWRInfinite<ApiResponse>(
-      enabled
-        ? (pageIndex, prevData) =>
-            getKey(pageIndex, prevData, id!, limit, sortBy, sortOrder, sql)
-        : () => null,
+      (pageIndex, prevData) =>
+        getKey(pageIndex, prevData, id!, limit, sortBy, sortOrder, sql),
       createFetcher(
         dataFetchContext,
         abortController,
         notifyOnComplete,
         userEmail,
+        enabled, // Pass enabled to fetcher
       ),
       {
         revalidateIfStale: false,
