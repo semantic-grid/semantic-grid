@@ -35,6 +35,7 @@ dependencies = [
     "fastapi==0.115.4",
     "fastapi-cli==0.0.5",
     "fastmcp==2.2.7",
+    "gevent>=24.2.1",
     "google-api-core==2.23.0",
     "google-auth==2.36.0",
     "google-cloud-aiplatform==1.71.1",
