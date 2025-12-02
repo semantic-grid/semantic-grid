@@ -189,7 +189,6 @@ export const QueryDataProvider = ({
     sortOrder,
     notifyOnComplete,
     userEmail: notifyOnComplete ? appUser?.email : undefined,
-    enabled: fetchEnabled, // Only enable if user clicked button
   });
   console.log("QueryDataProvider data", queryId, data, "error", dataError);
   const hasLoadedOnce = useRef(false);

@@ -15,7 +15,6 @@ const createFetcher =
     abortController: AbortController,
     notifyOnComplete?: boolean,
     userEmail?: string,
-    enabled?: boolean,
   ) =>
   async (key: ReturnType<typeof getKey>): Promise<ApiResponse> => {
     // @ts-ignore
@@ -70,18 +69,9 @@ const getKey = (
   sortBy?: string,
   sortOrder?: "asc" | "desc",
   sql?: string,
-  enabled?: boolean,
-):
-  | [string, string, number, number, string?, ("asc" | "desc")?, string?]
-  | null => {
-  // Return null if fetch is disabled - prevents SWR from fetching
-  if (!enabled) {
-    console.log("disabled");
-    return null;
-  }
+): [string, string, number, number, string?, ("asc" | "desc")?] | null => {
   // Only return null if we don't have the minimum required data
   if (!id || !sql) {
-    console.log("missing id or sql");
     return null;
   }
 
@@ -92,8 +82,14 @@ const getKey = (
   }
 
   const offset = pageIndex * limit;
-  const key = [`/api/apegpt/data/sse`, id, offset, limit, sortBy, sortOrder];
-  console.log("key", key);
+  const key: [string, string, number, number, string?, ("asc" | "desc")?] = [
+    `/api/apegpt/data/sse`,
+    id,
+    offset,
+    limit,
+    sortBy,
+    sortOrder,
+  ];
 
   return key;
 };
@@ -106,7 +102,6 @@ export const useInfiniteQuery = ({
   sortOrder,
   notifyOnComplete = false,
   userEmail,
-  enabled = false,
 }: {
   id?: string;
   sql?: string;
@@ -115,31 +110,19 @@ export const useInfiniteQuery = ({
   sortOrder?: "asc" | "desc";
   notifyOnComplete?: boolean;
   userEmail?: string;
-  enabled?: boolean;
 }) => {
-  console.log("useInfiniteQuery req", id, sortBy, sortOrder);
   const dataFetchContext = useDataFetch();
   const abortController = new AbortController();
 
   const { data, error, isLoading, size, setSize, mutate, isValidating } =
     useSWRInfinite<ApiResponse>(
       (pageIndex, prevData) =>
-        getKey(
-          pageIndex,
-          prevData,
-          id!,
-          limit,
-          sortBy,
-          sortOrder,
-          sql,
-          enabled,
-        ),
+        getKey(pageIndex, prevData, id!, limit, sortBy, sortOrder, sql),
       createFetcher(
         dataFetchContext,
         abortController,
         notifyOnComplete,
         userEmail,
-        enabled,
       ),
       {
         revalidateIfStale: false,

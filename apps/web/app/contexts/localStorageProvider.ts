@@ -129,6 +129,46 @@ function checkAndCleanup(
   }
 }
 
+/**
+ * Check if data exists in localStorage cache for a given query
+ * Used to determine if we should show "Fetch Data" button or auto-display cached data
+ */
+export function checkCacheForQuery(
+  queryId: string,
+  limit: number = 100,
+  sortBy?: string,
+  sortOrder?: string,
+): boolean {
+  try {
+    const rawCache = localStorage.getItem("app-cache");
+    if (!rawCache) return false;
+
+    const cacheData: Array<[string, any]> = JSON.parse(rawCache);
+
+    // SWR infinite uses $inf$ prefix and stores array of keys
+    // Key format: ['/api/apegpt/data/sse', id, offset, limit, sortBy, sortOrder]
+    const targetKeyStart = `$inf$@"/api/apegpt/data/sse",`;
+
+    for (const [key, value] of cacheData) {
+      if (
+        typeof key === "string" &&
+        key.includes(targetKeyStart) &&
+        key.includes(queryId)
+      ) {
+        // Found a matching cache entry
+        if (value && Array.isArray(value) && value.length > 0) {
+          console.log("[Cache] Found cached data for query", { queryId, key });
+          return true;
+        }
+      }
+    }
+    return false;
+  } catch (error) {
+    console.warn("[Cache] Error checking cache:", error);
+    return false;
+  }
+}
+
 export function localStorageProvider() {
   // Load metadata
   let metadata = loadMetadata();

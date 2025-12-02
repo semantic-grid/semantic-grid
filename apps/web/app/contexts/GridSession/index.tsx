@@ -31,6 +31,7 @@ import { AppContext } from "@/app/contexts/App";
 import { useDataFetch } from "@/app/contexts/DataFetchContext";
 import { useSessionContext } from "@/app/contexts/SessionStatus";
 import { isSolanaAddress, isSolanaSignature } from "@/app/helpers/cell";
+
 import { useAppUser } from "@/app/hooks/useAppUser";
 import { useInfiniteQuery } from "@/app/hooks/useInfiniteQuery";
 import { useUserSession } from "@/app/hooks/useUserSession";
@@ -116,10 +117,8 @@ export interface ChatSessionContextType {
   setRequestId: React.Dispatch<React.SetStateAction<string | undefined>>;
   error: any;
   onFetchData: (withNotification?: boolean) => void;
-  metadata?: any;
   query: any;
   hasCachedData: boolean;
-  fetchEnabled: boolean;
 }
 
 export const getDecision = async (
@@ -424,27 +423,6 @@ export const GridSessionProvider = ({
     useState<keyof typeof options>("submit");
 
   const [notifyOnComplete, setNotifyOnComplete] = useState(false);
-  // Track fetch state per query_id so users can switch sections and return to in-progress fetches
-  const [fetchEnabledMap, setFetchEnabledMap] = useState<
-    Record<string, boolean>
-  >({});
-  const fetchEnabled = query?.query_id
-    ? (fetchEnabledMap[query.query_id] ?? false)
-    : false;
-  const setFetchEnabled = (enabled: boolean) => {
-    console.log("[setFetchEnabled]", {
-      enabled,
-      queryId: query?.query_id,
-      query,
-    });
-    if (query?.query_id) {
-      setFetchEnabledMap((prev) => ({ ...prev, [query.query_id]: enabled }));
-    } else {
-      console.warn(
-        "[setFetchEnabled] No query_id available, cannot enable fetch",
-      );
-    }
-  };
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const scrollToBottom = () => {
@@ -628,7 +606,6 @@ export const GridSessionProvider = ({
     sortOrder,
     notifyOnComplete,
     userEmail: notifyOnComplete ? appUser?.email : undefined,
-    enabled: fetchEnabled && !!query?.query_id, // Only enable if user clicked button AND we have a query_id
   });
   const hasLoadedOnce = useRef(false);
   const triggered = useRef(false);
@@ -782,11 +759,6 @@ export const GridSessionProvider = ({
   const rowCountRef = React.useRef(dataRowCount || metadata?.row_count || 0);
 
   const rowCount = React.useMemo(() => {
-    // If fetch is disabled, return 0 to show empty state
-    if (!fetchEnabled) {
-      return 0;
-    }
-
     if (dataRowCount !== undefined) {
       rowCountRef.current = dataRowCount;
     }
@@ -794,7 +766,7 @@ export const GridSessionProvider = ({
       rowCountRef.current = metadata.row_count;
     }
     return rowCountRef.current;
-  }, [dataRowCount, fetchEnabled]);
+  }, [dataRowCount, metadata?.row_count]);
 
   const refs = useMemo(
     () => ({
@@ -1039,35 +1011,12 @@ export const GridSessionProvider = ({
         `[onFetchData] User requested fetch, withNotification=${withNotification}`,
         { queryId: query?.query_id },
       );
-      setFetchEnabled(true);
       setNotifyOnComplete(withNotification);
-      // Note: mutateSWR will be triggered by useEffect when fetchEnabled changes
-    },
-    [query?.query_id],
-  );
-
-  // Trigger SWR fetch when fetchEnabled becomes true
-  useEffect(() => {
-    if (fetchEnabled && query?.query_id) {
-      console.log("[GridSession] fetchEnabled changed, triggering mutate", {
-        queryId: query.query_id,
-      });
+      // Trigger SWR to fetch data
       mutateSWR();
-    }
-  }, [fetchEnabled, query?.query_id, mutateSWR]);
-
-  // Reset fetchEnabled when fetch completes (success or error)
-  useEffect(() => {
-    if (fetchEnabled && !isLoading && !isValidating) {
-      // Fetch completed - reset fetchEnabled so user must click again for fresh data
-      console.log("[GridSession] Fetch completed, resetting fetchEnabled", {
-        queryId: query?.query_id,
-        hasData: data && data.length > 0,
-        hasError: !!dataError,
-      });
-      setFetchEnabled(false);
-    }
-  }, [fetchEnabled, isLoading, isValidating, query?.query_id, data, dataError]);
+    },
+    [query?.query_id, mutateSWR],
+  );
 
   return (
     <Index.Provider
@@ -1119,7 +1068,6 @@ export const GridSessionProvider = ({
         onFetchData,
         query,
         hasCachedData,
-        fetchEnabled,
       }}
     >
       {children}

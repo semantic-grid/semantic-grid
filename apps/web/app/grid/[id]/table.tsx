@@ -128,7 +128,6 @@ export const DataTable = () => {
     metadata,
     query,
     hasCachedData,
-    fetchEnabled,
   } = useGridSession();
   const apiRef = useGridApiRef();
 
@@ -223,7 +222,7 @@ export const DataTable = () => {
       rows={rows}
       rowCount={rowCount}
       columns={gridColumns}
-      loading={isLoading && fetchEnabled} // Only show loading if fetch is enabled
+      loading={isLoading}
       onColumnHeaderClick={(params) => {
         if (activeColumn?.field !== "__add_column__") {
           // setNewCol(false);
