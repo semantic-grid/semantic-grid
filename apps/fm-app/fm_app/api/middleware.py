@@ -28,11 +28,19 @@ class DatabaseHealthMiddleware(BaseHTTPMiddleware):
         pool = self.engine.pool
 
         # Calculate pool utilization percentage
-        total_capacity = pool.size() + pool.overflow()
-        if total_capacity > 0:
-            utilization = pool.checkedout() / total_capacity
+        # pool.size() is the base pool size
+        # pool.overflow() can be negative during warmup, so use max(0, overflow)
+        # pool.checkedout() is currently checked out connections
+        base_size = pool.size()
+        current_overflow = max(0, pool.overflow())
+        total_capacity = base_size + current_overflow
+        checked_out = pool.checkedout()
 
-            # If pool is >90% utilized, return 503 Service Unavailable
+        # Only check utilization if pool has capacity and connections are checked out
+        if base_size > 0 and checked_out > 0:
+            utilization = checked_out / base_size  # Compare against base size
+
+            # If checked out exceeds 90% of base pool size, return 503
             if utilization > 0.9:
                 logger.warning(
                     "Database pool exhausted",
