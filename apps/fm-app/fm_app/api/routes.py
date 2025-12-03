@@ -18,6 +18,7 @@ import plotly.graph_objects as go
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Security
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.security import HTTPBearer
+from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette import EventSourceResponse
@@ -1805,6 +1806,206 @@ async def stream_data_fetch(
             }
 
     return EventSourceResponse(event_generator())
+
+
+@api_router.delete("/data/{query_id}")
+async def cancel_data_fetch(
+    query_id: UUID,
+    auth_result: dict = Depends(verify_any_token),
+):
+    """
+    Cancel or unsubscribe from a running data fetch.
+
+    Behavior:
+    - If user is the only subscriber → cancel the Celery task entirely
+    - If other users are subscribed → just unsubscribe this user (task continues)
+
+    Returns:
+        - status: "cancelled" if task was terminated
+        - status: "unsubscribed" if user was removed but task continues
+        - status: "not_found" if no running task exists
+    """
+    user_owner = auth_result.get("sub")
+    if user_owner is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="No user name"
+        )
+
+    # Get user email from auth result (for subscriber tracking)
+    user_email = auth_result.get("email") or auth_result.get(
+        "https://semantic-grid.com/email"
+    )
+
+    from fm_app.cache.task_tracker import (
+        clear_running_task,
+        get_running_task,
+        remove_task_subscriber,
+    )
+    from fm_app.workers.worker import wrk_fetch_data
+
+    tracking_id = str(query_id)
+    running_task_info = await get_running_task(tracking_id)
+
+    if not running_task_info:
+        logger.info(f"No running task found for query {tracking_id}")
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "status": "not_found",
+                "message": "No running task found for this query",
+                "query_id": tracking_id,
+            },
+        )
+
+    task_id = running_task_info["task_id"]
+    subscribers = running_task_info.get("subscribers", [])
+
+    # Check if this user is the only subscriber
+    user_is_only_subscriber = len(subscribers) <= 1 and (
+        not subscribers or subscribers[0].get("user_email") == user_email
+    )
+
+    if user_is_only_subscriber or not user_email:
+        # Cancel the entire task
+        task = wrk_fetch_data.AsyncResult(task_id)
+        task.revoke(terminate=True)
+        await clear_running_task(tracking_id)
+
+        logger.info(
+            f"Cancelled task {task_id} for query {tracking_id}",
+            extra={
+                "task_id": task_id,
+                "query_id": tracking_id,
+                "user": user_owner,
+            },
+        )
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "status": "cancelled",
+                "message": "Fetch cancelled",
+                "query_id": tracking_id,
+            },
+        )
+    else:
+        # Just unsubscribe this user
+        removed, remaining = await remove_task_subscriber(tracking_id, user_email)
+
+        logger.info(
+            f"Unsubscribed user from query {tracking_id}",
+            extra={
+                "query_id": tracking_id,
+                "user_email": user_email,
+                "remaining_subscribers": remaining,
+            },
+        )
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "status": "unsubscribed",
+                "message": "Unsubscribed from shared fetch",
+                "query_id": tracking_id,
+                "remaining_subscribers": remaining,
+            },
+        )
+
+
+class UpdateNotificationRequest(BaseModel):
+    """Request body for updating notification settings."""
+
+    notify: bool
+    user_email: Optional[str] = None
+
+
+@api_router.patch("/data/{query_id}")
+async def update_data_fetch_notification(
+    query_id: UUID,
+    update_request: UpdateNotificationRequest,
+    auth_result: dict = Depends(verify_any_token),
+):
+    """
+    Update notification settings for a running data fetch.
+
+    Allows users to add or remove email notification for when the fetch completes.
+
+    Request body:
+        - notify: bool - Whether to send notification on complete
+        - user_email: str (optional) - Email for notification
+          (uses auth email if not provided)
+
+    Returns:
+        - status: "updated" if notification setting was updated
+        - status: "not_found" if no running task exists
+    """
+    user_owner = auth_result.get("sub")
+    if user_owner is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="No user name"
+        )
+
+    # Get user email from request or auth result
+    user_email = (
+        update_request.user_email
+        or auth_result.get("email")
+        or auth_result.get("https://semantic-grid.com/email")
+    )
+
+    if not user_email and update_request.notify:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email required for notifications",
+        )
+
+    from fm_app.cache.task_tracker import (
+        get_running_task,
+        update_subscriber_notification,
+    )
+
+    tracking_id = str(query_id)
+    running_task_info = await get_running_task(tracking_id)
+
+    if not running_task_info:
+        logger.info(f"No running task found for query {tracking_id}")
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "status": "not_found",
+                "message": "No running task found for this query",
+                "query_id": tracking_id,
+            },
+        )
+
+    # Update notification preference
+    success = await update_subscriber_notification(
+        tracking_id, user_email, update_request.notify
+    )
+
+    if success:
+        logger.info(
+            f"Updated notification for query {tracking_id}",
+            extra={
+                "query_id": tracking_id,
+                "user_email": user_email,
+                "notify": update_request.notify,
+            },
+        )
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "status": "updated",
+                "notify": update_request.notify,
+                "user_email": user_email,
+                "query_id": tracking_id,
+            },
+        )
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update notification settings",
+        )
 
 
 @api_router.get("/query/{query_id}")

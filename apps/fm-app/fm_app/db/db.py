@@ -1182,8 +1182,8 @@ async def get_queries(
         """
         SELECT query_id, request, intent, summary, description, sql, row_count, columns, chart, ai_generated, ai_context, data_source, db_dialect, explanation, parent_id
         FROM query
-        LIMIT limit = :limit
-        OFFSET offset = :offset;
+        LIMIT :limit
+        OFFSET :offset;
         """
     )
     res = await db.execute(get_queries_sql, params={"limit": limit, "offset": offset})

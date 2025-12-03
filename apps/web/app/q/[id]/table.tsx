@@ -103,7 +103,7 @@ export const DataTable = () => {
   // Memoize the fetch overlay wrapper to avoid creating new component on each render
   // eslint-disable-next-line react/display-name, react/no-unstable-nested-components
   const FetchOverlayWrapper = React.useMemo(
-    () => () => <FetchDataOverlay onFetchData={onFetchData} />,
+    () => () => <FetchDataOverlay onFetch={onFetchData} />,
     [onFetchData],
   );
 

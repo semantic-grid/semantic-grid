@@ -215,6 +215,127 @@ async def clear_running_task(query_id: str) -> bool:
         return False
 
 
+async def remove_task_subscriber(
+    query_id: str,
+    user_email: str,
+) -> tuple[bool, int]:
+    """
+    Remove a subscriber from a running task.
+
+    Args:
+        query_id: Query ID
+        user_email: User email to remove
+
+    Returns:
+        Tuple of (success, remaining_subscriber_count)
+    """
+    try:
+        redis = await get_redis()
+        key = f"running_task:{query_id}"
+
+        task_data = await redis.get(key)
+        if not task_data:
+            logger.warning(f"No running task found for query {query_id}")
+            return False, 0
+
+        task_info = json.loads(task_data)
+        subscribers = task_info.get("subscribers", [])
+
+        # Filter out the subscriber
+        original_count = len(subscribers)
+        subscribers = [s for s in subscribers if s.get("user_email") != user_email]
+        removed = len(subscribers) < original_count
+
+        if removed:
+            task_info["subscribers"] = subscribers
+
+            # Get remaining TTL and update
+            ttl = await redis.ttl(key)
+            if ttl > 0:
+                await redis.setex(key, ttl, json.dumps(task_info))
+            else:
+                await redis.setex(key, 1800, json.dumps(task_info))
+
+            logger.info(
+                f"Removed subscriber from query {query_id}",
+                extra={
+                    "query_id": query_id,
+                    "user_email": user_email,
+                    "remaining_subscribers": len(subscribers),
+                },
+            )
+
+        return removed, len(subscribers)
+    except Exception as e:
+        logger.warning(f"Failed to remove subscriber: {e}")
+        return False, 0
+
+
+async def update_subscriber_notification(
+    query_id: str,
+    user_email: str,
+    notify: bool,
+) -> bool:
+    """
+    Update notification preference for a subscriber.
+
+    Args:
+        query_id: Query ID
+        user_email: User email to update
+        notify: New notification preference
+
+    Returns:
+        True if updated successfully
+    """
+    try:
+        redis = await get_redis()
+        key = f"running_task:{query_id}"
+
+        task_data = await redis.get(key)
+        if not task_data:
+            logger.warning(f"No running task found for query {query_id}")
+            return False
+
+        task_info = json.loads(task_data)
+        subscribers = task_info.get("subscribers", [])
+
+        # Find and update the subscriber
+        updated = False
+        for subscriber in subscribers:
+            if subscriber.get("user_email") == user_email:
+                subscriber["notify"] = notify
+                updated = True
+                break
+
+        if not updated:
+            # Add new subscriber if not found
+            subscribers.append({"user_email": user_email, "notify": notify})
+            updated = True
+
+        task_info["subscribers"] = subscribers
+
+        # Get remaining TTL and update
+        ttl = await redis.ttl(key)
+        if ttl > 0:
+            await redis.setex(key, ttl, json.dumps(task_info))
+        else:
+            await redis.setex(key, 1800, json.dumps(task_info))
+
+        logger.info(
+            f"Updated subscriber notification for query {query_id}",
+            extra={
+                "query_id": query_id,
+                "user_email": user_email,
+                "notify": notify,
+            },
+        )
+
+        return True
+    except Exception as e:
+        logger.warning(f"Failed to update subscriber notification: {e}")
+        return False
+
+
 async def set_timeout_notified(query_id: str) -> bool:
     """
     Mark that a timeout notification has been sent for this query.
