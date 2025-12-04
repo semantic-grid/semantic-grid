@@ -75,72 +75,106 @@ const StatusChip = ({
   return <Chip label={status} color={colorMap[status]} size="small" />;
 };
 
-// Worker status indicator dots
-const WorkerStatusDots = ({
-  telemetry,
-}: {
-  telemetry: TelemetryData | null;
-}) => {
+// Worker status indicator - shows pods and tasks as dots
+const WorkerStatus = ({ telemetry }: { telemetry: TelemetryData | null }) => {
   if (!telemetry || telemetry.workers.error) {
     return (
       <Box sx={{ display: "flex", gap: 0.5, alignItems: "center" }}>
         <Typography variant="caption" color="text.secondary">
-          Workers: --
+          Pods: -- | Tasks: --
         </Typography>
       </Box>
     );
   }
 
-  const { workers } = telemetry.workers;
+  const { workers, total } = telemetry.workers;
+  const totalTasks = workers.reduce((sum, w) => sum + w.active_tasks, 0);
+  const totalCapacity = workers.reduce((sum, w) => sum + w.pool_size, 0);
+
+  // Create array of task slot states
+  const taskSlots = Array.from({ length: totalCapacity }, (_, i) =>
+    i < totalTasks ? "busy" : "idle",
+  );
 
   return (
     <Box sx={{ display: "flex", gap: 0.5, alignItems: "center" }}>
       <Typography variant="caption" color="text.secondary" sx={{ mr: 1 }}>
-        Workers:
+        Pods: {total} | Tasks:
       </Typography>
-      {workers.map((worker, i) => (
+      {taskSlots.map((status, i) => (
         <Tooltip
           key={i}
-          title={`${worker.id}: ${worker.active_tasks}/${worker.pool_size} tasks`}
+          title={status === "busy" ? "Task running" : "Slot available"}
         >
           <Box
             sx={{
               width: 10,
               height: 10,
               borderRadius: "50%",
-              bgcolor:
-                worker.active_tasks > 0 ? "warning.main" : "success.main",
+              bgcolor: status === "busy" ? "warning.main" : "success.main",
               border: "1px solid",
-              borderColor:
-                worker.active_tasks > 0 ? "warning.dark" : "success.dark",
+              borderColor: status === "busy" ? "warning.dark" : "success.dark",
             }}
           />
         </Tooltip>
       ))}
       <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
-        {telemetry.workers.busy}/{telemetry.workers.total}
+        {totalTasks}/{totalCapacity}
       </Typography>
     </Box>
   );
 };
 
-// DB Pool status indicator
+// DB Pool status indicator with visual dots
 const DbPoolStatus = ({ telemetry }: { telemetry: TelemetryData | null }) => {
   if (!telemetry || telemetry.db_pool.error) {
     return (
-      <Typography variant="caption" color="text.secondary">
-        DB Pool: --
-      </Typography>
+      <Box sx={{ display: "flex", gap: 0.5, alignItems: "center" }}>
+        <Typography variant="caption" color="text.secondary">
+          DB Pool: --
+        </Typography>
+      </Box>
     );
   }
 
-  const { checked_out, size, overflow } = telemetry.db_pool;
+  const { checked_out, size, checked_in } = telemetry.db_pool;
+  const total = size;
+
+  // Create array of connection states
+  const connections = Array.from({ length: total }, (_, i) => {
+    if (i < checked_out) return "busy"; // In use
+    if (i < checked_out + checked_in) return "idle"; // Available in pool
+    return "idle"; // Available
+  });
 
   return (
-    <Typography variant="caption" color="text.secondary">
-      DB Pool: {checked_out}/{size}
-      {overflow > 0 && ` (+${overflow})`}
-    </Typography>
+    <Box sx={{ display: "flex", gap: 0.5, alignItems: "center" }}>
+      <Typography variant="caption" color="text.secondary" sx={{ mr: 1 }}>
+        DB:
+      </Typography>
+      {connections.map((status, i) => (
+        <Tooltip
+          key={i}
+          title={
+            status === "busy" ? "Connection in use" : "Connection available"
+          }
+        >
+          <Box
+            sx={{
+              width: 10,
+              height: 10,
+              borderRadius: "50%",
+              bgcolor: status === "busy" ? "warning.main" : "success.main",
+              border: "1px solid",
+              borderColor: status === "busy" ? "warning.dark" : "success.dark",
+            }}
+          />
+        </Tooltip>
+      ))}
+      <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+        {checked_out}/{total}
+      </Typography>
+    </Box>
   );
 };
 
@@ -895,7 +929,7 @@ const DataTestPage = () => {
           zIndex: 1000,
         }}
       >
-        <WorkerStatusDots telemetry={telemetry} />
+        <WorkerStatus telemetry={telemetry} />
         <DbPoolStatus telemetry={telemetry} />
       </Box>
     </Box>
