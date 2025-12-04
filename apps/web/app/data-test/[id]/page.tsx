@@ -7,9 +7,7 @@ import {
   CardContent,
   Chip,
   FormControlLabel,
-  MenuItem,
   Paper,
-  Select,
   Stack,
   Switch,
   Table,
@@ -196,18 +194,25 @@ const DataTestPage = () => {
   const params = useParams();
   const router = useRouter();
   const queryId = (params?.id as string) || "";
-  const { authUser } = useAppUser();
-  const userEmail = authUser?.email as string | undefined;
+  const { user, authUser, isLoading: isUserLoading } = useAppUser();
+  // user.email works for both auth users and guests (if guest has email)
+  const userEmail = (authUser?.email || user?.email) as string | undefined;
+
+  // Debug: log auth state
+  console.log("[DataTest] Auth state:", {
+    user,
+    authUser,
+    userEmail,
+    isUserLoading,
+  });
 
   const [inputQueryId, setInputQueryId] = useState(queryId);
   const [sseEvents, setSSEEvents] = useState<SSEEvent[]>([]);
   const [manualNotify, setManualNotify] = useState(false);
   const [useSSE, setUseSSE] = useState(true);
   const [paginate, setPaginate] = useState(true);
-  const [pageSize, setPageSize] = useState(100);
-  const [offset, setOffset] = useState(0);
-  const [sortBy, setSortBy] = useState("");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+  const [pageSize] = useState(100);
+  const [offset] = useState(0);
   const [performanceWarning, setPerformanceWarning] = useState(false);
   const [estimatedRows, setEstimatedRows] = useState<number | undefined>();
   const [estimatedSizeGb, setEstimatedSizeGb] = useState<number | undefined>();
@@ -298,26 +303,22 @@ const DataTestPage = () => {
   }, []);
 
   const getFetchOptions = useCallback(
-    (force: boolean = false) => ({
-      notify: manualNotify,
-      useSSE,
-      paginate,
-      pageSize,
-      offset,
-      ...(sortBy ? { sortBy, sortOrder } : {}),
-      ...(force ? { force: true } : {}),
-      ...(userEmail ? { userEmail } : {}),
-    }),
-    [
-      manualNotify,
-      useSSE,
-      paginate,
-      pageSize,
-      offset,
-      sortBy,
-      sortOrder,
-      userEmail,
-    ],
+    (force: boolean = false) => {
+      const currentSort = sortModel[0];
+      return {
+        notify: manualNotify,
+        useSSE,
+        paginate,
+        pageSize,
+        offset,
+        ...(currentSort
+          ? { sortBy: currentSort.field, sortOrder: currentSort.sort }
+          : {}),
+        ...(force ? { force: true } : {}),
+        ...(userEmail ? { userEmail } : {}),
+      };
+    },
+    [manualNotify, useSSE, paginate, pageSize, offset, sortModel, userEmail],
   );
 
   const handleFetch = () => {
@@ -558,6 +559,21 @@ const DataTestPage = () => {
                           </TableCell>
                         </TableRow>
                       )}
+                      <TableRow>
+                        <TableCell sx={{ py: 0.5, border: 0 }}>
+                          User Email
+                        </TableCell>
+                        <TableCell
+                          sx={{
+                            py: 0.5,
+                            border: 0,
+                            fontSize: 11,
+                            color: userEmail ? "text.primary" : "error.main",
+                          }}
+                        >
+                          {userEmail || "Not logged in"}
+                        </TableCell>
+                      </TableRow>
                     </TableBody>
                   </Table>
                 </CardContent>
@@ -775,7 +791,7 @@ const DataTestPage = () => {
                 </CardContent>
               </Card>
 
-              {/* Fetch Options */}
+              {/* Fetch Options (read-only, reflects actual state) */}
               <Card sx={{ mb: 2 }} variant="outlined">
                 <CardContent sx={{ py: 1, "&:last-child": { pb: 1 } }}>
                   <Typography
@@ -785,56 +801,50 @@ const DataTestPage = () => {
                   >
                     Fetch Options
                   </Typography>
-                  <Stack spacing={1.5}>
-                    <Stack direction="row" spacing={1}>
-                      <TextField
-                        label="Page Size"
-                        type="number"
-                        value={pageSize}
-                        onChange={(e) =>
-                          setPageSize(
-                            Math.max(1, parseInt(e.target.value) || 1),
-                          )
-                        }
-                        size="small"
-                        sx={{ width: 100 }}
-                        inputProps={{ min: 1 }}
-                      />
-                      <TextField
-                        label="Offset"
-                        type="number"
-                        value={offset}
-                        onChange={(e) =>
-                          setOffset(Math.max(0, parseInt(e.target.value) || 0))
-                        }
-                        size="small"
-                        sx={{ width: 100 }}
-                        inputProps={{ min: 0 }}
-                      />
-                    </Stack>
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      <TextField
-                        label="Sort By"
-                        value={sortBy}
-                        onChange={(e) => setSortBy(e.target.value)}
-                        size="small"
-                        sx={{ flex: 1 }}
-                        placeholder="column name"
-                      />
-                      <Select
-                        value={sortOrder}
-                        onChange={(e) =>
-                          setSortOrder(e.target.value as "asc" | "desc")
-                        }
-                        size="small"
-                        sx={{ width: 80 }}
-                        disabled={!sortBy}
-                      >
-                        <MenuItem value="asc">ASC</MenuItem>
-                        <MenuItem value="desc">DESC</MenuItem>
-                      </Select>
-                    </Stack>
-                  </Stack>
+                  <Table size="small">
+                    <TableBody>
+                      <TableRow>
+                        <TableCell sx={{ py: 0.5, border: 0 }}>
+                          Page Size
+                        </TableCell>
+                        <TableCell
+                          sx={{ py: 0.5, border: 0, fontFamily: "monospace" }}
+                        >
+                          {pageSize}
+                        </TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell sx={{ py: 0.5, border: 0 }}>
+                          Offset
+                        </TableCell>
+                        <TableCell
+                          sx={{ py: 0.5, border: 0, fontFamily: "monospace" }}
+                        >
+                          {offset}
+                        </TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell sx={{ py: 0.5, border: 0 }}>
+                          Sort By
+                        </TableCell>
+                        <TableCell
+                          sx={{ py: 0.5, border: 0, fontFamily: "monospace" }}
+                        >
+                          {sortModel[0]?.field || "none"}
+                        </TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell sx={{ py: 0.5, border: 0 }}>
+                          Sort Order
+                        </TableCell>
+                        <TableCell
+                          sx={{ py: 0.5, border: 0, fontFamily: "monospace" }}
+                        >
+                          {sortModel[0]?.sort || "none"}
+                        </TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
                 </CardContent>
               </Card>
 
