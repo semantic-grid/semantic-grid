@@ -297,16 +297,28 @@ const DataTestPage = () => {
     ]);
   }, []);
 
-  const getFetchOptions = (force: boolean = false) => ({
-    notify: manualNotify,
-    useSSE,
-    paginate,
-    pageSize,
-    offset,
-    ...(sortBy ? { sortBy, sortOrder } : {}),
-    ...(force ? { force: true } : {}),
-    ...(userEmail ? { userEmail } : {}),
-  });
+  const getFetchOptions = useCallback(
+    (force: boolean = false) => ({
+      notify: manualNotify,
+      useSSE,
+      paginate,
+      pageSize,
+      offset,
+      ...(sortBy ? { sortBy, sortOrder } : {}),
+      ...(force ? { force: true } : {}),
+      ...(userEmail ? { userEmail } : {}),
+    }),
+    [
+      manualNotify,
+      useSSE,
+      paginate,
+      pageSize,
+      offset,
+      sortBy,
+      sortOrder,
+      userEmail,
+    ],
+  );
 
   const handleFetch = () => {
     const options = getFetchOptions();
