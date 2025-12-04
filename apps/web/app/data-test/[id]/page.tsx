@@ -268,8 +268,13 @@ const DataTestPage = () => {
               onSelectionModelChange={setSelectionModel}
               showAddColumn={showAddColumn}
               onAddColumn={() => {
-                console.log("[DataTest] Add column clicked");
-                alert("Add Column button clicked!");
+                // Select the __add_column__ column (updates refs)
+                setActiveColumn({
+                  field: "__add_column__",
+                  headerName: "New Column",
+                });
+                setActiveRows(undefined);
+                setSelectionModel([]);
               }}
               onRefsChange={setRefs}
             />
