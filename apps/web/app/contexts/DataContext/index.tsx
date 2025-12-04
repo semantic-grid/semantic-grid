@@ -113,7 +113,7 @@ const hydrateFromLocalStorage = (): Map<string, QueryState> => {
           cachedAt: Date.now(),
         });
         console.log(
-          `[DataContext] Hydrated query ${queryId}: ${rows.length} rows`,
+          `[DataContext] Hydrated query ${queryId}: ${extracted.rows.length} rows`,
         );
       }
     }
