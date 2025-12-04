@@ -264,6 +264,23 @@ export const QueryDataGrid = ({
     cancelFetch(queryId);
   }, [cancelFetch, queryId]);
 
+  // Handle classic pagination page change
+  const handlePageChange = useCallback(
+    (newPage: number) => {
+      setPaginationModel((prev) => ({ ...prev, page: newPage }));
+      const newOffset = newPage * pageSize;
+      fetchQuery(queryId, {
+        useSSE,
+        pageSize,
+        offset: newOffset,
+        paginate: true,
+        sortBy: sortModel[0]?.field,
+        sortOrder: sortModel[0]?.sort ?? undefined,
+      });
+    },
+    [fetchQuery, queryId, useSSE, pageSize, sortModel],
+  );
+
   // Determine the overlay component based on UI state
   const noRowsOverlayComponent = useMemo(() => {
     switch (uiState) {
@@ -424,6 +441,12 @@ export const QueryDataGrid = ({
               onRefresh={handleRefresh}
               onRefreshWithNotify={handleRefreshWithNotify}
               onCancel={handleCancel}
+              paginationMode={paginate ? "infinite" : "classic"}
+              currentRows={rows.length}
+              totalRows={totalRows}
+              page={paginationModel.page}
+              pageSize={paginationModel.pageSize}
+              onPageChange={handlePageChange}
             />
           ),
         }}

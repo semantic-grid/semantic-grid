@@ -1,12 +1,14 @@
 "use client";
 
-import { Cancel, Notifications, Refresh } from "@mui/icons-material";
-import { Box, Button, styled, Typography } from "@mui/material";
 import {
-  GridFooter,
-  GridFooterContainer,
-  useGridApiContext,
-} from "@mui/x-data-grid-pro";
+  Cancel,
+  ChevronLeft,
+  ChevronRight,
+  Notifications,
+  Refresh,
+} from "@mui/icons-material";
+import { Box, Button, IconButton, styled, Typography } from "@mui/material";
+import { GridFooterContainer, useGridApiContext } from "@mui/x-data-grid-pro";
 
 import { pulse } from "@/app/components/dancing-balls";
 
@@ -15,6 +17,8 @@ const PulsingMonoText = styled(Typography)(({ theme }) => ({
   animation: `${pulse} 1.5s ease-in-out infinite`,
 }));
 
+export type PaginationMode = "infinite" | "classic";
+
 interface QueryDataGridFooterProps {
   isFetching: boolean;
   isValidating: boolean;
@@ -22,6 +26,13 @@ interface QueryDataGridFooterProps {
   onRefresh: () => void;
   onRefreshWithNotify: () => void;
   onCancel: () => void;
+  // Pagination
+  paginationMode?: PaginationMode;
+  currentRows: number;
+  totalRows: number;
+  page: number;
+  pageSize: number;
+  onPageChange?: (page: number) => void;
 }
 
 export const QueryDataGridFooter = ({
@@ -31,9 +42,22 @@ export const QueryDataGridFooter = ({
   onRefresh,
   onRefreshWithNotify,
   onCancel,
+  paginationMode = "infinite",
+  currentRows,
+  totalRows,
+  page,
+  pageSize,
+  onPageChange,
 }: QueryDataGridFooterProps) => {
   const apiRef = useGridApiContext();
   const isFetchingMore = isValidating && !isFetching;
+
+  // Classic pagination calculations
+  const totalPages = Math.ceil(totalRows / pageSize);
+  const canGoPrev = page > 0;
+  const canGoNext = page < totalPages - 1;
+  const startRow = page * pageSize + 1;
+  const endRow = Math.min((page + 1) * pageSize, totalRows);
 
   return (
     <GridFooterContainer
@@ -88,9 +112,39 @@ export const QueryDataGridFooter = ({
         )}
       </Box>
 
-      {/* Right side: Standard MUI footer (pagination, etc.) */}
-      {/* @ts-ignore */}
-      <GridFooter apiRef={apiRef} sx={{ width: "auto" }} />
+      {/* Right side: Pagination info */}
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+        {paginationMode === "infinite" ? (
+          // Infinite scroll: show "Total Rows: X of Y"
+          <Typography variant="body2" color="text.secondary">
+            Total Rows: {currentRows.toLocaleString()} of{" "}
+            {totalRows.toLocaleString()}
+          </Typography>
+        ) : (
+          // Classic paging: show page navigation
+          <>
+            <Typography variant="body2" color="text.secondary">
+              {totalRows > 0
+                ? `${startRow.toLocaleString()}-${endRow.toLocaleString()} of ${totalRows.toLocaleString()}`
+                : "0 rows"}
+            </Typography>
+            <IconButton
+              size="small"
+              onClick={() => onPageChange?.(page - 1)}
+              disabled={!canGoPrev || isFetching}
+            >
+              <ChevronLeft />
+            </IconButton>
+            <IconButton
+              size="small"
+              onClick={() => onPageChange?.(page + 1)}
+              disabled={!canGoNext || isFetching}
+            >
+              <ChevronRight />
+            </IconButton>
+          </>
+        )}
+      </Box>
     </GridFooterContainer>
   );
 };
