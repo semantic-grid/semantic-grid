@@ -108,19 +108,26 @@ const persistToLocalStorage = (
       data: { rows: data.rows, total_rows: data.total_rows },
     };
 
-    // Find and update existing entry or add new one
+    // Find and update existing entry for this exact queryId, or add new one
+    // Use exact match with quotes to avoid partial UUID matches
     const existingIndex = cacheData.findIndex(
-      ([key]) => typeof key === "string" && key.includes(queryId),
+      ([key]) => typeof key === "string" && key.includes(`"${queryId}"`),
     );
 
     if (existingIndex >= 0) {
+      console.log(
+        `[DataContext] Updating existing cache entry at index ${existingIndex}`,
+      );
       cacheData[existingIndex] = [cacheKey, cacheValue];
     } else {
+      console.log(`[DataContext] Adding new cache entry for ${queryId}`);
       cacheData.push([cacheKey, cacheValue]);
     }
 
     localStorage.setItem("app-cache", JSON.stringify(cacheData));
-    console.log(`[DataContext] Persisted query ${queryId} to localStorage`);
+    console.log(
+      `[DataContext] Persisted query ${queryId} to localStorage (${data.rows.length} rows)`,
+    );
   } catch (error) {
     console.warn("[DataContext] Failed to persist to localStorage:", error);
   }
