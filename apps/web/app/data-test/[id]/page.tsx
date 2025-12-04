@@ -19,10 +19,35 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
+import { Tooltip } from "@mui/material";
 import type { GridColDef, GridSortItem } from "@mui/x-data-grid-pro";
 import { formatDistanceToNow } from "date-fns";
 import { useParams, useRouter } from "next/navigation";
 import React, { useCallback, useEffect, useState } from "react";
+
+// Telemetry types
+interface WorkerInfo {
+  id: string;
+  active_tasks: number;
+  pool_size: number;
+}
+
+interface TelemetryData {
+  workers: {
+    workers: WorkerInfo[];
+    total: number;
+    busy: number;
+    idle: number;
+    error?: string;
+  };
+  db_pool: {
+    size: number;
+    checked_in: number;
+    checked_out: number;
+    overflow: number;
+    error?: string;
+  };
+}
 
 import type { DataGridRefs } from "@/app/components/QueryDataGrid";
 import { QueryDataGrid } from "@/app/components/QueryDataGrid";
@@ -48,6 +73,75 @@ const StatusChip = ({
   } as const;
 
   return <Chip label={status} color={colorMap[status]} size="small" />;
+};
+
+// Worker status indicator dots
+const WorkerStatusDots = ({
+  telemetry,
+}: {
+  telemetry: TelemetryData | null;
+}) => {
+  if (!telemetry || telemetry.workers.error) {
+    return (
+      <Box sx={{ display: "flex", gap: 0.5, alignItems: "center" }}>
+        <Typography variant="caption" color="text.secondary">
+          Workers: --
+        </Typography>
+      </Box>
+    );
+  }
+
+  const { workers } = telemetry.workers;
+
+  return (
+    <Box sx={{ display: "flex", gap: 0.5, alignItems: "center" }}>
+      <Typography variant="caption" color="text.secondary" sx={{ mr: 1 }}>
+        Workers:
+      </Typography>
+      {workers.map((worker, i) => (
+        <Tooltip
+          key={i}
+          title={`${worker.id}: ${worker.active_tasks}/${worker.pool_size} tasks`}
+        >
+          <Box
+            sx={{
+              width: 10,
+              height: 10,
+              borderRadius: "50%",
+              bgcolor:
+                worker.active_tasks > 0 ? "warning.main" : "success.main",
+              border: "1px solid",
+              borderColor:
+                worker.active_tasks > 0 ? "warning.dark" : "success.dark",
+            }}
+          />
+        </Tooltip>
+      ))}
+      <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+        {telemetry.workers.busy}/{telemetry.workers.total}
+      </Typography>
+    </Box>
+  );
+};
+
+// DB Pool status indicator
+const DbPoolStatus = ({ telemetry }: { telemetry: TelemetryData | null }) => {
+  if (!telemetry || telemetry.db_pool.error) {
+    return (
+      <Typography variant="caption" color="text.secondary">
+        DB Pool: --
+      </Typography>
+    );
+  }
+
+  const { checked_out, size, overflow } = telemetry.db_pool;
+
+  return (
+    <Typography variant="caption" color="text.secondary">
+      DB Pool: {checked_out}/{size}
+      {overflow > 0 && ` (+${overflow})`}
+    </Typography>
+  );
 };
 
 // Generate columns from first row of data
@@ -88,6 +182,32 @@ const DataTestPage = () => {
   const [selectionModel, setSelectionModel] = useState<number[]>([]);
   const [showAddColumn, setShowAddColumn] = useState(true);
   const [refs, setRefs] = useState<DataGridRefs>({});
+
+  // Telemetry state
+  const [telemetry, setTelemetry] = useState<TelemetryData | null>(null);
+
+  // Telemetry SSE connection
+  useEffect(() => {
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || "";
+    const eventSource = new EventSource(`${apiBase}/telemetry/sse`);
+
+    eventSource.addEventListener("telemetry", (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        setTelemetry(data);
+      } catch (err) {
+        console.error("[Telemetry] Parse error:", err);
+      }
+    });
+
+    eventSource.addEventListener("error", () => {
+      console.warn("[Telemetry] SSE connection error");
+    });
+
+    return () => {
+      eventSource.close();
+    };
+  }, []);
 
   // Fetch query metadata
   const { data: queryMetadata, isLoading: isLoadingMetadata } =
@@ -756,6 +876,28 @@ const DataTestPage = () => {
             </>
           )}
         </Box>
+      </Box>
+
+      {/* Telemetry Status Bar */}
+      <Box
+        sx={{
+          position: "fixed",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          bgcolor: "background.paper",
+          borderTop: 1,
+          borderColor: "divider",
+          px: 2,
+          py: 0.5,
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          zIndex: 1000,
+        }}
+      >
+        <WorkerStatusDots telemetry={telemetry} />
+        <DbPoolStatus telemetry={telemetry} />
       </Box>
     </Box>
   );

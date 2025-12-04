@@ -538,6 +538,15 @@ def wrk_fetch_data(self, args):
     notify_on_complete = args.get("notify_on_complete", False)
     user_email = args.get("user_email")
 
+    # Report task has started (prevents false "workers_busy" warnings)
+    self.update_state(
+        state="STARTED",
+        meta={
+            "query_id": query_id,
+            "stage": "started",
+        },
+    )
+
     logger.info(
         f"Starting data fetch for query {query_id}",
         extra={
@@ -594,6 +603,15 @@ def wrk_fetch_data(self, args):
             sort_by=sort_by,
             sort_order=sort_order,
             include_total_count=settings,  # We already have it
+        )
+
+        # Report we're about to execute the query (this is the slow part)
+        self.update_state(
+            state="PROGRESS",
+            meta={
+                "query_id": query_id,
+                "stage": "executing_query",
+            },
         )
 
         # Execute using the warehouse engine

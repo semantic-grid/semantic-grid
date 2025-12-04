@@ -1697,6 +1697,7 @@ async def stream_data_fetch(
             poll_interval = 0.5  # Poll every 500ms
             count_sent = False  # Track if count event was sent
             busy_warning_sent = False  # Track if busy warning was sent
+            progress_sent = False  # Track if progress event was sent
             busy_warning_threshold = 5  # Warn if task pending for 5 seconds
 
             while time.time() - start_time < max_wait:
@@ -1728,6 +1729,21 @@ async def stream_data_fetch(
                         ),
                     }
                     busy_warning_sent = True
+
+                # Check for PROGRESS state (query is executing)
+                if result.state == "PROGRESS" and not progress_sent:
+                    meta = result.info or {}
+                    yield {
+                        "event": "progress",
+                        "data": json.dumps(
+                            {
+                                "status": "running",
+                                "query_id": meta.get("query_id"),
+                                "stage": meta.get("stage", "executing"),
+                            }
+                        ),
+                    }
+                    progress_sent = True
 
                 # Check for counting complete state (only send once)
                 if result.state == "COUNTING_COMPLETE" and not count_sent:
@@ -1803,6 +1819,105 @@ async def stream_data_fetch(
             yield {
                 "event": "error",
                 "data": json.dumps({"status": "error", "error": str(e)}),
+            }
+
+    return EventSourceResponse(event_generator())
+
+
+@api_router.get("/telemetry/sse")
+async def telemetry_sse(request: Request):
+    """
+    SSE endpoint for system telemetry (worker stats, DB pool stats).
+    Sends updates every 5 seconds.
+    """
+    from fm_app.workers.worker import app as celery_app
+
+    async def get_worker_stats():
+        """Get Celery worker statistics."""
+        try:
+            # Run inspection in thread pool (it's synchronous)
+            loop = asyncio.get_event_loop()
+            inspect = celery_app.control.inspect()
+
+            # These are blocking calls, run in executor
+            active = await loop.run_in_executor(None, inspect.active)
+            stats = await loop.run_in_executor(None, inspect.stats)
+
+            active = active or {}
+            stats = stats or {}
+
+            workers = []
+            for worker_name, worker_stats in stats.items():
+                active_tasks = active.get(worker_name, [])
+                workers.append(
+                    {
+                        "id": worker_name.split("@")[-1],  # Short name
+                        "active_tasks": len(active_tasks),
+                        "pool_size": worker_stats.get("pool", {}).get(
+                            "max-concurrency", 0
+                        ),
+                    }
+                )
+
+            return {
+                "workers": workers,
+                "total": len(workers),
+                "busy": sum(1 for w in workers if w["active_tasks"] > 0),
+                "idle": sum(1 for w in workers if w["active_tasks"] == 0),
+            }
+        except Exception as e:
+            logging.warning(f"Failed to get worker stats: {e}")
+            return {"workers": [], "total": 0, "busy": 0, "idle": 0, "error": str(e)}
+
+    async def get_db_pool_stats():
+        """Get database connection pool statistics."""
+        try:
+            pool = wh_engine.pool
+            return {
+                "size": pool.size(),
+                "checked_in": pool.checkedin(),
+                "checked_out": pool.checkedout(),
+                "overflow": pool.overflow(),
+            }
+        except Exception as e:
+            logging.warning(f"Failed to get DB pool stats: {e}")
+            return {"error": str(e)}
+
+    async def event_generator():
+        try:
+            yield {
+                "event": "connected",
+                "data": json.dumps({"status": "connected"}),
+            }
+
+            while True:
+                if await request.is_disconnected():
+                    break
+
+                # Gather stats
+                worker_stats = await get_worker_stats()
+                db_stats = await get_db_pool_stats()
+
+                yield {
+                    "event": "telemetry",
+                    "data": json.dumps(
+                        {
+                            "timestamp": datetime.utcnow().isoformat(),
+                            "workers": worker_stats,
+                            "db_pool": db_stats,
+                        }
+                    ),
+                }
+
+                await asyncio.sleep(5)
+
+        except asyncio.CancelledError:
+            logging.info("Telemetry SSE cancelled")
+        except Exception as e:
+            logging.error(f"Telemetry SSE error: {e}")
+            yield {
+                "event": "error",
+                "data": json.dumps({"error": str(e)}),
             }
 
     return EventSourceResponse(event_generator())
