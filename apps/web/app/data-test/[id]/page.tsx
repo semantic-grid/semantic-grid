@@ -6,20 +6,23 @@ import {
   Card,
   CardContent,
   Chip,
-  Divider,
+  FormControlLabel,
+  MenuItem,
   Paper,
+  Select,
   Stack,
+  Switch,
   Table,
   TableBody,
   TableCell,
-  TableHead,
   TableRow,
   TextField,
   Typography,
 } from "@mui/material";
 import type { GridColDef } from "@mui/x-data-grid-pro";
+import { formatDistanceToNow } from "date-fns";
 import { useParams, useRouter } from "next/navigation";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useState } from "react";
 
 import { QueryDataGrid } from "@/app/components/QueryDataGrid";
 import { useData } from "@/app/contexts/DataContext";
@@ -66,6 +69,12 @@ const DataTestPage = () => {
   const [inputQueryId, setInputQueryId] = useState(queryId);
   const [sseEvents, setSSEEvents] = useState<SSEEvent[]>([]);
   const [manualNotify, setManualNotify] = useState(false);
+  const [useSSE, setUseSSE] = useState(true);
+  const [paginate, setPaginate] = useState(false);
+  const [pageSize, setPageSize] = useState(100);
+  const [offset, setOffset] = useState(0);
+  const [sortBy, setSortBy] = useState("");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
   const {
     getQueryState,
@@ -98,14 +107,34 @@ const DataTestPage = () => {
     ]);
   }, []);
 
+  const getFetchOptions = (force: boolean = false) => ({
+    notify: manualNotify,
+    useSSE,
+    paginate,
+    pageSize,
+    offset,
+    ...(sortBy ? { sortBy, sortOrder } : {}),
+    ...(force ? { force: true } : {}),
+  });
+
   const handleFetch = () => {
-    logEvent("action", { action: "fetchQuery", queryId, force: false });
-    fetchQuery(queryId, { notify: manualNotify });
+    const options = getFetchOptions();
+    logEvent("action", {
+      action: "fetchQuery",
+      queryId,
+      ...options,
+    });
+    fetchQuery(queryId, options);
   };
 
   const handleForceFetch = () => {
-    logEvent("action", { action: "fetchQuery", queryId, force: true });
-    fetchQuery(queryId, { force: true, notify: manualNotify });
+    const options = getFetchOptions(true);
+    logEvent("action", {
+      action: "fetchQuery",
+      queryId,
+      ...options,
+    });
+    fetchQuery(queryId, options);
   };
 
   const handleCancel = () => {
@@ -119,29 +148,26 @@ const DataTestPage = () => {
   };
 
   const handleSubscribe = () => {
-    logEvent("action", { action: "subscribe", queryId });
+    const options = getFetchOptions();
+    logEvent("action", { action: "subscribe", queryId, ...options });
 
-    const unsubscribe = subscribe(
-      queryId,
-      { notify: manualNotify },
-      {
-        onData: (data) => {
-          logEvent("data", {
-            rows: data.rows.length,
-            total_rows: data.total_rows,
-          });
-        },
-        onError: (error) => {
-          logEvent("error", { error });
-        },
-        onCount: (totalRows) => {
-          logEvent("count", { totalRows });
-        },
-        onCancelled: () => {
-          logEvent("cancelled", {});
-        },
+    const unsubscribe = subscribe(queryId, options, {
+      onData: (data) => {
+        logEvent("data", {
+          rows: data.rows.length,
+          total_rows: data.total_rows,
+        });
       },
-    );
+      onError: (error) => {
+        logEvent("error", { error });
+      },
+      onCount: (totalRows) => {
+        logEvent("count", { totalRows });
+      },
+      onCancelled: () => {
+        logEvent("cancelled", {});
+      },
+    });
 
     return unsubscribe;
   };
@@ -284,7 +310,9 @@ const DataTestPage = () => {
                         </TableCell>
                         <TableCell sx={{ py: 0.5, border: 0, fontSize: 11 }}>
                           {queryState.cachedAt
-                            ? new Date(queryState.cachedAt).toLocaleTimeString()
+                            ? formatDistanceToNow(queryState.cachedAt, {
+                                addSuffix: true,
+                              })
                             : "N/A"}
                         </TableCell>
                       </TableRow>
@@ -361,15 +389,102 @@ const DataTestPage = () => {
                         Subscribe
                       </Button>
                     </Stack>
-                    <Button
-                      variant={manualNotify ? "contained" : "outlined"}
-                      size="small"
-                      onClick={() => setManualNotify(!manualNotify)}
-                      color={manualNotify ? "success" : "inherit"}
-                      fullWidth
-                    >
-                      Email Notify: {manualNotify ? "ON" : "OFF"}
-                    </Button>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={useSSE}
+                            onChange={(e) => setUseSSE(e.target.checked)}
+                            size="small"
+                          />
+                        }
+                        label="SSE"
+                        sx={{ mr: 2 }}
+                      />
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={paginate}
+                            onChange={(e) => setPaginate(e.target.checked)}
+                            size="small"
+                          />
+                        }
+                        label="Paginate"
+                      />
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={manualNotify}
+                            onChange={(e) => setManualNotify(e.target.checked)}
+                            size="small"
+                          />
+                        }
+                        label="Notify"
+                      />
+                    </Stack>
+                  </Stack>
+                </CardContent>
+              </Card>
+
+              {/* Fetch Options */}
+              <Card sx={{ mb: 2 }} variant="outlined">
+                <CardContent sx={{ py: 1, "&:last-child": { pb: 1 } }}>
+                  <Typography
+                    variant="subtitle2"
+                    color="text.secondary"
+                    gutterBottom
+                  >
+                    Fetch Options
+                  </Typography>
+                  <Stack spacing={1.5}>
+                    <Stack direction="row" spacing={1}>
+                      <TextField
+                        label="Page Size"
+                        type="number"
+                        value={pageSize}
+                        onChange={(e) =>
+                          setPageSize(
+                            Math.max(1, parseInt(e.target.value) || 1),
+                          )
+                        }
+                        size="small"
+                        sx={{ width: 100 }}
+                        inputProps={{ min: 1 }}
+                      />
+                      <TextField
+                        label="Offset"
+                        type="number"
+                        value={offset}
+                        onChange={(e) =>
+                          setOffset(Math.max(0, parseInt(e.target.value) || 0))
+                        }
+                        size="small"
+                        sx={{ width: 100 }}
+                        inputProps={{ min: 0 }}
+                      />
+                    </Stack>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <TextField
+                        label="Sort By"
+                        value={sortBy}
+                        onChange={(e) => setSortBy(e.target.value)}
+                        size="small"
+                        sx={{ flex: 1 }}
+                        placeholder="column name"
+                      />
+                      <Select
+                        value={sortOrder}
+                        onChange={(e) =>
+                          setSortOrder(e.target.value as "asc" | "desc")
+                        }
+                        size="small"
+                        sx={{ width: 80 }}
+                        disabled={!sortBy}
+                      >
+                        <MenuItem value="asc">ASC</MenuItem>
+                        <MenuItem value="desc">DESC</MenuItem>
+                      </Select>
+                    </Stack>
                   </Stack>
                 </CardContent>
               </Card>
