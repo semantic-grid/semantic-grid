@@ -537,6 +537,7 @@ def wrk_fetch_data(self, args):
     sort_order = args.get("sort_order", "asc")
     notify_on_complete = args.get("notify_on_complete", False)
     user_email = args.get("user_email")
+    force = args.get("force", False)
 
     # Report task has started (prevents false "workers_busy" warnings)
     self.update_state(
@@ -557,16 +558,22 @@ def wrk_fetch_data(self, args):
             "sort_order": sort_order,
             "notify_requested": notify_on_complete,
             "has_email": bool(user_email),
+            "force": force,
         },
     )
 
-    # Check cache first
+    # Check cache first (skip if force=True)
     try:
         from fm_app.cache.query_cache import run_async
 
-        cached_result = run_async(
-            get_cached_query(query_id, limit, offset, sort_by, sort_order)
-        )
+        cached_result = None
+        if not force:
+            cached_result = run_async(
+                get_cached_query(query_id, limit, offset, sort_by, sort_order)
+            )
+        else:
+            logger.info(f"Force refresh requested, skipping cache for query {query_id}")
+
         if cached_result:
             logger.info(f"Returning cached data for query {query_id}")
             result = {

@@ -1524,6 +1524,7 @@ async def stream_data_fetch(
     sort_order: str = Query("asc", regex="^(asc|desc)$"),
     notify_on_complete: bool = Query(False),
     user_email: Optional[str] = Query(None),
+    force: bool = Query(False),
     db: AsyncSession = Depends(get_db),
     auth_result: dict = Depends(verify_any_token),
 ):
@@ -1645,6 +1646,7 @@ async def stream_data_fetch(
             "sort_order": sort_order,
             "notify_on_complete": notify_on_complete,
             "user_email": user_email,
+            "force": force,
         }
 
         task = wrk_fetch_data.apply_async(args=[task_args])
