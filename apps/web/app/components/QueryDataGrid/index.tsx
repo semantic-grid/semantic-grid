@@ -49,6 +49,8 @@ export const QueryDataGrid = ({
   showAddColumn = false,
   onAddColumn,
   onRefsChange,
+  notify = false,
+  userEmail,
 }: QueryDataGridProps) => {
   const apiRef = useGridApiRef();
   const gridRef = useRef<HTMLDivElement>(null);
@@ -92,16 +94,28 @@ export const QueryDataGrid = ({
           pageSize,
           sortBy: newModel[0].field,
           sortOrder: newModel[0].sort ?? undefined,
+          notify,
+          userEmail,
         });
       } else {
         // No sort - refetch without sort params
         fetchQuery(queryId, {
           useSSE,
           pageSize,
+          notify,
+          userEmail,
         });
       }
     },
-    [onSortModelChange, fetchQuery, queryId, useSSE, pageSize],
+    [
+      onSortModelChange,
+      fetchQuery,
+      queryId,
+      useSSE,
+      pageSize,
+      notify,
+      userEmail,
+    ],
   );
 
   const handleSelectionChange = useCallback(
@@ -386,18 +400,21 @@ export const QueryDataGrid = ({
       pageSize,
       sortBy: sortModel[0]?.field,
       sortOrder: sortModel[0]?.sort || undefined,
+      notify,
+      userEmail,
     });
-  }, [fetchQuery, queryId, useSSE, pageSize, sortModel]);
+  }, [fetchQuery, queryId, useSSE, pageSize, sortModel, notify, userEmail]);
 
   const handleFetchWithNotify = useCallback(() => {
     fetchQuery(queryId, {
       useSSE,
       notify: true,
+      userEmail,
       pageSize,
       sortBy: sortModel[0]?.field,
       sortOrder: sortModel[0]?.sort || undefined,
     });
-  }, [fetchQuery, queryId, useSSE, pageSize, sortModel]);
+  }, [fetchQuery, queryId, useSSE, pageSize, sortModel, userEmail]);
 
   const handleRefresh = useCallback(() => {
     fetchQuery(queryId, {
@@ -406,19 +423,22 @@ export const QueryDataGrid = ({
       pageSize,
       sortBy: sortModel[0]?.field,
       sortOrder: sortModel[0]?.sort || undefined,
+      notify,
+      userEmail,
     });
-  }, [fetchQuery, queryId, useSSE, pageSize, sortModel]);
+  }, [fetchQuery, queryId, useSSE, pageSize, sortModel, notify, userEmail]);
 
   const handleRefreshWithNotify = useCallback(() => {
     fetchQuery(queryId, {
       useSSE,
       force: true,
       notify: true,
+      userEmail,
       pageSize,
       sortBy: sortModel[0]?.field,
       sortOrder: sortModel[0]?.sort || undefined,
     });
-  }, [fetchQuery, queryId, useSSE, pageSize, sortModel]);
+  }, [fetchQuery, queryId, useSSE, pageSize, sortModel, userEmail]);
 
   const handleCancel = useCallback(() => {
     cancelFetch(queryId);
@@ -436,9 +456,11 @@ export const QueryDataGrid = ({
         paginate: true,
         sortBy: sortModel[0]?.field,
         sortOrder: sortModel[0]?.sort ?? undefined,
+        notify,
+        userEmail,
       });
     },
-    [fetchQuery, queryId, useSSE, pageSize, sortModel],
+    [fetchQuery, queryId, useSSE, pageSize, sortModel, notify, userEmail],
   );
 
   // Determine the overlay component based on UI state

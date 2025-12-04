@@ -449,6 +449,8 @@ const DataTestPage = () => {
                 setSelectionModel([]);
               }}
               onRefsChange={setRefs}
+              notify={manualNotify}
+              userEmail={userEmail}
             />
           ) : (
             <Box

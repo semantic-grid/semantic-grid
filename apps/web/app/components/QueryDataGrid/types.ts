@@ -34,6 +34,9 @@ export interface QueryDataGridProps {
   onAddColumn?: () => void;
   // Refs callback - called when selection changes
   onRefsChange?: (refs: DataGridRefs) => void;
+  // Notification settings
+  notify?: boolean;
+  userEmail?: string;
 }
 
 export type UIState =
