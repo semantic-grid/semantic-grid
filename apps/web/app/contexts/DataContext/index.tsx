@@ -4,6 +4,7 @@ import React, {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -20,6 +21,67 @@ import {
 } from "./types";
 
 const DataContext = createContext<DataContextValue | undefined>(undefined);
+
+// Helper to extract queryId from SWR cache key
+// Key format: $inf$@"/api/apegpt/data/sse","queryId",offset,limit,"sortBy","sortOrder"
+const parseSwrCacheKey = (key: string): string | null => {
+  if (!key.includes("/api/apegpt/data/sse")) return null;
+
+  // Extract UUID from key
+  const match = key.match(/"([a-f0-9-]{36})"/);
+  return match?.[1] ?? null;
+};
+
+// Hydrate query states from SWR localStorage cache
+const hydrateFromLocalStorage = (): Map<string, QueryState> => {
+  const states = new Map<string, QueryState>();
+
+  if (typeof window === "undefined") return states;
+
+  try {
+    const rawCache = localStorage.getItem("app-cache");
+    if (!rawCache) return states;
+
+    const cacheData: Array<[string, any]> = JSON.parse(rawCache);
+
+    for (const [key, value] of cacheData) {
+      if (typeof key !== "string") continue;
+
+      const queryId = parseSwrCacheKey(key);
+      if (!queryId) continue;
+
+      // SWR infinite stores array of pages, each page has rows/total_rows
+      if (!Array.isArray(value) || value.length === 0) continue;
+
+      // Get the first page data (offset 0)
+      const firstPage = value[0];
+      if (!firstPage || typeof firstPage !== "object") continue;
+
+      const rows = firstPage.rows || [];
+      const totalRows = firstPage.total_rows || rows.length;
+
+      // Only hydrate if we don't already have this query or if this has more data
+      const existing = states.get(queryId);
+      if (!existing || rows.length > existing.rows.length) {
+        states.set(queryId, {
+          status: "success",
+          rows,
+          totalRows,
+          isFetching: false,
+          isValidating: false,
+          cachedAt: Date.now(),
+        });
+        console.log(
+          `[DataContext] Hydrated query ${queryId}: ${rows.length} rows`,
+        );
+      }
+    }
+  } catch (error) {
+    console.warn("[DataContext] Failed to hydrate from localStorage:", error);
+  }
+
+  return states;
+};
 
 export const useData = () => {
   const context = useContext(DataContext);
@@ -49,15 +111,38 @@ const buildCacheKey = (queryId: string, options: FetchOptions): string => {
 
 interface FetchState {
   eventSource: EventSource | null;
-  status: "connecting" | "counting" | "fetching" | "complete" | "error" | "cancelled";
+  status:
+    | "connecting"
+    | "counting"
+    | "fetching"
+    | "complete"
+    | "error"
+    | "cancelled";
   subscribers: Map<string, SubscriptionCallbacks>;
 }
 
 export const DataProvider = ({ children }: { children: ReactNode }) => {
-  // Query states by queryId
+  // Query states by queryId - initialized empty, hydrated on mount
   const [queryStates, setQueryStates] = useState<Map<string, QueryState>>(
-    new Map()
+    () => new Map(),
   );
+
+  // Track if we've hydrated from localStorage
+  const hasHydratedRef = useRef(false);
+
+  // Hydrate from localStorage on mount (client-side only)
+  useEffect(() => {
+    if (hasHydratedRef.current) return;
+    hasHydratedRef.current = true;
+
+    const hydrated = hydrateFromLocalStorage();
+    if (hydrated.size > 0) {
+      console.log(
+        `[DataContext] Hydrated ${hydrated.size} queries from localStorage`,
+      );
+      setQueryStates(hydrated);
+    }
+  }, []);
 
   // Active fetches by cache key
   const fetchStatesRef = useRef<Map<string, FetchState>>(new Map());
@@ -70,7 +155,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     (queryId: string): QueryState => {
       return queryStates.get(queryId) || DEFAULT_QUERY_STATE;
     },
-    [queryStates]
+    [queryStates],
   );
 
   // Update query state
@@ -83,7 +168,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         return newMap;
       });
     },
-    []
+    [],
   );
 
   // Check if data is stale based on TTL
@@ -94,7 +179,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       const ttl = state.ttl || DEFAULT_TTL;
       return Date.now() - state.cachedAt > ttl;
     },
-    [queryStates]
+    [queryStates],
   );
 
   // Check if cached data exists
@@ -103,7 +188,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       const state = queryStates.get(queryId);
       return !!state && state.rows.length > 0;
     },
-    [queryStates]
+    [queryStates],
   );
 
   // Invalidate cache for a query
@@ -121,7 +206,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       url: string,
       cacheKey: string,
       queryId: string,
-      fetchState: FetchState
+      fetchState: FetchState,
     ) => {
       const eventSource = new EventSource(url);
       fetchState.eventSource = eventSource;
@@ -224,7 +309,10 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         if (eventSource.readyState === EventSource.CLOSED) {
           console.error("[DataContext] SSE connection closed");
 
-          if (fetchState.status !== "complete" && fetchState.status !== "cancelled") {
+          if (
+            fetchState.status !== "complete" &&
+            fetchState.status !== "cancelled"
+          ) {
             updateQueryState(queryId, {
               status: "error",
               error: "Connection closed",
@@ -243,7 +331,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 
       return eventSource;
     },
-    [updateQueryState]
+    [updateQueryState],
   );
 
   // Subscribe to data fetch
@@ -252,7 +340,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       queryId: string,
       sql: string,
       options: FetchOptions,
-      callbacks: SubscriptionCallbacks
+      callbacks: SubscriptionCallbacks,
     ): (() => void) => {
       const cacheKey = buildCacheKey(queryId, options);
       const subscriptionId = `${cacheKey}-${Date.now()}-${Math.random()}`;
@@ -323,7 +411,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         }
       };
     },
-    [createEventSource, hasCachedData, queryStates, updateQueryState]
+    [createEventSource, hasCachedData, queryStates, updateQueryState],
   );
 
   // Fetch query data
@@ -355,7 +443,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         },
       });
     },
-    [invalidateCache, subscribe]
+    [invalidateCache, subscribe],
   );
 
   // Cancel fetch
@@ -386,7 +474,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         isValidating: false,
       });
     },
-    [updateQueryState]
+    [updateQueryState],
   );
 
   // Update notification settings
@@ -404,7 +492,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         console.error("[DataContext] Failed to update notification:", error);
       }
     },
-    []
+    [],
   );
 
   const value = useMemo(
@@ -427,7 +515,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       hasCachedData,
       invalidateCache,
       subscribe,
-    ]
+    ],
   );
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;

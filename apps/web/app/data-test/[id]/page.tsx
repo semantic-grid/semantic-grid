@@ -61,9 +61,9 @@ const generateColumns = (rows: any[]): GridColDef[] => {
 const DataTestPage = () => {
   const params = useParams();
   const router = useRouter();
-  const queryId = params.id as string;
+  const queryId = (params?.id as string) || "";
 
-  const [inputQueryId, setInputQueryId] = useState(queryId || "");
+  const [inputQueryId, setInputQueryId] = useState(queryId);
   const [sql, setSql] = useState("SELECT 1"); // Placeholder SQL
   const [sseEvents, setSSEEvents] = useState<SSEEvent[]>([]);
   const [manualNotify, setManualNotify] = useState(false);
@@ -87,10 +87,12 @@ const DataTestPage = () => {
 
   // Log SSE events
   const logEvent = useCallback((type: string, data: any) => {
+    const iso = new Date().toISOString();
+    const time = iso.split("T")[1]?.slice(0, 12) ?? iso;
     setSSEEvents((prev) => [
       {
         type,
-        timestamp: new Date().toISOString().split("T")[1].slice(0, 12),
+        timestamp: time,
         data,
       },
       ...prev.slice(0, 49), // Keep last 50 events
