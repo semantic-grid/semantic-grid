@@ -188,8 +188,7 @@ const DataTestPage = () => {
 
   // Telemetry SSE connection
   useEffect(() => {
-    const apiBase = process.env.NEXT_PUBLIC_API_URL || "";
-    const eventSource = new EventSource(`${apiBase}/telemetry/sse`);
+    const eventSource = new EventSource("/api/apegpt/telemetry/sse");
 
     eventSource.addEventListener("telemetry", (e) => {
       try {
