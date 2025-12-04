@@ -52,6 +52,7 @@ interface TelemetryData {
 import type { DataGridRefs } from "@/app/components/QueryDataGrid";
 import { QueryDataGrid } from "@/app/components/QueryDataGrid";
 import { useData } from "@/app/contexts/DataContext";
+import { useAppUser } from "@/app/hooks/useAppUser";
 import { useQueryObject } from "@/app/hooks/useQueryObject";
 
 type SSEEvent = {
@@ -195,6 +196,8 @@ const DataTestPage = () => {
   const params = useParams();
   const router = useRouter();
   const queryId = (params?.id as string) || "";
+  const { authUser } = useAppUser();
+  const userEmail = authUser?.email as string | undefined;
 
   const [inputQueryId, setInputQueryId] = useState(queryId);
   const [sseEvents, setSSEEvents] = useState<SSEEvent[]>([]);
@@ -302,6 +305,7 @@ const DataTestPage = () => {
     offset,
     ...(sortBy ? { sortBy, sortOrder } : {}),
     ...(force ? { force: true } : {}),
+    ...(userEmail ? { userEmail } : {}),
   });
 
   const handleFetch = () => {
@@ -370,7 +374,9 @@ const DataTestPage = () => {
   };
 
   return (
-    <Box sx={{ display: "flex", height: "100vh", overflow: "hidden" }}>
+    <Box
+      sx={{ display: "flex", height: "100vh", overflow: "hidden", pb: "32px" }}
+    >
       {/* Left Panel - DataGrid */}
       <Box
         sx={{
