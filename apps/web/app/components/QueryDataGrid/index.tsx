@@ -34,17 +34,12 @@ export const QueryDataGrid = ({
   pageSize = 100,
 }: QueryDataGridProps) => {
   const apiRef = useGridApiRef();
-  const {
-    getQueryState,
-    fetchQuery,
-    cancelFetch,
-    isStale,
-    hasCachedData,
-  } = useData();
+  const { getQueryState, fetchQuery, cancelFetch, isStale, hasCachedData } =
+    useData();
 
   // Internal state for sort/selection if not controlled externally
   const [internalSortModel, setInternalSortModel] = useState(
-    externalSortModel || []
+    externalSortModel || [],
   );
   const [internalSelectionModel, setInternalSelectionModel] = useState<
     number[]
@@ -65,7 +60,7 @@ export const QueryDataGrid = ({
         setInternalSortModel(newModel);
       }
     },
-    [onSortModelChange]
+    [onSortModelChange],
   );
 
   const handleSelectionChange = useCallback(
@@ -76,13 +71,28 @@ export const QueryDataGrid = ({
         setInternalSelectionModel(newSelection);
       }
     },
-    [onSelectionModelChange]
+    [onSelectionModelChange],
   );
 
   // Get current query state
   const queryState = getQueryState(queryId);
-  const { status, rows, totalRows, error, isFetching, isValidating } =
-    queryState;
+  const {
+    status,
+    rows: rawRows,
+    totalRows,
+    error,
+    isFetching,
+    isValidating,
+  } = queryState;
+
+  // Ensure rows have unique IDs - stabilize with length check
+  const rows = useMemo(() => {
+    if (rawRows.length === 0) return [];
+    return rawRows.map((row, index) => ({
+      ...row,
+      _gridId: row.id ?? index,
+    }));
+  }, [rawRows]);
 
   // Determine UI state based on query state
   const uiState = useMemo((): UIState => {
@@ -108,14 +118,7 @@ export const QueryDataGrid = ({
     }
 
     return "has_cache_fresh";
-  }, [
-    queryId,
-    status,
-    isFetching,
-    performanceWarning,
-    hasCachedData,
-    isStale,
-  ]);
+  }, [queryId, status, isFetching, performanceWarning, hasCachedData, isStale]);
 
   // Action handlers
   const handleFetch = useCallback(() => {
@@ -164,7 +167,10 @@ export const QueryDataGrid = ({
       case "error":
         // eslint-disable-next-line react/no-unstable-nested-components
         return () => (
-          <ErrorOverlay error={error || "Unknown error"} onRetry={handleFetch} />
+          <ErrorOverlay
+            error={error || "Unknown error"}
+            onRetry={handleFetch}
+          />
         );
       case "no_cache_pending":
         // eslint-disable-next-line react/no-unstable-nested-components
@@ -212,7 +218,7 @@ export const QueryDataGrid = ({
 
   // Cell/column click handlers
   const handleColumnHeaderClick = useCallback(
-    (params: { colDef: typeof columns[number] }) => {
+    (params: { colDef: (typeof columns)[number] }) => {
       if (onActiveColumnChange) {
         if (activeColumn && activeColumn.field === params.colDef.field) {
           onActiveColumnChange(null);
@@ -223,7 +229,12 @@ export const QueryDataGrid = ({
       handleSelectionChange([]);
       onActiveRowsChange?.(undefined);
     },
-    [activeColumn, onActiveColumnChange, handleSelectionChange, onActiveRowsChange]
+    [
+      activeColumn,
+      onActiveColumnChange,
+      handleSelectionChange,
+      onActiveRowsChange,
+    ],
   );
 
   const handleCellClick = useCallback(
@@ -236,7 +247,7 @@ export const QueryDataGrid = ({
         handleSelectionChange([]);
       } else if (mouseEvent.shiftKey || mouseEvent.ctrlKey) {
         onActiveRowsChange?.(
-          activeRows ? [...activeRows, params.row] : [params.row]
+          activeRows ? [...activeRows, params.row] : [params.row],
         );
         handleSelectionChange([...selectionModel, params.row.id]);
       } else {
@@ -250,7 +261,7 @@ export const QueryDataGrid = ({
       onActiveColumnChange,
       onActiveRowsChange,
       handleSelectionChange,
-    ]
+    ],
   );
 
   // Show spinner overlay when revalidating with existing data
@@ -280,6 +291,7 @@ export const QueryDataGrid = ({
         rows={rows}
         rowCount={totalRows}
         columns={columns}
+        getRowId={(row) => row._gridId}
         loading={isFetching}
         onColumnHeaderClick={handleColumnHeaderClick}
         onCellClick={handleCellClick}

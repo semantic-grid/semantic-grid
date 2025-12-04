@@ -23,13 +23,57 @@ import {
 const DataContext = createContext<DataContextValue | undefined>(undefined);
 
 // Helper to extract queryId from SWR cache key
-// Key format: $inf$@"/api/apegpt/data/sse","queryId",offset,limit,"sortBy","sortOrder"
+// Key formats:
+//   $inf$@"/api/apegpt/data/sse","queryId",... (SWR infinite)
+//   @"/api/apegpt/data/sse","queryId",... (regular SWR)
 const parseSwrCacheKey = (key: string): string | null => {
   if (!key.includes("/api/apegpt/data/sse")) return null;
 
   // Extract UUID from key
   const match = key.match(/"([a-f0-9-]{36})"/);
   return match?.[1] ?? null;
+};
+
+// Extract rows and totalRows from various cache value formats
+const extractDataFromCacheValue = (
+  value: unknown,
+): { rows: any[]; totalRows: number } | null => {
+  if (!value || typeof value !== "object") return null;
+
+  // Format 1: SWR infinite - array of pages [{rows, total_rows}, ...]
+  if (Array.isArray(value)) {
+    if (value.length === 0) return null;
+    const firstPage = value[0];
+    if (firstPage?.rows) {
+      return {
+        rows: firstPage.rows,
+        totalRows: firstPage.total_rows ?? firstPage.rows.length,
+      };
+    }
+    return null;
+  }
+
+  // Format 2: Direct object with data.rows
+  const obj = value as Record<string, unknown>;
+  if (obj.data && typeof obj.data === "object") {
+    const data = obj.data as Record<string, unknown>;
+    if (Array.isArray(data.rows)) {
+      return {
+        rows: data.rows,
+        totalRows: (data.total_rows as number) ?? data.rows.length,
+      };
+    }
+  }
+
+  // Format 3: Direct object with rows
+  if (Array.isArray(obj.rows)) {
+    return {
+      rows: obj.rows,
+      totalRows: (obj.total_rows as number) ?? obj.rows.length,
+    };
+  }
+
+  return null;
 };
 
 // Hydrate query states from SWR localStorage cache
@@ -52,30 +96,18 @@ const hydrateFromLocalStorage = (): Map<string, QueryState> => {
       if (typeof key !== "string") continue;
 
       const queryId = parseSwrCacheKey(key);
-      if (!queryId) {
-        console.log(
-          `[DataContext] Skipping non-SSE key: ${key.substring(0, 50)}...`,
-        );
-        continue;
-      }
+      if (!queryId) continue;
 
-      // SWR infinite stores array of pages, each page has rows/total_rows
-      if (!Array.isArray(value) || value.length === 0) continue;
-
-      // Get the first page data (offset 0)
-      const firstPage = value[0];
-      if (!firstPage || typeof firstPage !== "object") continue;
-
-      const rows = firstPage.rows || [];
-      const totalRows = firstPage.total_rows || rows.length;
+      const extracted = extractDataFromCacheValue(value);
+      if (!extracted || extracted.rows.length === 0) continue;
 
       // Only hydrate if we don't already have this query or if this has more data
       const existing = states.get(queryId);
-      if (!existing || rows.length > existing.rows.length) {
+      if (!existing || extracted.rows.length > existing.rows.length) {
         states.set(queryId, {
           status: "success",
-          rows,
-          totalRows,
+          rows: extracted.rows,
+          totalRows: extracted.totalRows,
           isFetching: false,
           isValidating: false,
           cachedAt: Date.now(),
