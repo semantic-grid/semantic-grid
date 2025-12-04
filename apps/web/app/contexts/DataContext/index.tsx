@@ -40,15 +40,24 @@ const hydrateFromLocalStorage = (): Map<string, QueryState> => {
 
   try {
     const rawCache = localStorage.getItem("app-cache");
-    if (!rawCache) return states;
+    if (!rawCache) {
+      console.log("[DataContext] No app-cache in localStorage");
+      return states;
+    }
 
     const cacheData: Array<[string, any]> = JSON.parse(rawCache);
+    console.log(`[DataContext] Found ${cacheData.length} cache entries`);
 
     for (const [key, value] of cacheData) {
       if (typeof key !== "string") continue;
 
       const queryId = parseSwrCacheKey(key);
-      if (!queryId) continue;
+      if (!queryId) {
+        console.log(
+          `[DataContext] Skipping non-SSE key: ${key.substring(0, 50)}...`,
+        );
+        continue;
+      }
 
       // SWR infinite stores array of pages, each page has rows/total_rows
       if (!Array.isArray(value) || value.length === 0) continue;
