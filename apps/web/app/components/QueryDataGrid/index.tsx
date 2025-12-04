@@ -18,8 +18,8 @@ import type { QueryDataGridProps, UIState } from "./types";
 
 export const QueryDataGrid = ({
   queryId,
-  sql,
   columns,
+  useSSE = true,
   performanceWarning = false,
   estimatedRows,
   estimatedSizeGb,
@@ -122,40 +122,44 @@ export const QueryDataGrid = ({
 
   // Action handlers
   const handleFetch = useCallback(() => {
-    fetchQuery(queryId, sql, {
-      limit: pageSize,
+    fetchQuery(queryId, {
+      useSSE,
+      pageSize,
       sortBy: sortModel[0]?.field,
       sortOrder: sortModel[0]?.sort || undefined,
     });
-  }, [fetchQuery, queryId, sql, pageSize, sortModel]);
+  }, [fetchQuery, queryId, useSSE, pageSize, sortModel]);
 
   const handleFetchWithNotify = useCallback(() => {
-    fetchQuery(queryId, sql, {
+    fetchQuery(queryId, {
+      useSSE,
       notify: true,
-      limit: pageSize,
+      pageSize,
       sortBy: sortModel[0]?.field,
       sortOrder: sortModel[0]?.sort || undefined,
     });
-  }, [fetchQuery, queryId, sql, pageSize, sortModel]);
+  }, [fetchQuery, queryId, useSSE, pageSize, sortModel]);
 
   const handleRefresh = useCallback(() => {
-    fetchQuery(queryId, sql, {
+    fetchQuery(queryId, {
+      useSSE,
       force: true,
-      limit: pageSize,
+      pageSize,
       sortBy: sortModel[0]?.field,
       sortOrder: sortModel[0]?.sort || undefined,
     });
-  }, [fetchQuery, queryId, sql, pageSize, sortModel]);
+  }, [fetchQuery, queryId, useSSE, pageSize, sortModel]);
 
   const handleRefreshWithNotify = useCallback(() => {
-    fetchQuery(queryId, sql, {
+    fetchQuery(queryId, {
+      useSSE,
       force: true,
       notify: true,
-      limit: pageSize,
+      pageSize,
       sortBy: sortModel[0]?.field,
       sortOrder: sortModel[0]?.sort || undefined,
     });
-  }, [fetchQuery, queryId, sql, pageSize, sortModel]);
+  }, [fetchQuery, queryId, useSSE, pageSize, sortModel]);
 
   const handleCancel = useCallback(() => {
     cancelFetch(queryId);

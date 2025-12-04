@@ -2,8 +2,8 @@ import type { GridColDef, GridSortItem } from "@mui/x-data-grid-pro";
 
 export interface QueryDataGridProps {
   queryId: string;
-  sql: string;
   columns: GridColDef[];
+  useSSE?: boolean; // Default: true
   performanceWarning?: boolean;
   estimatedRows?: number;
   estimatedSizeGb?: number;

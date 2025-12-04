@@ -12,13 +12,24 @@ export interface QueryState {
 }
 
 export interface FetchOptions {
-  force?: boolean; // bypass local cache
-  notify?: boolean; // send email notification on complete
-  userEmail?: string;
-  limit?: number;
-  offset?: number;
+  // Fetch method
+  useSSE?: boolean; // true = SSE stream, false = regular fetch (default: true)
+
+  // Pagination
+  paginate?: boolean; // enable pagination / infinite scroll
+  pageSize?: number; // default: 100
+  offset?: number; // default: 0
+
+  // Sorting
   sortBy?: string;
   sortOrder?: "asc" | "desc";
+
+  // Cache control
+  force?: boolean; // bypass local cache, force refetch
+
+  // Notifications
+  notify?: boolean; // send email notification on complete
+  userEmail?: string;
 }
 
 export interface SubscriptionCallbacks {
@@ -33,19 +44,22 @@ export interface DataContextValue {
   getQueryState: (queryId: string) => QueryState;
 
   // Actions
-  fetchQuery: (queryId: string, sql: string, options?: FetchOptions) => void;
+  fetchQuery: (queryId: string, options?: FetchOptions) => void;
   cancelFetch: (queryId: string) => void;
-  updateNotification: (queryId: string, notify: boolean, userEmail?: string) => void;
+  updateNotification: (
+    queryId: string,
+    notify: boolean,
+    userEmail?: string,
+  ) => void;
 
   // Cache helpers
   isStale: (queryId: string) => boolean;
   hasCachedData: (queryId: string) => boolean;
   invalidateCache: (queryId: string) => void;
 
-  // SSE subscription (internal use by hooks)
+  // SSE subscription (for components that need fine-grained control)
   subscribe: (
     queryId: string,
-    sql: string,
     options: FetchOptions,
     callbacks: SubscriptionCallbacks,
   ) => () => void; // returns unsubscribe function

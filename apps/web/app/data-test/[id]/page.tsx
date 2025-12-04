@@ -64,7 +64,6 @@ const DataTestPage = () => {
   const queryId = (params?.id as string) || "";
 
   const [inputQueryId, setInputQueryId] = useState(queryId);
-  const [sql, setSql] = useState("SELECT 1"); // Placeholder SQL
   const [sseEvents, setSSEEvents] = useState<SSEEvent[]>([]);
   const [manualNotify, setManualNotify] = useState(false);
 
@@ -101,12 +100,12 @@ const DataTestPage = () => {
 
   const handleFetch = () => {
     logEvent("action", { action: "fetchQuery", queryId, force: false });
-    fetchQuery(queryId, sql, { notify: manualNotify });
+    fetchQuery(queryId, { notify: manualNotify });
   };
 
   const handleForceFetch = () => {
     logEvent("action", { action: "fetchQuery", queryId, force: true });
-    fetchQuery(queryId, sql, { force: true, notify: manualNotify });
+    fetchQuery(queryId, { force: true, notify: manualNotify });
   };
 
   const handleCancel = () => {
@@ -124,7 +123,6 @@ const DataTestPage = () => {
 
     const unsubscribe = subscribe(
       queryId,
-      sql,
       { notify: manualNotify },
       {
         onData: (data) => {
@@ -192,7 +190,6 @@ const DataTestPage = () => {
           {queryId ? (
             <QueryDataGrid
               queryId={queryId}
-              sql={sql}
               columns={columns}
               performanceWarning={false}
             />

@@ -76,55 +76,29 @@ const extractDataFromCacheValue = (
   return null;
 };
 
-// Persist data to localStorage in SWR-compatible format
+const DATA_CONTEXT_CACHE_KEY = "data-context-cache";
+
+// Persist data to localStorage
 const persistToLocalStorage = (
   queryId: string,
   data: { rows: any[]; total_rows: number },
-  options: {
-    offset?: number;
-    limit?: number;
-    sortBy?: string;
-    sortOrder?: string;
-  } = {},
 ): void => {
   if (typeof window === "undefined") return;
 
   try {
-    const rawCache = localStorage.getItem("app-cache");
-    const cacheData: Array<[string, any]> = rawCache
-      ? JSON.parse(rawCache)
-      : [];
+    const rawCache = localStorage.getItem(DATA_CONTEXT_CACHE_KEY);
+    const cache: Record<
+      string,
+      { rows: any[]; total_rows: number; cachedAt: number }
+    > = rawCache ? JSON.parse(rawCache) : {};
 
-    // Build SWR-compatible cache key
-    // Format: @"/api/apegpt/data/sse","queryId",offset,limit,"sortBy","sortOrder"
-    const offset = options.offset ?? 0;
-    const limit = options.limit ?? 100;
-    const sortBy = options.sortBy ?? "";
-    const sortOrder = options.sortOrder ?? "asc";
-    const cacheKey = `@"/api/apegpt/data/sse","${queryId}",${offset},${limit},"${sortBy}","${sortOrder}"`;
-
-    // SWR stores data wrapped in {data: ...}
-    const cacheValue = {
-      data: { rows: data.rows, total_rows: data.total_rows },
+    cache[queryId] = {
+      rows: data.rows,
+      total_rows: data.total_rows,
+      cachedAt: Date.now(),
     };
 
-    // Find and update existing entry for this exact queryId, or add new one
-    // Use exact match with quotes to avoid partial UUID matches
-    const existingIndex = cacheData.findIndex(
-      ([key]) => typeof key === "string" && key.includes(`"${queryId}"`),
-    );
-
-    if (existingIndex >= 0) {
-      console.log(
-        `[DataContext] Updating existing cache entry at index ${existingIndex}`,
-      );
-      cacheData[existingIndex] = [cacheKey, cacheValue];
-    } else {
-      console.log(`[DataContext] Adding new cache entry for ${queryId}`);
-      cacheData.push([cacheKey, cacheValue]);
-    }
-
-    localStorage.setItem("app-cache", JSON.stringify(cacheData));
+    localStorage.setItem(DATA_CONTEXT_CACHE_KEY, JSON.stringify(cache));
     console.log(
       `[DataContext] Persisted query ${queryId} to localStorage (${data.rows.length} rows)`,
     );
@@ -133,21 +107,53 @@ const persistToLocalStorage = (
   }
 };
 
-// Hydrate query states from SWR localStorage cache
+// Hydrate query states from localStorage (both DataContext cache and legacy SWR cache)
 const hydrateFromLocalStorage = (): Map<string, QueryState> => {
   const states = new Map<string, QueryState>();
 
   if (typeof window === "undefined") return states;
 
+  // First, hydrate from DataContext's own cache
+  try {
+    const rawDataContextCache = localStorage.getItem(DATA_CONTEXT_CACHE_KEY);
+    if (rawDataContextCache) {
+      const cache: Record<
+        string,
+        { rows: any[]; total_rows: number; cachedAt: number }
+      > = JSON.parse(rawDataContextCache);
+
+      for (const [queryId, data] of Object.entries(cache)) {
+        if (data.rows && data.rows.length > 0) {
+          states.set(queryId, {
+            status: "success",
+            rows: data.rows,
+            totalRows: data.total_rows,
+            isFetching: false,
+            isValidating: false,
+            cachedAt: data.cachedAt,
+          });
+          console.log(
+            `[DataContext] Hydrated query ${queryId}: ${data.rows.length} rows (from data-context-cache)`,
+          );
+        }
+      }
+    }
+  } catch (error) {
+    console.warn(
+      "[DataContext] Failed to hydrate from data-context-cache:",
+      error,
+    );
+  }
+
+  // Then, hydrate from legacy SWR cache (for backwards compatibility)
   try {
     const rawCache = localStorage.getItem("app-cache");
     if (!rawCache) {
-      console.log("[DataContext] No app-cache in localStorage");
+      console.log(`[DataContext] Hydrated ${states.size} queries total`);
       return states;
     }
 
     const cacheData: Array<[string, any]> = JSON.parse(rawCache);
-    console.log(`[DataContext] Found ${cacheData.length} cache entries`);
 
     for (const [key, value] of cacheData) {
       if (typeof key !== "string") continue;
@@ -170,14 +176,15 @@ const hydrateFromLocalStorage = (): Map<string, QueryState> => {
           cachedAt: Date.now(),
         });
         console.log(
-          `[DataContext] Hydrated query ${queryId}: ${extracted.rows.length} rows`,
+          `[DataContext] Hydrated query ${queryId}: ${extracted.rows.length} rows (from app-cache)`,
         );
       }
     }
   } catch (error) {
-    console.warn("[DataContext] Failed to hydrate from localStorage:", error);
+    console.warn("[DataContext] Failed to hydrate from app-cache:", error);
   }
 
+  console.log(`[DataContext] Hydrated ${states.size} queries total`);
   return states;
 };
 
@@ -192,7 +199,7 @@ export const useData = () => {
 // Helper to build SSE URL
 const buildSSEUrl = (queryId: string, options: FetchOptions): string => {
   const params = new URLSearchParams();
-  if (options.limit) params.append("limit", String(options.limit));
+  if (options.pageSize) params.append("limit", String(options.pageSize));
   if (options.offset) params.append("offset", String(options.offset));
   if (options.sortBy) params.append("sort_by", options.sortBy);
   if (options.sortOrder) params.append("sort_order", options.sortOrder);
@@ -202,13 +209,24 @@ const buildSSEUrl = (queryId: string, options: FetchOptions): string => {
   return `/api/apegpt/data/sse/${queryId}?${params.toString()}`;
 };
 
+// Helper to build regular fetch URL
+const buildFetchUrl = (queryId: string, options: FetchOptions): string => {
+  const params = new URLSearchParams();
+  if (options.pageSize) params.append("limit", String(options.pageSize));
+  if (options.offset) params.append("offset", String(options.offset));
+  if (options.sortBy) params.append("sort_by", options.sortBy);
+  if (options.sortOrder) params.append("sort_order", options.sortOrder);
+  return `/api/apegpt/data/${queryId}?${params.toString()}`;
+};
+
 // Helper to build cache key
 const buildCacheKey = (queryId: string, options: FetchOptions): string => {
-  return `${queryId}:${options.limit || 100}:${options.offset || 0}:${options.sortBy || ""}:${options.sortOrder || "asc"}`;
+  return `${queryId}:${options.pageSize || 100}:${options.offset || 0}:${options.sortBy || ""}:${options.sortOrder || "asc"}`;
 };
 
 interface FetchState {
   eventSource: EventSource | null;
+  abortController: AbortController | null;
   status:
     | "connecting"
     | "counting"
@@ -235,9 +253,6 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 
     const hydrated = hydrateFromLocalStorage();
     if (hydrated.size > 0) {
-      console.log(
-        `[DataContext] Hydrated ${hydrated.size} queries from localStorage`,
-      );
       setQueryStates(hydrated);
     }
   }, []);
@@ -298,7 +313,80 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     });
   }, []);
 
-  // Create EventSource and set up listeners
+  // Regular fetch (non-SSE)
+  const doRegularFetch = useCallback(
+    async (
+      queryId: string,
+      options: FetchOptions,
+      cacheKey: string,
+      fetchState: FetchState,
+    ) => {
+      const abortController = new AbortController();
+      fetchState.abortController = abortController;
+
+      try {
+        updateQueryState(queryId, { isFetching: true, status: "pending" });
+
+        const url = buildFetchUrl(queryId, options);
+        const response = await fetch(url, { signal: abortController.signal });
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        fetchState.status = "complete";
+
+        // Update query state
+        updateQueryState(queryId, {
+          status: "success",
+          rows: data.rows,
+          totalRows: data.total_rows,
+          isFetching: false,
+          isValidating: false,
+          cachedAt: Date.now(),
+          error: undefined,
+        });
+
+        // Persist to localStorage
+        persistToLocalStorage(queryId, data);
+
+        // Notify subscribers
+        fetchState.subscribers.forEach((sub) => {
+          sub.onData(data);
+        });
+      } catch (error: any) {
+        if (error.name === "AbortError") {
+          fetchState.status = "cancelled";
+          updateQueryState(queryId, {
+            status: "idle",
+            isFetching: false,
+            isValidating: false,
+          });
+          fetchState.subscribers.forEach((sub) => {
+            sub.onCancelled?.();
+          });
+        } else {
+          fetchState.status = "error";
+          const errorMessage = error.message || "Failed to fetch data";
+          updateQueryState(queryId, {
+            status: "error",
+            error: errorMessage,
+            isFetching: false,
+            isValidating: false,
+          });
+          fetchState.subscribers.forEach((sub) => {
+            sub.onError(errorMessage);
+          });
+        }
+      } finally {
+        fetchStatesRef.current.delete(cacheKey);
+      }
+    },
+    [updateQueryState],
+  );
+
+  // Create EventSource and set up listeners (SSE fetch)
   const createEventSource = useCallback(
     (
       url: string,
@@ -310,14 +398,14 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       fetchState.eventSource = eventSource;
 
       eventSource.addEventListener("connected", (e) => {
-        console.log("[DataContext] Connected:", e.data);
+        console.log("[DataContext] SSE Connected:", e.data);
         fetchState.status = "fetching";
         updateQueryState(queryId, { isFetching: true, status: "pending" });
       });
 
       eventSource.addEventListener("reconnected", (e) => {
         const data = JSON.parse(e.data);
-        console.log("[DataContext] Reconnected:", data.message);
+        console.log("[DataContext] SSE Reconnected:", data.message);
         fetchState.status = "fetching";
       });
 
@@ -353,7 +441,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
           error: undefined,
         });
 
-        // Persist to localStorage for cache reuse
+        // Persist to localStorage
         persistToLocalStorage(queryId, data);
 
         // Notify subscribers
@@ -388,7 +476,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         fetchStatesRef.current.delete(cacheKey);
       });
 
-      eventSource.addEventListener("cancelled", (e) => {
+      eventSource.addEventListener("cancelled", () => {
         fetchState.status = "cancelled";
 
         updateQueryState(queryId, {
@@ -435,18 +523,18 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     [updateQueryState],
   );
 
-  // Subscribe to data fetch
+  // Subscribe to data fetch (supports both SSE and regular fetch)
   const subscribe = useCallback(
     (
       queryId: string,
-      sql: string,
       options: FetchOptions,
       callbacks: SubscriptionCallbacks,
     ): (() => void) => {
       const cacheKey = buildCacheKey(queryId, options);
       const subscriptionId = `${cacheKey}-${Date.now()}-${Math.random()}`;
+      const useSSE = options.useSSE !== false; // Default to SSE
 
-      console.log("[DataContext] Subscribe:", { queryId, cacheKey });
+      console.log("[DataContext] Subscribe:", { queryId, cacheKey, useSSE });
 
       // Cancel any pending cleanup
       const cleanupTimer = cleanupTimersRef.current.get(cacheKey);
@@ -461,6 +549,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         // Create new fetch state
         fetchState = {
           eventSource: null,
+          abortController: null,
           status: "connecting",
           subscribers: new Map(),
         };
@@ -474,9 +563,13 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
           status: "pending",
         });
 
-        // Create EventSource
-        const url = buildSSEUrl(queryId, options);
-        createEventSource(url, cacheKey, queryId, fetchState);
+        // Start fetch based on method
+        if (useSSE) {
+          const url = buildSSEUrl(queryId, options);
+          createEventSource(url, cacheKey, queryId, fetchState);
+        } else {
+          doRegularFetch(queryId, options, cacheKey, fetchState);
+        }
       }
 
       // Add subscriber
@@ -503,6 +596,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
             const state = fetchStatesRef.current.get(cacheKey);
             if (state && state.subscribers.size === 0) {
               state.eventSource?.close();
+              state.abortController?.abort();
               fetchStatesRef.current.delete(cacheKey);
               cleanupTimersRef.current.delete(cacheKey);
             }
@@ -512,12 +606,18 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         }
       };
     },
-    [createEventSource, hasCachedData, queryStates, updateQueryState],
+    [
+      createEventSource,
+      doRegularFetch,
+      hasCachedData,
+      queryStates,
+      updateQueryState,
+    ],
   );
 
-  // Fetch query data
+  // Fetch query data (main entry point)
   const fetchQuery = useCallback(
-    (queryId: string, sql: string, options: FetchOptions = {}) => {
+    (queryId: string, options: FetchOptions = {}) => {
       console.log("[DataContext] fetchQuery:", { queryId, options });
 
       // If force, invalidate local cache first
@@ -533,10 +633,9 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         return;
       }
 
-      // Start fetch via subscribe (will handle SSE connection)
-      const unsubscribe = subscribe(queryId, sql, options, {
+      // Start fetch via subscribe
+      const unsubscribe = subscribe(queryId, options, {
         onData: () => {
-          // Data will be in queryState
           unsubscribe();
         },
         onError: () => {
@@ -556,11 +655,12 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       fetchStatesRef.current.forEach((state, key) => {
         if (key.startsWith(queryId)) {
           state.eventSource?.close();
+          state.abortController?.abort();
           fetchStatesRef.current.delete(key);
         }
       });
 
-      // Call backend to cancel
+      // Call backend to cancel (for SSE/long-running queries)
       try {
         await fetch(`/api/apegpt/data/${queryId}`, {
           method: "DELETE",
