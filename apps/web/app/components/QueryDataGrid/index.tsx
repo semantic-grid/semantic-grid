@@ -1,7 +1,12 @@
 "use client";
 
-import { Box } from "@mui/material";
-import type { GridCellParams, MuiEvent } from "@mui/x-data-grid-pro";
+import { Add } from "@mui/icons-material";
+import { Box, IconButton, Tooltip } from "@mui/material";
+import type {
+  GridCellParams,
+  GridColDef,
+  MuiEvent,
+} from "@mui/x-data-grid-pro";
 import { DataGridPro, useGridApiRef } from "@mui/x-data-grid-pro";
 import React, {
   useCallback,
@@ -21,11 +26,12 @@ import {
   NoDataOverlay,
   SpinnerOverlay,
 } from "./overlays";
-import type { QueryDataGridProps, UIState } from "./types";
+import type { DataGridRefs, QueryDataGridProps, UIState } from "./types";
 
 export const QueryDataGrid = ({
   queryId,
-  columns,
+  columns: externalColumns,
+  queryMetadata,
   useSSE = true,
   paginate = true,
   performanceWarning = false,
@@ -40,6 +46,9 @@ export const QueryDataGrid = ({
   selectionModel: externalSelectionModel,
   onSelectionModelChange,
   pageSize = 100,
+  showAddColumn = false,
+  onAddColumn,
+  onRefsChange,
 }: QueryDataGridProps) => {
   const apiRef = useGridApiRef();
   const gridRef = useRef<HTMLDivElement>(null);
@@ -125,6 +134,114 @@ export const QueryDataGrid = ({
       _gridId: row.id ?? index,
     }));
   }, [rawRows]);
+
+  // Helper to find canonical column from metadata
+  const getColumnMetadata = useCallback(
+    (field: string) => {
+      return queryMetadata?.columns?.find(
+        (c) => c.id === field || c.column_name === field,
+      );
+    },
+    [queryMetadata],
+  );
+
+  // Enhance columns with descriptions and highlight classes
+  const columns = useMemo(() => {
+    const enhancedColumns: GridColDef[] = externalColumns.map((col) => {
+      const metadata = getColumnMetadata(col.field);
+      return {
+        ...col,
+        // Add description from metadata if available
+        headerDescription: metadata?.column_description || col.headerName,
+        // Add highlight class when column is active
+        headerClassName:
+          activeColumn?.field === col.field ? "highlight-column-header" : "",
+      };
+    });
+
+    // Add NEW COLUMN button if enabled
+    if (showAddColumn && onAddColumn) {
+      const addColumnDef: GridColDef = {
+        field: "__add_column__",
+        headerName: "",
+        sortable: false,
+        filterable: false,
+        width: 70,
+        disableColumnMenu: true,
+        renderHeader: () => (
+          <Box
+            display="flex"
+            justifyContent="center"
+            alignItems="center"
+            height="100%"
+          >
+            <Tooltip title="Add new column">
+              <IconButton
+                size="small"
+                color="primary"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onAddColumn();
+                }}
+                sx={{ border: "solid 1px #EF8626" }}
+              >
+                <Add sx={{ fontSize: "12px" }} />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        ),
+        renderCell: () => null,
+      };
+      enhancedColumns.push(addColumnDef);
+    }
+
+    return enhancedColumns;
+  }, [
+    externalColumns,
+    activeColumn,
+    showAddColumn,
+    onAddColumn,
+    getColumnMetadata,
+  ]);
+
+  // Compute and expose refs when selection changes
+  useEffect(() => {
+    if (!onRefsChange) return;
+
+    const refs: DataGridRefs = {};
+
+    // Build cols ref: [column_name, ...values from all rows]
+    if (activeColumn && activeColumn.field !== "__add_column__") {
+      const colMeta = getColumnMetadata(activeColumn.field);
+      const columnName = colMeta?.column_name || activeColumn.field;
+      refs.cols = [
+        columnName,
+        ...rows.map((r) => r[columnName]?.toString() || ""),
+      ];
+    }
+
+    // Build rows ref: [headers, ...row_values]
+    if (activeRows && activeRows.length > 0 && queryMetadata?.columns) {
+      const headers = queryMetadata.columns.map(
+        (c) => c.column_alias || c.column_name || c.id,
+      );
+      refs.rows = [
+        headers,
+        ...activeRows
+          .filter(Boolean)
+          .map((r) => Object.values(r).slice(1).filter(Boolean)),
+      ];
+    }
+
+    onRefsChange(refs);
+  }, [
+    activeColumn,
+    activeRows,
+    rows,
+    queryMetadata,
+    getColumnMetadata,
+    onRefsChange,
+  ]);
 
   // Infinite scroll: load more when nearing bottom
   useEffect(() => {

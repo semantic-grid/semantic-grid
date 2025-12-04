@@ -19,11 +19,12 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import type { GridColDef } from "@mui/x-data-grid-pro";
+import type { GridColDef, GridSortItem } from "@mui/x-data-grid-pro";
 import { formatDistanceToNow } from "date-fns";
 import { useParams, useRouter } from "next/navigation";
 import React, { useCallback, useEffect, useState } from "react";
 
+import type { DataGridRefs } from "@/app/components/QueryDataGrid";
 import { QueryDataGrid } from "@/app/components/QueryDataGrid";
 import { useData } from "@/app/contexts/DataContext";
 import { useQueryObject } from "@/app/hooks/useQueryObject";
@@ -79,6 +80,14 @@ const DataTestPage = () => {
   const [performanceWarning, setPerformanceWarning] = useState(false);
   const [estimatedRows, setEstimatedRows] = useState<number | undefined>();
   const [estimatedSizeGb, setEstimatedSizeGb] = useState<number | undefined>();
+
+  // Selection state
+  const [sortModel, setSortModel] = useState<GridSortItem[]>([]);
+  const [activeColumn, setActiveColumn] = useState<GridColDef | null>(null);
+  const [activeRows, setActiveRows] = useState<any[] | undefined>(undefined);
+  const [selectionModel, setSelectionModel] = useState<number[]>([]);
+  const [showAddColumn, setShowAddColumn] = useState(true);
+  const [refs, setRefs] = useState<DataGridRefs>({});
 
   // Fetch query metadata
   const { data: queryMetadata, isLoading: isLoadingMetadata } =
@@ -242,12 +251,27 @@ const DataTestPage = () => {
             <QueryDataGrid
               queryId={queryId}
               columns={columns}
+              queryMetadata={queryMetadata}
               useSSE={useSSE}
               paginate={paginate}
               pageSize={pageSize}
               performanceWarning={performanceWarning}
               estimatedRows={estimatedRows}
               estimatedSizeGb={estimatedSizeGb}
+              sortModel={sortModel}
+              onSortModelChange={setSortModel}
+              activeColumn={activeColumn}
+              onActiveColumnChange={setActiveColumn}
+              activeRows={activeRows}
+              onActiveRowsChange={setActiveRows}
+              selectionModel={selectionModel}
+              onSelectionModelChange={setSelectionModel}
+              showAddColumn={showAddColumn}
+              onAddColumn={() => {
+                console.log("[DataTest] Add column clicked");
+                alert("Add Column button clicked!");
+              }}
+              onRefsChange={setRefs}
             />
           ) : (
             <Box
@@ -474,7 +498,104 @@ const DataTestPage = () => {
                         </Typography>
                       )}
                     </Stack>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={showAddColumn}
+                            onChange={(e) => setShowAddColumn(e.target.checked)}
+                            size="small"
+                          />
+                        }
+                        label="Add Column Btn"
+                      />
+                    </Stack>
                   </Stack>
+                </CardContent>
+              </Card>
+
+              {/* Selection & Refs */}
+              <Card sx={{ mb: 2 }} variant="outlined">
+                <CardContent sx={{ py: 1, "&:last-child": { pb: 1 } }}>
+                  <Typography
+                    variant="subtitle2"
+                    color="text.secondary"
+                    gutterBottom
+                  >
+                    Selection & Refs
+                  </Typography>
+                  <Table size="small">
+                    <TableBody>
+                      <TableRow>
+                        <TableCell sx={{ py: 0.5, border: 0 }}>
+                          Active Column
+                        </TableCell>
+                        <TableCell
+                          sx={{
+                            py: 0.5,
+                            border: 0,
+                            fontFamily: "monospace",
+                            fontSize: 11,
+                          }}
+                        >
+                          {activeColumn?.field ?? "none"}
+                        </TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell sx={{ py: 0.5, border: 0 }}>
+                          Active Rows
+                        </TableCell>
+                        <TableCell
+                          sx={{
+                            py: 0.5,
+                            border: 0,
+                            fontFamily: "monospace",
+                            fontSize: 11,
+                          }}
+                        >
+                          {activeRows?.length ?? 0} selected
+                        </TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell sx={{ py: 0.5, border: 0 }}>
+                          Refs.cols
+                        </TableCell>
+                        <TableCell
+                          sx={{
+                            py: 0.5,
+                            border: 0,
+                            fontFamily: "monospace",
+                            fontSize: 10,
+                            maxWidth: 200,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                          }}
+                        >
+                          {refs.cols
+                            ? `[${refs.cols[0]}, ${refs.cols.length - 1} values]`
+                            : "none"}
+                        </TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell sx={{ py: 0.5, border: 0 }}>
+                          Refs.rows
+                        </TableCell>
+                        <TableCell
+                          sx={{
+                            py: 0.5,
+                            border: 0,
+                            fontFamily: "monospace",
+                            fontSize: 10,
+                            maxWidth: 200,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                          }}
+                        >
+                          {refs.rows ? `${refs.rows.length - 1} rows` : "none"}
+                        </TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
                 </CardContent>
               </Card>
 
