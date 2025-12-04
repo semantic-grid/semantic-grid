@@ -196,11 +196,20 @@ export const useData = () => {
   return context;
 };
 
+// When paginate=false, fetch all data (large limit)
+// When paginate=true, use the specified pageSize for incremental loading
+const ALL_DATA_LIMIT = 10000;
+
 // Helper to build SSE URL
 const buildSSEUrl = (queryId: string, options: FetchOptions): string => {
   const params = new URLSearchParams();
-  if (options.pageSize) params.append("limit", String(options.pageSize));
-  if (options.offset) params.append("offset", String(options.offset));
+  // If paginate=false, use large limit to fetch all data at once
+  const limit =
+    options.paginate === false ? ALL_DATA_LIMIT : options.pageSize || 100;
+  params.append("limit", String(limit));
+  if (options.paginate !== false && options.offset) {
+    params.append("offset", String(options.offset));
+  }
   if (options.sortBy) params.append("sort_by", options.sortBy);
   if (options.sortOrder) params.append("sort_order", options.sortOrder);
   if (options.force) params.append("force", "true");
@@ -212,8 +221,13 @@ const buildSSEUrl = (queryId: string, options: FetchOptions): string => {
 // Helper to build regular fetch URL
 const buildFetchUrl = (queryId: string, options: FetchOptions): string => {
   const params = new URLSearchParams();
-  if (options.pageSize) params.append("limit", String(options.pageSize));
-  if (options.offset) params.append("offset", String(options.offset));
+  // If paginate=false, use large limit to fetch all data at once
+  const limit =
+    options.paginate === false ? ALL_DATA_LIMIT : options.pageSize || 100;
+  params.append("limit", String(limit));
+  if (options.paginate !== false && options.offset) {
+    params.append("offset", String(options.offset));
+  }
   if (options.sortBy) params.append("sort_by", options.sortBy);
   if (options.sortOrder) params.append("sort_order", options.sortOrder);
   return `/api/apegpt/data/${queryId}?${params.toString()}`;

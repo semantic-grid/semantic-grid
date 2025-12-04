@@ -59,8 +59,24 @@ export const QueryDataGrid = ({
       } else {
         setInternalSortModel(newModel);
       }
+
+      // Trigger server-side sort by refetching with new sort params
+      if (newModel.length > 0 && newModel[0]) {
+        fetchQuery(queryId, {
+          useSSE,
+          pageSize,
+          sortBy: newModel[0].field,
+          sortOrder: newModel[0].sort ?? undefined,
+        });
+      } else {
+        // No sort - refetch without sort params
+        fetchQuery(queryId, {
+          useSSE,
+          pageSize,
+        });
+      }
     },
-    [onSortModelChange],
+    [onSortModelChange, fetchQuery, queryId, useSSE, pageSize],
   );
 
   const handleSelectionChange = useCallback(
