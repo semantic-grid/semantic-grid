@@ -1,8 +1,15 @@
 "use client";
 
+import { Box } from "@mui/material";
 import type { GridCellParams, MuiEvent } from "@mui/x-data-grid-pro";
 import { DataGridPro, useGridApiRef } from "@mui/x-data-grid-pro";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import { useData } from "@/app/contexts/DataContext";
 
@@ -20,6 +27,7 @@ export const QueryDataGrid = ({
   queryId,
   columns,
   useSSE = true,
+  paginate = true,
   performanceWarning = false,
   estimatedRows,
   estimatedSizeGb,
@@ -34,8 +42,16 @@ export const QueryDataGrid = ({
   pageSize = 100,
 }: QueryDataGridProps) => {
   const apiRef = useGridApiRef();
-  const { getQueryState, fetchQuery, cancelFetch, isStale, hasCachedData } =
-    useData();
+  const gridRef = useRef<HTMLDivElement>(null);
+  const {
+    getQueryState,
+    fetchQuery,
+    loadMore,
+    cancelFetch,
+    isStale,
+    hasCachedData,
+    isReachingEnd,
+  } = useData();
 
   // Internal state for sort/selection if not controlled externally
   const [internalSortModel, setInternalSortModel] = useState(
@@ -110,13 +126,72 @@ export const QueryDataGrid = ({
     }));
   }, [rawRows]);
 
+  // Infinite scroll: load more when nearing bottom
+  useEffect(() => {
+    if (!paginate) return; // Skip if pagination disabled (fetch all mode)
+
+    const grid = gridRef.current;
+    if (!grid) return;
+
+    const scrollable = grid.querySelector(
+      ".MuiDataGrid-virtualScroller",
+    ) as HTMLDivElement;
+    if (!scrollable) return;
+
+    const handleScroll = () => {
+      const { scrollTop, clientHeight, scrollHeight } = scrollable;
+      const nearBottom =
+        scrollTop + clientHeight >= scrollHeight - clientHeight * 1.5;
+
+      if (
+        nearBottom &&
+        !isReachingEnd(queryId) &&
+        !isFetching &&
+        !isValidating
+      ) {
+        console.log("[QueryDataGrid] Nearing bottom, loading more...");
+        loadMore(queryId, {
+          useSSE,
+          pageSize,
+          sortBy: sortModel[0]?.field,
+          sortOrder: sortModel[0]?.sort ?? undefined,
+        });
+      }
+    };
+
+    scrollable.addEventListener("scroll", handleScroll);
+    return () => scrollable.removeEventListener("scroll", handleScroll);
+  }, [
+    paginate,
+    queryId,
+    isFetching,
+    isValidating,
+    isReachingEnd,
+    loadMore,
+    useSSE,
+    pageSize,
+    sortModel,
+  ]);
+
   // Determine UI state based on query state
+  // Key insight: if we have rows displayed, keep showing them during refetch (sort, pagination)
   const uiState = useMemo((): UIState => {
     const hasCache = hasCachedData(queryId);
+    const hasDisplayedRows = rows.length > 0;
     const stale = isStale(queryId);
 
-    if (status === "error") {
+    if (status === "error" && !hasDisplayedRows) {
       return "error";
+    }
+
+    // If we have rows on screen, don't show loading overlay - use spinner instead
+    if (hasDisplayedRows) {
+      if (stale) {
+        return performanceWarning
+          ? "has_cache_stale_warning"
+          : "has_cache_stale";
+      }
+      return "has_cache_fresh";
     }
 
     if (!hasCache) {
@@ -128,13 +203,21 @@ export const QueryDataGrid = ({
         : "no_cache_no_pending";
     }
 
-    // Has cached data
+    // Has cached data but no rows displayed yet
     if (stale) {
       return performanceWarning ? "has_cache_stale_warning" : "has_cache_stale";
     }
 
     return "has_cache_fresh";
-  }, [queryId, status, isFetching, performanceWarning, hasCachedData, isStale]);
+  }, [
+    queryId,
+    status,
+    rows.length,
+    isFetching,
+    performanceWarning,
+    hasCachedData,
+    isStale,
+  ]);
 
   // Action handlers
   const handleFetch = useCallback(() => {
@@ -284,14 +367,8 @@ export const QueryDataGrid = ({
     ],
   );
 
-  // Show spinner overlay when revalidating with existing data
-  const showSpinnerOverlay =
-    (uiState === "has_cache_stale" || uiState === "has_cache_fresh") &&
-    isValidating;
-
   return (
-    <>
-      {showSpinnerOverlay && <SpinnerOverlay />}
+    <Box ref={gridRef} sx={{ width: "100%", height: "100%" }}>
       <DataGridPro
         apiRef={apiRef}
         density="compact"
@@ -337,6 +414,8 @@ export const QueryDataGrid = ({
         slots={{
           noRowsOverlay: noRowsOverlayComponent,
           // eslint-disable-next-line react/no-unstable-nested-components
+          loadingOverlay: () => <SpinnerOverlay onCancel={handleCancel} />,
+          // eslint-disable-next-line react/no-unstable-nested-components
           footer: () => (
             <QueryDataGridFooter
               isFetching={isFetching}
@@ -374,7 +453,7 @@ export const QueryDataGrid = ({
           },
         }}
       />
-    </>
+    </Box>
   );
 };
 

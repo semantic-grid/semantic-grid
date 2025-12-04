@@ -4,6 +4,7 @@ export interface QueryDataGridProps {
   queryId: string;
   columns: GridColDef[];
   useSSE?: boolean; // Default: true
+  paginate?: boolean; // Default: true - enables infinite scroll; false = fetch all at once
   performanceWarning?: boolean;
   estimatedRows?: number;
   estimatedSizeGb?: number;

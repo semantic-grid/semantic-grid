@@ -57,8 +57,8 @@ export const FetchOverlay = ({
           {estimatedRows
             ? `${estimatedRows.toLocaleString()} rows`
             : "a large dataset"}
-          {estimatedSizeGb ? ` (~${estimatedSizeGb.toFixed(2)} GB)` : ""} and may
-          take several minutes.
+          {estimatedSizeGb ? ` (~${estimatedSizeGb.toFixed(2)} GB)` : ""} and
+          may take several minutes.
         </Typography>
         <Typography
           variant="body2"
@@ -140,20 +140,31 @@ export const LoadingOverlay = ({
   </Box>
 );
 
-export const SpinnerOverlay = () => (
+interface SpinnerOverlayProps {
+  onCancel?: () => void;
+}
+
+export const SpinnerOverlay = ({ onCancel }: SpinnerOverlayProps) => (
   <Box
-    position="absolute"
-    top={0}
-    left={0}
-    width="100%"
-    height="100%"
-    bgcolor="rgba(0, 0, 0, 0.5)"
-    zIndex={10}
     display="flex"
+    flexDirection="column"
     alignItems="center"
     justifyContent="center"
+    height="100%"
+    gap={2}
   >
     <CircularProgress variant="indeterminate" />
+    {onCancel && (
+      <Button
+        variant="outlined"
+        size="small"
+        startIcon={<Cancel />}
+        onClick={onCancel}
+        sx={{ textTransform: "none" }}
+      >
+        Cancel
+      </Button>
+    )}
   </Box>
 );
 

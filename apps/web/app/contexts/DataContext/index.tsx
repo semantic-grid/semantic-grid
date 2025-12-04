@@ -710,25 +710,127 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     [],
   );
 
+  // Check if all rows have been loaded
+  const isReachingEnd = useCallback(
+    (queryId: string): boolean => {
+      const state = queryStates.get(queryId);
+      if (!state) return false;
+      return state.rows.length >= state.totalRows;
+    },
+    [queryStates],
+  );
+
+  // Load more rows (for infinite scroll)
+  const loadMore = useCallback(
+    (queryId: string, options: FetchOptions = {}) => {
+      const state = queryStates.get(queryId);
+      if (!state) {
+        console.log("[DataContext] loadMore: No state for queryId", queryId);
+        return;
+      }
+
+      // Don't load more if already at end or currently fetching
+      if (state.rows.length >= state.totalRows) {
+        console.log("[DataContext] loadMore: Already at end");
+        return;
+      }
+      if (state.isFetching) {
+        console.log("[DataContext] loadMore: Already fetching");
+        return;
+      }
+
+      const pageSize = options.pageSize || 100;
+      const nextOffset = state.rows.length;
+
+      console.log("[DataContext] loadMore:", {
+        queryId,
+        currentRows: state.rows.length,
+        totalRows: state.totalRows,
+        nextOffset,
+        pageSize,
+      });
+
+      // Fetch next page and append rows
+      const loadMoreOptions: FetchOptions = {
+        ...options,
+        offset: nextOffset,
+        pageSize,
+        paginate: true,
+      };
+
+      const cacheKey = buildCacheKey(queryId, loadMoreOptions);
+
+      // Check if already fetching this page
+      if (fetchStatesRef.current.has(cacheKey)) {
+        console.log("[DataContext] loadMore: Already fetching this page");
+        return;
+      }
+
+      updateQueryState(queryId, { isFetching: true });
+
+      const unsubscribe = subscribe(queryId, loadMoreOptions, {
+        onData: (data) => {
+          // Append new rows to existing rows
+          setQueryStates((prev) => {
+            const newMap = new Map(prev);
+            const current = newMap.get(queryId) || DEFAULT_QUERY_STATE;
+            const newRows = [...current.rows, ...data.rows];
+            newMap.set(queryId, {
+              ...current,
+              rows: newRows,
+              totalRows: data.total_rows,
+              status: "success",
+              isFetching: false,
+              isValidating: false,
+              cachedAt: Date.now(),
+            });
+
+            // Persist updated data to localStorage
+            persistToLocalStorage(queryId, {
+              rows: newRows,
+              total_rows: data.total_rows,
+            });
+
+            return newMap;
+          });
+          unsubscribe();
+        },
+        onError: (error) => {
+          updateQueryState(queryId, {
+            error,
+            isFetching: false,
+            isValidating: false,
+          });
+          unsubscribe();
+        },
+      });
+    },
+    [queryStates, subscribe, updateQueryState],
+  );
+
   const value = useMemo(
     (): DataContextValue => ({
       getQueryState,
       fetchQuery,
+      loadMore,
       cancelFetch,
       updateNotification,
       isStale,
       hasCachedData,
       invalidateCache,
+      isReachingEnd,
       subscribe,
     }),
     [
       getQueryState,
       fetchQuery,
+      loadMore,
       cancelFetch,
       updateNotification,
       isStale,
       hasCachedData,
       invalidateCache,
+      isReachingEnd,
       subscribe,
     ],
   );

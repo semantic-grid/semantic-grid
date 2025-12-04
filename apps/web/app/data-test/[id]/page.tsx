@@ -22,10 +22,11 @@ import {
 import type { GridColDef } from "@mui/x-data-grid-pro";
 import { formatDistanceToNow } from "date-fns";
 import { useParams, useRouter } from "next/navigation";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 
 import { QueryDataGrid } from "@/app/components/QueryDataGrid";
 import { useData } from "@/app/contexts/DataContext";
+import { useQueryObject } from "@/app/hooks/useQueryObject";
 
 type SSEEvent = {
   type: string;
@@ -70,11 +71,35 @@ const DataTestPage = () => {
   const [sseEvents, setSSEEvents] = useState<SSEEvent[]>([]);
   const [manualNotify, setManualNotify] = useState(false);
   const [useSSE, setUseSSE] = useState(true);
-  const [paginate, setPaginate] = useState(false);
+  const [paginate, setPaginate] = useState(true);
   const [pageSize, setPageSize] = useState(100);
   const [offset, setOffset] = useState(0);
   const [sortBy, setSortBy] = useState("");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+  const [performanceWarning, setPerformanceWarning] = useState(false);
+  const [estimatedRows, setEstimatedRows] = useState<number | undefined>();
+  const [estimatedSizeGb, setEstimatedSizeGb] = useState<number | undefined>();
+
+  // Fetch query metadata
+  const { data: queryMetadata, isLoading: isLoadingMetadata } =
+    useQueryObject(queryId);
+
+  // Update defaults from query metadata when it loads
+  useEffect(() => {
+    if (queryMetadata?.explanation) {
+      const { performance_warning, estimated_rows, estimated_size_gb } =
+        queryMetadata.explanation;
+      if (performance_warning !== undefined) {
+        setPerformanceWarning(performance_warning);
+      }
+      if (estimated_rows !== undefined) {
+        setEstimatedRows(estimated_rows);
+      }
+      if (estimated_size_gb !== undefined) {
+        setEstimatedSizeGb(estimated_size_gb);
+      }
+    }
+  }, [queryMetadata]);
 
   const {
     getQueryState,
@@ -217,7 +242,12 @@ const DataTestPage = () => {
             <QueryDataGrid
               queryId={queryId}
               columns={columns}
-              performanceWarning={false}
+              useSSE={useSSE}
+              paginate={paginate}
+              pageSize={pageSize}
+              performanceWarning={performanceWarning}
+              estimatedRows={estimatedRows}
+              estimatedSizeGb={estimatedSizeGb}
             />
           ) : (
             <Box
@@ -421,6 +451,28 @@ const DataTestPage = () => {
                         }
                         label="Notify"
                       />
+                    </Stack>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={performanceWarning}
+                            onChange={(e) =>
+                              setPerformanceWarning(e.target.checked)
+                            }
+                            size="small"
+                          />
+                        }
+                        label="Perf Warning"
+                      />
+                      {performanceWarning && (
+                        <Typography variant="caption" color="text.secondary">
+                          {estimatedRows?.toLocaleString() ?? "?"} rows
+                          {estimatedSizeGb
+                            ? ` / ${estimatedSizeGb.toFixed(2)} GB`
+                            : ""}
+                        </Typography>
+                      )}
                     </Stack>
                   </Stack>
                 </CardContent>

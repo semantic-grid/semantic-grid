@@ -45,6 +45,7 @@ export interface DataContextValue {
 
   // Actions
   fetchQuery: (queryId: string, options?: FetchOptions) => void;
+  loadMore: (queryId: string, options?: FetchOptions) => void; // fetch next page, append rows
   cancelFetch: (queryId: string) => void;
   updateNotification: (
     queryId: string,
@@ -56,6 +57,7 @@ export interface DataContextValue {
   isStale: (queryId: string) => boolean;
   hasCachedData: (queryId: string) => boolean;
   invalidateCache: (queryId: string) => void;
+  isReachingEnd: (queryId: string) => boolean; // true if all rows loaded
 
   // SSE subscription (for components that need fine-grained control)
   subscribe: (
