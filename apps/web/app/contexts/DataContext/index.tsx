@@ -76,6 +76,56 @@ const extractDataFromCacheValue = (
   return null;
 };
 
+// Persist data to localStorage in SWR-compatible format
+const persistToLocalStorage = (
+  queryId: string,
+  data: { rows: any[]; total_rows: number },
+  options: {
+    offset?: number;
+    limit?: number;
+    sortBy?: string;
+    sortOrder?: string;
+  } = {},
+): void => {
+  if (typeof window === "undefined") return;
+
+  try {
+    const rawCache = localStorage.getItem("app-cache");
+    const cacheData: Array<[string, any]> = rawCache
+      ? JSON.parse(rawCache)
+      : [];
+
+    // Build SWR-compatible cache key
+    // Format: @"/api/apegpt/data/sse","queryId",offset,limit,"sortBy","sortOrder"
+    const offset = options.offset ?? 0;
+    const limit = options.limit ?? 100;
+    const sortBy = options.sortBy ?? "";
+    const sortOrder = options.sortOrder ?? "asc";
+    const cacheKey = `@"/api/apegpt/data/sse","${queryId}",${offset},${limit},"${sortBy}","${sortOrder}"`;
+
+    // SWR stores data wrapped in {data: ...}
+    const cacheValue = {
+      data: { rows: data.rows, total_rows: data.total_rows },
+    };
+
+    // Find and update existing entry or add new one
+    const existingIndex = cacheData.findIndex(
+      ([key]) => typeof key === "string" && key.includes(queryId),
+    );
+
+    if (existingIndex >= 0) {
+      cacheData[existingIndex] = [cacheKey, cacheValue];
+    } else {
+      cacheData.push([cacheKey, cacheValue]);
+    }
+
+    localStorage.setItem("app-cache", JSON.stringify(cacheData));
+    console.log(`[DataContext] Persisted query ${queryId} to localStorage`);
+  } catch (error) {
+    console.warn("[DataContext] Failed to persist to localStorage:", error);
+  }
+};
+
 // Hydrate query states from SWR localStorage cache
 const hydrateFromLocalStorage = (): Map<string, QueryState> => {
   const states = new Map<string, QueryState>();
@@ -295,6 +345,9 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
           cachedAt: Date.now(),
           error: undefined,
         });
+
+        // Persist to localStorage for cache reuse
+        persistToLocalStorage(queryId, data);
 
         // Notify subscribers
         fetchState.subscribers.forEach((sub) => {
