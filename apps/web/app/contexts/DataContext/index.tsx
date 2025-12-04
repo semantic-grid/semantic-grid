@@ -318,13 +318,36 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     [queryStates],
   );
 
-  // Invalidate cache for a query
+  // Invalidate cache for a query (both in-memory and localStorage)
   const invalidateCache = useCallback((queryId: string) => {
+    // Clear in-memory state
     setQueryStates((prev) => {
       const newMap = new Map(prev);
       newMap.delete(queryId);
       return newMap;
     });
+
+    // Clear from localStorage (data-context-cache)
+    if (typeof window !== "undefined") {
+      try {
+        const rawCache = localStorage.getItem(DATA_CONTEXT_CACHE_KEY);
+        if (rawCache) {
+          const cache = JSON.parse(rawCache);
+          if (cache[queryId]) {
+            delete cache[queryId];
+            localStorage.setItem(DATA_CONTEXT_CACHE_KEY, JSON.stringify(cache));
+            console.log(
+              `[DataContext] Invalidated localStorage cache for ${queryId}`,
+            );
+          }
+        }
+      } catch (error) {
+        console.warn(
+          "[DataContext] Failed to invalidate localStorage cache:",
+          error,
+        );
+      }
+    }
   }, []);
 
   // Regular fetch (non-SSE)
