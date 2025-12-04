@@ -1,6 +1,6 @@
 "use client";
 
-import { Add } from "@mui/icons-material";
+import { Add, ArrowDownward, ArrowUpward, SwapVert } from "@mui/icons-material";
 import { Box, IconButton, Tooltip } from "@mui/material";
 import type {
   GridCellParams,
@@ -145,17 +145,58 @@ export const QueryDataGrid = ({
     [queryMetadata],
   );
 
-  // Enhance columns with descriptions and highlight classes
+  // Custom sort click handler - separate from column header selection
+  const handleSortClick = useCallback(
+    (field: string) => (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation(); // Prevent triggering column selection
+
+      const currentSort = sortModel[0];
+      const direction =
+        currentSort?.field === field && currentSort?.sort !== "asc"
+          ? "asc"
+          : "desc";
+
+      handleSortModelChange([{ field, sort: direction }]);
+    },
+    [sortModel, handleSortModelChange],
+  );
+
+  // Enhance columns with descriptions, tooltips, and custom sort buttons
   const columns = useMemo(() => {
     const enhancedColumns: GridColDef[] = externalColumns.map((col) => {
       const metadata = getColumnMetadata(col.field);
+      const description =
+        metadata?.column_description || col.headerName || col.field;
+
       return {
         ...col,
-        // Add description from metadata if available
-        headerDescription: metadata?.column_description || col.headerName,
+        // Disable built-in sorting - we use custom sort buttons
+        sortable: false,
         // Add highlight class when column is active
         headerClassName:
           activeColumn?.field === col.field ? "highlight-column-header" : "",
+        // Custom header with tooltip and sort button
+        renderHeader: (params: any) => (
+          <Tooltip title={description}>
+            <Box display="flex" alignItems="center">
+              <span>{params.colDef.headerName}</span>
+              <IconButton size="small" onClick={handleSortClick(col.field)}>
+                {sortModel[0]?.field === col.field &&
+                  sortModel[0]?.sort === "asc" && (
+                    <ArrowDownward sx={{ fontSize: 16 }} />
+                  )}
+                {sortModel[0]?.field === col.field &&
+                  sortModel[0]?.sort === "desc" && (
+                    <ArrowUpward sx={{ fontSize: 16 }} />
+                  )}
+                {(!sortModel[0] || sortModel[0]?.field !== col.field) && (
+                  <SwapVert color="disabled" sx={{ fontSize: 16 }} />
+                )}
+              </IconButton>
+            </Box>
+          </Tooltip>
+        ),
       };
     });
 
@@ -202,6 +243,8 @@ export const QueryDataGrid = ({
     showAddColumn,
     onAddColumn,
     getColumnMetadata,
+    sortModel,
+    handleSortClick,
   ]);
 
   // Compute and expose refs when selection changes
@@ -479,17 +522,23 @@ export const QueryDataGrid = ({
       const mouseEvent = event as React.MouseEvent;
       onActiveColumnChange?.(null);
 
-      if (selectionModel.includes(params.row.id)) {
+      // Use _gridId for selection tracking (matches getRowId)
+      const rowId = params.row._gridId;
+
+      if (selectionModel.includes(rowId)) {
+        // Clicking already-selected row clears selection
         onActiveRowsChange?.(undefined);
         handleSelectionChange([]);
       } else if (mouseEvent.shiftKey || mouseEvent.ctrlKey) {
+        // Multi-select with Shift/Ctrl
         onActiveRowsChange?.(
           activeRows ? [...activeRows, params.row] : [params.row],
         );
-        handleSelectionChange([...selectionModel, params.row.id]);
+        handleSelectionChange([...selectionModel, rowId]);
       } else {
+        // Single select
         onActiveRowsChange?.([params.row]);
-        handleSelectionChange([params.row.id]);
+        handleSelectionChange([rowId]);
       }
     },
     [
@@ -510,15 +559,17 @@ export const QueryDataGrid = ({
         paginationMode="server"
         sortModel={sortModel}
         disableMultipleRowSelection={false}
-        onSortModelChange={handleSortModelChange}
         paginationModel={paginationModel}
         onPaginationModelChange={setPaginationModel}
         disableRowSelectionOnClick
         rowSelectionModel={selectionModel}
         onRowSelectionModelChange={(newSelection) => {
+          // Update selection model - clears active column
           handleSelectionChange(newSelection as number[]);
           onActiveColumnChange?.(null);
         }}
+        // Disable built-in sort handling - we use custom sort buttons
+        onSortModelChange={() => {}}
         rows={rows}
         rowCount={totalRows}
         columns={columns}
@@ -527,14 +578,11 @@ export const QueryDataGrid = ({
         onColumnHeaderClick={handleColumnHeaderClick}
         onCellClick={handleCellClick}
         getRowClassName={(params) => {
-          if (
-            activeRows
-              ?.filter(Boolean)
-              .find((r: any) => r?.id === params.row?.id)
-          ) {
-            return "highlighted-row";
-          }
-          return "";
+          // Check if this row is in activeRows by matching _gridId
+          const isActive = activeRows
+            ?.filter(Boolean)
+            .some((r: any) => r?._gridId === params.row?._gridId);
+          return isActive ? "highlighted-row" : "";
         }}
         getCellClassName={(params) => {
           if (
