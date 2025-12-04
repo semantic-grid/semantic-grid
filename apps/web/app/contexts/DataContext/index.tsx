@@ -548,13 +548,29 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       const subscriptionId = `${cacheKey}-${Date.now()}-${Math.random()}`;
       const useSSE = options.useSSE !== false; // Default to SSE
 
-      console.log("[DataContext] Subscribe:", { queryId, cacheKey, useSSE });
+      console.log("[DataContext] Subscribe:", {
+        queryId,
+        cacheKey,
+        useSSE,
+        force: options.force,
+      });
 
       // Cancel any pending cleanup
       const cleanupTimer = cleanupTimersRef.current.get(cacheKey);
       if (cleanupTimer) {
         clearTimeout(cleanupTimer);
         cleanupTimersRef.current.delete(cacheKey);
+      }
+
+      // If force=true, clear any existing fetch state to ensure a fresh request
+      if (options.force) {
+        const existingState = fetchStatesRef.current.get(cacheKey);
+        if (existingState) {
+          existingState.eventSource?.close();
+          existingState.abortController?.abort();
+          fetchStatesRef.current.delete(cacheKey);
+          console.log("[DataContext] Force: cleared existing fetch state");
+        }
       }
 
       let fetchState = fetchStatesRef.current.get(cacheKey);
