@@ -646,6 +646,7 @@ export const QueryDataGrid = ({
         sortingMode="server"
         paginationMode="server"
         sortModel={sortModel}
+        disableAutosize
         disableMultipleRowSelection={false}
         paginationModel={paginationModel}
         onPaginationModelChange={setPaginationModel}
