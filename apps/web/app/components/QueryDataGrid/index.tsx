@@ -269,7 +269,12 @@ export const QueryDataGrid = ({
     const refs: DataGridRefs = {};
 
     // Build cols ref: [column_name, ...values from all rows]
-    if (activeColumn && activeColumn.field !== "__add_column__") {
+    // Exclude special fields: __add_column__ (add column button) and "general" (general section)
+    if (
+      activeColumn &&
+      activeColumn.field !== "__add_column__" &&
+      activeColumn.field !== "general"
+    ) {
       const colMeta = getColumnMetadata(activeColumn.field);
       const columnName = colMeta?.column_name || activeColumn.field;
       refs.cols = [

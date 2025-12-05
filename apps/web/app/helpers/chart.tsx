@@ -46,8 +46,23 @@ const mapColumnType = (dbType?: string): string | undefined => {
   return "string";
 };
 
-export const buildGridColumns = (query: TQuery) => {
+// Successor type for linked query navigation in StyledValue
+type Successor = {
+  name: string;
+  id: string;
+  refs?: any;
+  session_id?: string;
+};
+
+export const buildGridColumns = (
+  query: TQuery,
+  options?: {
+    successors?: Successor[];
+  },
+): GridColDef[] => {
   if (!query || !query.columns) return [];
+
+  const successors = options?.successors || [];
 
   return (
     query.columns?.map((col: TColumn, idx: number) => ({
@@ -67,7 +82,7 @@ export const buildGridColumns = (query: TQuery) => {
           columnType={col.column_type?.replace("Nullable(", "")}
           value={params.value}
           params={params}
-          successors={[]}
+          successors={successors}
         />
       ),
     })) || []
@@ -78,7 +93,7 @@ export const buildGridColumns = (query: TQuery) => {
 export const timeKey = (t?: string) => t?.toLowerCase()?.includes("date");
 
 // Helper to get the original DB type from a grid column
-const getDbType = (col: GridColDef): string | undefined =>
+const getDbType = (col: GridColDef | undefined): string | undefined =>
   (col as any)?._dbType || col?.type;
 
 // Find column by matching field name (with or without col_ prefix)

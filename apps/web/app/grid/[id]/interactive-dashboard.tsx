@@ -15,6 +15,8 @@ import type { GridColDef } from "@mui/x-data-grid";
 import { useRouter } from "next/navigation";
 import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
 
+import { QueryDataGrid } from "@/app/components/QueryDataGrid";
+import type { DataGridRefs } from "@/app/components/QueryDataGrid/types";
 import HighlightedSQL from "@/app/components/SqlView";
 import { AppContext } from "@/app/contexts/App";
 import { useGridSession } from "@/app/contexts/GridSession";
@@ -31,7 +33,6 @@ import { useLocalStorage } from "@/app/hooks/useLocalStorage";
 import type { TColumn } from "@/app/lib/types";
 
 import { ChatContainer } from "./chat-container";
-import { DataTable } from "./table";
 
 export interface IInteractiveDashboardProps {
   // user?: Claims | null;
@@ -49,7 +50,7 @@ export interface IInteractiveDashboardProps {
   // error?: any;
   // pendingRequest?: { session_id: string; sequence_number: number } | null; // Pending message, if any
   ancestors?: { id: string; name: string }[]; // Ancestors of the current chat
-  // successors?: any[]; // Children of the current chat
+  successors?: { name: string; id: string; refs?: any; session_id?: string }[]; // Children/linked sessions
   welcomeMessage?: string | null;
   suggestedPrompts?: string[];
 }
@@ -81,6 +82,7 @@ export const InteractiveDashboard = ({
   metadata,
   // pendingRequest,
   ancestors = [],
+  successors = [],
   welcomeMessage,
   suggestedPrompts,
 }: IInteractiveDashboardProps) => {
@@ -92,9 +94,18 @@ export const InteractiveDashboard = ({
     mergedSql,
     isReachingEnd,
     isValidating,
-    setSize,
+    loadMoreRows,
     scrollToBottom,
     requestId,
+    activeColumn,
+    setActiveColumn,
+    activeRows,
+    setActiveRows,
+    selectionModel,
+    setSelectionModel,
+    setNewCol,
+    onFetchData,
+    query: sessionQuery,
   } = useGridSession();
   const { mode, isLarge } = useContext(ThemeContext);
   const { tab, setTab } = useContext(AppContext);
@@ -124,16 +135,22 @@ export const InteractiveDashboard = ({
     [latestUpdate],
   );
 
-  const query = useMemo(() => {
-    if (!sections || sections.length === 0) {
-      return null;
-    }
-    const selected = sections.find((s) => s.requestId === requestId)?.query;
-    if (selected) {
-      return selected;
-    }
-    return sections.slice(-1)[0]?.query;
-  }, [sections, requestId]);
+  // Use query from GridSessionProvider (already computed based on requestId)
+  const query = sessionQuery;
+
+  // Performance warning info from query
+  const performanceWarning = query?.explanation?.performance_warning ?? false;
+  const estimatedRows = query?.explanation?.estimated_rows;
+  const estimatedSizeGb = query?.explanation?.estimated_size_gb;
+
+  // Handler for add column
+  const handleAddColumn = () => {
+    setNewCol(true);
+    setActiveColumn({
+      field: "new_column",
+      headerName: "New Column",
+    } as GridColDef);
+  };
 
   const gridRef = useRef<HTMLDivElement | null>(null);
 
@@ -264,7 +281,7 @@ export const InteractiveDashboard = ({
       ) {
         if (!isReachingEnd && !isLoading && !isValidating) {
           console.log("Nearing the bottom, loading more data...");
-          setSize((s) => s + 1);
+          loadMoreRows();
         }
       }
     };
@@ -339,10 +356,10 @@ export const InteractiveDashboard = ({
   const gridColumns: GridColDef[] = useMemo(() => {
     if (!query) return [];
 
-    const userColumns = buildGridColumns(query);
+    const userColumns = buildGridColumns(query, { successors });
 
     return [...userColumns];
-  }, [query]);
+  }, [query, successors]);
 
   const guessedChartType = useMemo(() => {
     // guess based on gridColumns, i.e. if type of the first column is date, then line chart
@@ -583,7 +600,26 @@ export const InteractiveDashboard = ({
                         />
                       </Box>
                     )}
-                    {view === "grid" && <DataTable />}
+                    {view === "grid" && query?.query_id && (
+                      <QueryDataGrid
+                        queryId={query.query_id}
+                        columns={gridColumns}
+                        queryMetadata={query}
+                        paginate={true}
+                        pageSize={100}
+                        performanceWarning={performanceWarning}
+                        estimatedRows={estimatedRows}
+                        estimatedSizeGb={estimatedSizeGb}
+                        activeColumn={activeColumn}
+                        onActiveColumnChange={setActiveColumn}
+                        activeRows={activeRows ?? undefined}
+                        onActiveRowsChange={setActiveRows}
+                        selectionModel={selectionModel}
+                        onSelectionModelChange={setSelectionModel}
+                        showAddColumn={true}
+                        onAddColumn={handleAddColumn}
+                      />
+                    )}
                     {/* <Popover
                       open={!!contextMenu}
                       onClose={handleClose}
@@ -692,7 +728,26 @@ export const InteractiveDashboard = ({
               <Box>
                 <Container disableGutters maxWidth={false}>
                   <Box ref={gridRef}>
-                    <DataTable />
+                    {query?.query_id && (
+                      <QueryDataGrid
+                        queryId={query.query_id}
+                        columns={gridColumns}
+                        queryMetadata={query}
+                        paginate={true}
+                        pageSize={100}
+                        performanceWarning={performanceWarning}
+                        estimatedRows={estimatedRows}
+                        estimatedSizeGb={estimatedSizeGb}
+                        activeColumn={activeColumn}
+                        onActiveColumnChange={setActiveColumn}
+                        activeRows={activeRows ?? undefined}
+                        onActiveRowsChange={setActiveRows}
+                        selectionModel={selectionModel}
+                        onSelectionModelChange={setSelectionModel}
+                        showAddColumn={true}
+                        onAddColumn={handleAddColumn}
+                      />
+                    )}
                   </Box>
                 </Container>
               </Box>

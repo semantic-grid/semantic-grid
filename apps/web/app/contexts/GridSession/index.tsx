@@ -28,12 +28,11 @@ import { createRequest } from "@/app/actions";
 import { increaseTrialCount } from "@/app/chat/actions";
 import { StyledValue } from "@/app/components/StyledValue";
 import { AppContext } from "@/app/contexts/App";
-import { useDataFetch } from "@/app/contexts/DataFetchContext";
+import { useData } from "@/app/contexts/DataContext";
 import { useSessionContext } from "@/app/contexts/SessionStatus";
 import { isSolanaAddress, isSolanaSignature } from "@/app/helpers/cell";
 
 import { useAppUser } from "@/app/hooks/useAppUser";
-import { useInfiniteQuery } from "@/app/hooks/useInfiniteQuery";
 import { useUserSession } from "@/app/hooks/useUserSession";
 import type {
   TChatMessage,
@@ -105,12 +104,12 @@ export interface ChatSessionContextType {
   mergedSql: string | undefined;
   isReachingEnd: boolean;
   isValidating: boolean;
-  setSize: React.Dispatch<React.SetStateAction<number>>;
+  loadMoreRows: () => void;
   metadata: any;
   context: string;
   scrollRef: React.RefObject<HTMLDivElement>;
   scrollToBottom: () => void;
-  abortController?: AbortController;
+  cancelDataFetch: () => void;
   selectedAction: keyof typeof options;
   setSelectedAction: React.Dispatch<React.SetStateAction<keyof typeof options>>;
   requestId: string | undefined;
@@ -588,32 +587,33 @@ export const GridSessionProvider = ({
   const sortBy = sortByCol?.column_name?.replace("col_", "");
   const sortOrder = sortModel[0]?.sort || "asc";
 
+  // Use DataContext for data fetching
+  const {
+    getQueryState,
+    fetchQuery,
+    loadMore,
+    cancelFetch,
+    hasCachedData: checkHasCachedData,
+    isReachingEnd: checkIsReachingEnd,
+  } = useData();
+
+  const queryId = query?.query_id;
+
+  // Get current query state from DataContext
+  const queryState = getQueryState(queryId || "");
   const {
     rows: data,
     totalRows: dataRowCount,
-    setSize,
-    // isFetchingMore,
-    isReachingEnd,
     error: dataError,
-    isLoading,
+    isFetching: isLoading,
     isValidating,
-    abortController,
-    mutate: mutateSWR,
-  } = useInfiniteQuery({
-    id: query?.query_id,
-    sql: query?.sql || metadata?.sql,
-    sortBy,
-    sortOrder,
-    notifyOnComplete,
-    userEmail: notifyOnComplete ? appUser?.email : undefined,
-  });
+  } = queryState;
+
+  const isReachingEnd = queryId ? checkIsReachingEnd(queryId) : false;
+  const hasCachedData = queryId ? checkHasCachedData(queryId) : false;
+
   const hasLoadedOnce = useRef(false);
   const triggered = useRef(false);
-
-  // Simple cache check - SWR returns cached data immediately if available
-  const hasCachedData = useMemo(() => {
-    return data !== undefined && data.length > 0 && !isLoading;
-  }, [data, isLoading]);
 
   useEffect(() => {
     if (activeRows && activeRows?.length < (data?.length || 0)) {
@@ -1007,16 +1007,39 @@ export const GridSessionProvider = ({
 
   const onFetchData = useCallback(
     (withNotification: boolean = false) => {
+      if (!queryId) return;
       console.log(
         `[onFetchData] User requested fetch, withNotification=${withNotification}`,
-        { queryId: query?.query_id },
+        { queryId },
       );
       setNotifyOnComplete(withNotification);
-      // Trigger SWR to fetch data
-      mutateSWR();
+      // Fetch via DataContext
+      fetchQuery(queryId, {
+        pageSize: 100,
+        sortBy,
+        sortOrder,
+        notify: withNotification,
+        userEmail: withNotification ? appUser?.email : undefined,
+      });
     },
-    [query?.query_id, mutateSWR],
+    [queryId, fetchQuery, sortBy, sortOrder, appUser?.email],
   );
+
+  // Wrapper for loadMore to match the old setSize pattern
+  const loadMoreRows = useCallback(() => {
+    if (!queryId) return;
+    loadMore(queryId, {
+      pageSize: 100,
+      sortBy,
+      sortOrder,
+    });
+  }, [queryId, loadMore, sortBy, sortOrder]);
+
+  // Wrapper for cancelFetch
+  const cancelDataFetch = useCallback(() => {
+    if (!queryId) return;
+    cancelFetch(queryId);
+  }, [queryId, cancelFetch]);
 
   return (
     <Index.Provider
@@ -1054,12 +1077,12 @@ export const GridSessionProvider = ({
         mergedSql,
         isReachingEnd,
         isValidating,
-        setSize,
+        loadMoreRows,
         metadata,
         context,
         scrollRef,
         scrollToBottom,
-        abortController,
+        cancelDataFetch,
         selectedAction,
         setSelectedAction,
         requestId,

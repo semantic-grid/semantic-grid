@@ -131,7 +131,7 @@ export const QueryBox = ({
     lastMessages,
     isLoading,
     isValidating,
-    abortController,
+    cancelDataFetch,
     selectedAction,
     setSelectedAction,
   } = useGridSession();
@@ -179,7 +179,7 @@ export const QueryBox = ({
   }, [promptVal]);
 
   const handleStatusClick = (e: React.MouseEvent<HTMLButtonElement>) => {
-    console.log("stop", pending, isLoading, isValidating, abortController);
+    console.log("stop", pending, isLoading, isValidating);
     e.preventDefault();
     if (pending) {
       // Stop the current request
@@ -197,10 +197,10 @@ export const QueryBox = ({
         });
       return;
     }
-    if ((isValidating || isLoading) && abortController) {
-      // Abort the current request
-      console.log("Aborting data request...");
-      abortController.abort();
+    if (isValidating || isLoading) {
+      // Cancel data fetch via DataContext
+      console.log("Cancelling data fetch...");
+      cancelDataFetch();
       return;
     }
     if (inputRef.current && inputRef.current.value) {
