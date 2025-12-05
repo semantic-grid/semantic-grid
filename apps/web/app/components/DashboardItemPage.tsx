@@ -1,28 +1,16 @@
 "use client";
 
-import {
-  alpha,
-  Box,
-  CircularProgress,
-  Container,
-  Paper,
-  Typography,
-} from "@mui/material";
-import { BarChart, ChartsTooltip, LineChart, PieChart } from "@mui/x-charts";
+import { Box, Container, Paper, Typography } from "@mui/material";
 import type { GridColDef } from "@mui/x-data-grid";
-import { DataGridPro as DataGrid } from "@mui/x-data-grid-pro";
 import React, { useEffect, useMemo } from "react";
 
+import { QueryChart } from "@/app/components/QueryChart";
+import type { ChartType } from "@/app/components/QueryChart/types";
+import { QueryDataGrid } from "@/app/components/QueryDataGrid";
 import HighlightedSQL from "@/app/components/SqlView";
+import { useData } from "@/app/contexts/DataContext";
 import { useItemViewContext } from "@/app/contexts/ItemView";
-import {
-  buildGridColumns,
-  buildPieChartSeries,
-  gridDataSet,
-  normalizeDataSet,
-  timeKey,
-} from "@/app/helpers/chart";
-import { useQuery } from "@/app/hooks/useQuery";
+import { buildGridColumns, timeKey } from "@/app/helpers/chart";
 import type { TQuery } from "@/app/lib/types";
 
 export const DashboardItemPage = ({
@@ -38,252 +26,103 @@ export const DashboardItemPage = ({
   itemType?: string;
   chartType?: string;
 }) => {
-  const {
-    data,
-    error: dataError,
-    isLoading,
-  } = useQuery({
-    id: query?.query_id,
-    sql: query?.sql,
-    limit: 20,
-    offset: 0,
-  });
+  const { fetchQuery, hasCachedData } = useData();
 
   const gridColumns: GridColDef[] = useMemo(() => {
     if (!query) return [];
-
-    const userColumns = buildGridColumns(query);
-
-    return [...userColumns];
+    return buildGridColumns(query);
   }, [query]);
 
-  const guessedChartType = useMemo(() => {
-    if (chartType) return chartType;
-    if (!chartType) {
-      // guess based on gridColumns, i.e. if type of the first column is date, then line chart
-      if (timeKey(gridColumns[0]?.type)) return "bar";
-      return "pie"; // default
+  // Guess chart type if not provided
+  const guessedChartType = useMemo((): ChartType => {
+    if (chartType === "line" || chartType === "bar" || chartType === "pie") {
+      return chartType;
     }
-    return null;
+    // Guess based on first column type
+    if (timeKey(gridColumns[0]?.type)) return "bar";
+    return "pie";
   }, [chartType, gridColumns]);
 
   const {
     view,
-    setView,
     chartType: selectedChartType,
     setChartType,
   } = useItemViewContext();
 
+  // Set initial chart type based on guessed value
   useEffect(() => {
-    setChartType(guessedChartType as any);
-  }, []);
+    if (guessedChartType) {
+      setChartType(guessedChartType);
+    }
+  }, [guessedChartType, setChartType]);
 
-  const pieSeries = useMemo(
-    () => buildPieChartSeries(data?.rows || [], gridColumns),
-    [data, gridColumns],
-  );
+  // Auto-fetch data if not cached
+  useEffect(() => {
+    if (query?.query_id && !hasCachedData(query.query_id)) {
+      fetchQuery(query.query_id, { pageSize: 100, paginate: false });
+    }
+  }, [query?.query_id, hasCachedData, fetchQuery]);
 
-  const lineChartSeries = useMemo(
-    () =>
-      gridColumns.slice(1).map((col) => ({
-        id: col.field?.replace("col_", ""),
-        label: col.headerName,
-        dataKey: col.field?.replace("col_", ""), // EXACTLY matches dataset key
-        showMark: false,
-      })),
-    [gridColumns],
-  );
+  // Validate selected chart type
+  const validChartType: ChartType =
+    selectedChartType === "line" ||
+    selectedChartType === "bar" ||
+    selectedChartType === "pie"
+      ? selectedChartType
+      : guessedChartType;
 
-  const xAxis = useMemo(
-    () => [
-      {
-        dataKey: gridColumns[0]?.field?.replace("col_", ""),
-        scaleType: selectedChartType === "bar" ? "band" : "time",
-        // valueFormatter: (value: Date) => value.toLocaleDateString(),
-        valueFormatter: (value: number) => new Date(value).toLocaleDateString(),
-      },
-    ],
-    [gridColumns, selectedChartType],
-  );
-
-  const dataset = useMemo(
-    () => normalizeDataSet(data?.rows || [], gridColumns),
-    [data, gridColumns],
-  );
-
-  const tableDataset = useMemo(
-    () => gridDataSet(data?.rows || [], gridColumns),
-    [data, gridColumns],
-  );
+  if (!query) {
+    return null;
+  }
 
   return (
     <Container maxWidth={false}>
-      {query && !isLoading && (
-        <Paper
-          elevation={0}
-          sx={{ height: "calc(100vh - 64px)", width: "100%" }}
-        >
-          <Typography variant="h6" gutterBottom>
-            {name}
-          </Typography>
-          <Typography variant="body2" gutterBottom>
-            {query.summary}
-          </Typography>
+      <Paper elevation={0} sx={{ height: "calc(100vh - 64px)", width: "100%" }}>
+        <Typography variant="h6" gutterBottom>
+          {name}
+        </Typography>
+        <Typography variant="body2" gutterBottom>
+          {query.summary}
+        </Typography>
 
-          <Box>
-            {view === "chart" && selectedChartType === "line" && (
-              <>
-                <LineChart
-                  yAxis={[{ width: 100 }]}
-                  style={{ height: "80vh", width: "100%" }}
-                  xAxis={xAxis as any} // e.g. 'col_0'
-                  series={lineChartSeries}
-                  dataset={dataset}
-                >
-                  <ChartsTooltip />
-                </LineChart>
-                {isLoading && (
-                  <Box
-                    position="absolute"
-                    top={0}
-                    left={0}
-                    right={0}
-                    bottom={0}
-                    display="flex"
-                    justifyContent="center"
-                    alignItems="center"
-                    bgcolor={(theme) =>
-                      alpha(theme.palette.background.default, 0.6)
-                    }
-                  >
-                    <CircularProgress />
-                  </Box>
-                )}
-              </>
-            )}
-            {view === "chart" && selectedChartType === "bar" && (
-              <>
-                <BarChart
-                  yAxis={[{ width: 100 }]}
-                  style={{ height: "80vh", width: "100%" }}
-                  xAxis={xAxis as any}
-                  series={lineChartSeries}
-                  dataset={dataset}
-                >
-                  <ChartsTooltip />
-                </BarChart>
-                {isLoading && (
-                  <Box
-                    position="absolute"
-                    top={0}
-                    left={0}
-                    right={0}
-                    bottom={0}
-                    display="flex"
-                    justifyContent="center"
-                    alignItems="center"
-                    bgcolor={(theme) =>
-                      alpha(theme.palette.background.default, 0.6)
-                    }
-                  >
-                    <CircularProgress />
-                  </Box>
-                )}
-              </>
-            )}
-            {view === "chart" && selectedChartType === "pie" && (
-              <>
-                <PieChart series={pieSeries} width={200} height={200} />
-                {isLoading && (
-                  <Box
-                    position="absolute"
-                    top={0}
-                    left={0}
-                    right={0}
-                    bottom={0}
-                    display="flex"
-                    justifyContent="center"
-                    alignItems="center"
-                    bgcolor={(theme) =>
-                      alpha(theme.palette.background.default, 0.6)
-                    }
-                  >
-                    <CircularProgress />
-                  </Box>
-                )}
-              </>
-            )}
-            {view === "grid" && (
-              <>
-                {dataError && (
-                  <Box
-                    sx={{
-                      height: "calc(100vh - 180px)",
-                      display: "flex",
-                      justifyContent: "center",
-                      alignItems: "center",
-                    }}
-                  >
-                    <Typography variant="body2" color="textSecondary">
-                      Query Execution Error
-                    </Typography>
-                  </Box>
-                )}
-                {!dataError && (
-                  <DataGrid
-                    density="compact"
-                    rows={tableDataset}
-                    // rowCount={rowCount}
-                    columns={gridColumns}
-                    loading={isLoading} // isLoading ? true : false
-                    sx={{
-                      height: "calc(100vh - 180px)", // Ensure table occupies full vertical space
-                      border: "none", // remove outer border
-                      fontSize: "1rem",
-                      "& .highlight-column": {
-                        backgroundColor: "rgba(255, 165, 0, 0.1)",
-                      },
-                      "& .MuiDataGrid-cell:focus": {
-                        outline: "none",
-                      },
-                      "& .MuiDataGrid-cell:focus-within": {
-                        outline: "none",
-                      },
-                      "& .MuiDataGrid-columnHeader:focus": {
-                        outline: "none",
-                      },
-                      "& .MuiDataGrid-columnHeader:focus-within": {
-                        outline: "none",
-                      },
-                      "& .highlight-column-header": {
-                        backgroundColor: "rgba(255, 165, 0, 0.1) !important", // <- this line
-                      },
-                      "& .highlighted-row": {
-                        backgroundColor: "rgba(255, 165, 0, 0.1)",
-                      },
-                    }}
-                  />
-                )}
-              </>
-            )}
-            {view === "sql" && (
-              <Box
-                sx={{
-                  "& p": {
-                    fontFamily: "monospace",
-                    whiteSpace: "pre-wrap",
-                    color: "text.secondary",
-                  },
-                }}
-              >
-                <HighlightedSQL
-                  code={query?.sql || "No SQL available for this query."}
-                />
-              </Box>
-            )}
-          </Box>
-        </Paper>
-      )}
+        <Box sx={{ height: "calc(100vh - 180px)" }}>
+          {view === "chart" && (
+            <QueryChart
+              queryId={query.query_id}
+              chartType={validChartType}
+              queryMetadata={query}
+              height={window?.innerHeight ? window.innerHeight - 200 : 600}
+            />
+          )}
+
+          {view === "grid" && (
+            <QueryDataGrid
+              queryId={query.query_id}
+              columns={gridColumns}
+              queryMetadata={query}
+              paginate={false}
+              pageSize={100}
+            />
+          )}
+
+          {view === "sql" && (
+            <Box
+              sx={{
+                p: 2,
+                "& p": {
+                  fontFamily: "monospace",
+                  whiteSpace: "pre-wrap",
+                  color: "text.secondary",
+                },
+              }}
+            >
+              <HighlightedSQL
+                code={query?.sql || "No SQL available for this query."}
+              />
+            </Box>
+          )}
+        </Box>
+      </Paper>
     </Container>
   );
 };
