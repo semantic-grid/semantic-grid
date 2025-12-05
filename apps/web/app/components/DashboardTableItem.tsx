@@ -7,6 +7,7 @@ import React, { useEffect, useMemo } from "react";
 import { QueryDataGrid } from "@/app/components/QueryDataGrid";
 import { useData } from "@/app/contexts/DataContext";
 import { buildGridColumns } from "@/app/helpers/chart";
+import { useAppUser } from "@/app/hooks/useAppUser";
 import { useQueryObject } from "@/app/hooks/useQueryObject";
 
 export const DashboardTableItem = ({
@@ -18,6 +19,7 @@ export const DashboardTableItem = ({
 }) => {
   const { data: query, isLoading: isLoadingQuery } = useQueryObject(queryUid);
   const { fetchQuery, hasCachedData } = useData();
+  const { user: appUser } = useAppUser();
 
   // Build columns from query metadata
   const gridColumns: GridColDef[] = useMemo(() => {
@@ -57,6 +59,7 @@ export const DashboardTableItem = ({
         queryMetadata={query}
         paginate={false}
         pageSize={100}
+        userEmail={appUser?.email}
       />
     </Box>
   );

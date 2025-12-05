@@ -11,6 +11,7 @@ import HighlightedSQL from "@/app/components/SqlView";
 import { useData } from "@/app/contexts/DataContext";
 import { useItemViewContext } from "@/app/contexts/ItemView";
 import { buildGridColumns, timeKey } from "@/app/helpers/chart";
+import { useAppUser } from "@/app/hooks/useAppUser";
 import type { TQuery } from "@/app/lib/types";
 
 export const DashboardItemPage = ({
@@ -27,6 +28,7 @@ export const DashboardItemPage = ({
   chartType?: string;
 }) => {
   const { fetchQuery, hasCachedData } = useData();
+  const { user: appUser } = useAppUser();
 
   const gridColumns: GridColDef[] = useMemo(() => {
     if (!query) return [];
@@ -124,6 +126,7 @@ export const DashboardItemPage = ({
               queryMetadata={query}
               paginate={false}
               pageSize={100}
+              userEmail={appUser?.email}
             />
           )}
 

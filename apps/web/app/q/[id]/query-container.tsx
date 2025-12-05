@@ -9,6 +9,7 @@ import { ScrollLockWrapper } from "@/app/components/ScrollLockWrapper";
 import HighlightedSQL from "@/app/components/SqlView";
 import { AppContext } from "@/app/contexts/App";
 import { buildGridColumns } from "@/app/helpers/chart";
+import { useAppUser } from "@/app/hooks/useAppUser";
 import type { TQuery } from "@/app/lib/types";
 
 export interface IQueryContainerProps {
@@ -40,6 +41,7 @@ const CustomTabPanel = (props: TabPanelProps) => {
 
 export const QueryContainer = ({ id, query }: IQueryContainerProps) => {
   const { tab } = useContext(AppContext);
+  const { user: appUser } = useAppUser();
 
   // Build grid columns from query metadata
   const gridColumns = useMemo(() => {
@@ -96,6 +98,7 @@ export const QueryContainer = ({ id, query }: IQueryContainerProps) => {
                     onActiveRowsChange={setActiveRows}
                     selectionModel={selectionModel}
                     onSelectionModelChange={setSelectionModel}
+                    userEmail={appUser?.email}
                   />
                 </ScrollLockWrapper>
               </Box>
