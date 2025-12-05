@@ -22,6 +22,7 @@ import React, {
 import { ResponseTextMessage } from "@/app/components/chat-box/ResponseTextMessage";
 import { ResponseTextStatus } from "@/app/components/chat-box/ResponseTextStatus";
 import CopyQueryUrl from "@/app/components/CopyQueryUrl";
+import { QueryFeedback } from "@/app/components/QueryFeedback";
 import SaveQueryUrl from "@/app/components/SaveQueryUrl";
 import ShareQueryUrl from "@/app/components/ShareQueryUrl";
 import { useGridSession } from "@/app/contexts/GridSession";
@@ -421,25 +422,36 @@ export const ChatContainer = ({
                             section.query &&
                             Boolean(requestId) &&
                             section.requestId === requestId && (
-                              <Stack
-                                sx={{ width: "100%", mt: 0.5 }}
-                                direction="row"
-                                spacing={1}
-                                alignItems="center"
-                                justifyContent="space-between"
-                              >
-                                <Typography
-                                  variant="body2"
-                                  color="textSecondary"
+                              <Box sx={{ width: "100%", mt: 0.5 }}>
+                                <Stack
+                                  direction="row"
+                                  spacing={1}
+                                  alignItems="center"
+                                  justifyContent="space-between"
                                 >
-                                  {rows(section.query?.row_count)}
-                                </Typography>
-                                <Box>
-                                  <CopyQueryUrl section={section} />
-                                  <ShareQueryUrl section={section} />
-                                  <SaveQueryUrl section={section} />
-                                </Box>
-                              </Stack>
+                                  <Stack
+                                    direction="row"
+                                    spacing={1}
+                                    alignItems="center"
+                                  >
+                                    <QueryFeedback
+                                      requestId={section.requestId || ""}
+                                      initialRating={msg.rating}
+                                    />
+                                    <Typography
+                                      variant="body2"
+                                      color="textSecondary"
+                                    >
+                                      {rows(section.query?.row_count)}
+                                    </Typography>
+                                  </Stack>
+                                  <Box>
+                                    <CopyQueryUrl section={section} />
+                                    <ShareQueryUrl section={section} />
+                                    <SaveQueryUrl section={section} />
+                                  </Box>
+                                </Stack>
+                              </Box>
                             )}
                         </Box>
                       </Box>
