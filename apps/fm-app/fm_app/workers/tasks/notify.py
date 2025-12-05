@@ -32,13 +32,14 @@ def send_query_notification(
     summary = None
     try:
         import asyncio
+        from uuid import UUID
 
-        from fm_app.api.db_session import async_session_factory
-        from fm_app.api.stores.query_metadata import get_query_by_id
+        from fm_app.db.db import get_query_by_id
+        from fm_app.workers.db_session import SESSION
 
         async def fetch_summary():
-            async with async_session_factory() as db:
-                query = await get_query_by_id(query_id=query_id, db=db)
+            async with SESSION() as db:  # type: ignore[attr-defined]
+                query = await get_query_by_id(db=db, query_id=UUID(query_id))
                 if query:
                     return query.summary
             return None
