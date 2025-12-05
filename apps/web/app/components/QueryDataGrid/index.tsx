@@ -51,6 +51,7 @@ export const QueryDataGrid = ({
   onRefsChange,
   notify = false,
   userEmail,
+  autoDownload = false,
 }: QueryDataGridProps) => {
   const apiRef = useGridApiRef();
   const gridRef = useRef<HTMLDivElement>(null);
@@ -463,6 +464,66 @@ export const QueryDataGrid = ({
     [fetchQuery, queryId, useSSE, pageSize, sortModel, notify, userEmail],
   );
 
+  // Handle CSV download
+  const handleDownload = useCallback(() => {
+    if (!rows || rows.length === 0) return;
+
+    // Get column headers from the grid columns (excluding special columns)
+    const dataColumns = enhancedColumns.filter(
+      (col) => col.field !== "__add_column__" && !col.field.startsWith("__"),
+    );
+    const headers = dataColumns.map((col) => col.field);
+
+    // Build CSV content
+    const csvRows = [
+      headers.join(","), // header row
+      ...rows.map((row) =>
+        headers
+          .map((header) => {
+            const value = row[header];
+            // Escape quotes and wrap in quotes if contains comma, quote, or newline
+            if (value === null || value === undefined) return "";
+            const str = String(value);
+            if (str.includes(",") || str.includes('"') || str.includes("\n")) {
+              return `"${str.replace(/"/g, '""')}"`;
+            }
+            return str;
+          })
+          .join(","),
+      ),
+    ];
+
+    const csvContent = csvRows.join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+
+    // Create download link and trigger
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${queryId}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }, [rows, enhancedColumns, queryId]);
+
+  // Auto-download when data is ready (triggered by URL param ?download=true)
+  const hasAutoDownloaded = useRef(false);
+  useEffect(() => {
+    if (
+      autoDownload &&
+      rows.length > 0 &&
+      !isFetching &&
+      !hasAutoDownloaded.current
+    ) {
+      hasAutoDownloaded.current = true;
+      // Small delay to ensure UI has rendered
+      setTimeout(() => {
+        handleDownload();
+      }, 100);
+    }
+  }, [autoDownload, rows.length, isFetching, handleDownload]);
+
   // Determine the overlay component based on UI state
   const noRowsOverlayComponent = useMemo(() => {
     switch (uiState) {
@@ -628,6 +689,7 @@ export const QueryDataGrid = ({
               onRefresh={handleRefresh}
               onRefreshWithNotify={handleRefreshWithNotify}
               onCancel={handleCancel}
+              onDownload={handleDownload}
               paginationMode={paginate ? "infinite" : "classic"}
               currentRows={rows.length}
               totalRows={totalRows}

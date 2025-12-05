@@ -9,23 +9,55 @@ logger = logging.getLogger(__name__)
 
 
 @app.task(name="send_query_notification", bind=True, max_retries=3)
-def send_query_notification(self, query_id: str, user_email: str):
+def send_query_notification(
+    self,
+    query_id: str,
+    user_email: str,
+    row_count: int = None,
+):
     """
     Send query completion notification email.
 
     Args:
         query_id: Query ID
         user_email: User email address (not persisted to DB)
+        row_count: Optional total row count (passed from worker)
     """
     logger.info(
         f"Sending query completion notification for query {query_id}",
         extra={"query_id": query_id, "has_email": bool(user_email)},
     )
 
+    # Try to fetch query metadata for summary
+    summary = None
+    try:
+        import asyncio
+
+        from fm_app.api.db_session import async_session_factory
+        from fm_app.api.stores.query_metadata import get_query_by_id
+
+        async def fetch_summary():
+            async with async_session_factory() as db:
+                query = await get_query_by_id(query_id=query_id, db=db)
+                if query:
+                    return query.summary
+            return None
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            summary = loop.run_until_complete(fetch_summary())
+        finally:
+            loop.close()
+    except Exception as e:
+        logger.warning(f"Could not fetch query summary: {e}")
+
     try:
         success = send_query_completion_email(
             to_email=user_email,
             query_id=query_id,
+            summary=summary,
+            row_count=row_count,
         )
 
         if success:

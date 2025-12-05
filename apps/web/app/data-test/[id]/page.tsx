@@ -20,7 +20,7 @@ import {
 import { Tooltip } from "@mui/material";
 import type { GridColDef, GridSortItem } from "@mui/x-data-grid-pro";
 import { formatDistanceToNow } from "date-fns";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import React, { useCallback, useEffect, useState } from "react";
 
 // Telemetry types
@@ -193,7 +193,9 @@ const generateColumns = (rows: any[]): GridColDef[] => {
 const DataTestPage = () => {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const queryId = (params?.id as string) || "";
+  const autoDownload = searchParams.get("download") === "true";
   const { user, authUser, isLoading: isUserLoading } = useAppUser();
   // user.email works for both auth users and guests (if guest has email)
   const userEmail = (authUser?.email || user?.email) as string | undefined;
@@ -451,6 +453,7 @@ const DataTestPage = () => {
               onRefsChange={setRefs}
               notify={manualNotify}
               userEmail={userEmail}
+              autoDownload={autoDownload}
             />
           ) : (
             <Box

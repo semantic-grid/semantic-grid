@@ -702,7 +702,9 @@ def wrk_fetch_data(self, args):
                     )
                     for subscriber in subscribers:
                         send_query_notification.delay(
-                            query_id, subscriber["user_email"]
+                            query_id,
+                            subscriber["user_email"],
+                            row_count=total_count,
                         )
 
             # Clear running task tracker

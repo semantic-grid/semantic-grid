@@ -79,6 +79,8 @@ def send_query_completion_email(
     to_email: str,
     query_id: str,
     query_name: Optional[str] = None,
+    summary: Optional[str] = None,
+    row_count: Optional[int] = None,
 ) -> bool:
     """
     Send query completion notification email.
@@ -87,6 +89,8 @@ def send_query_completion_email(
         to_email: Recipient email address
         query_id: Query ID
         query_name: Optional query name/description
+        summary: Optional query summary/description
+        row_count: Optional total row count
 
     Returns:
         True if email sent successfully
@@ -96,12 +100,30 @@ def send_query_completion_email(
     if query_name:
         subject = f"Your query '{query_name}' is ready"
 
-    # Build query link - using /q/:query_id route
+    # Build query links - using /q/:query_id route
     query_url = f"{settings.app_base_url}/q/{query_id}"
+    download_url = f"{settings.app_base_url}/q/{query_id}?download=true"
+
+    # Build summary section
+    summary_text = ""
+    summary_html = ""
+    if summary or row_count:
+        summary_parts = []
+        if summary:
+            summary_parts.append(summary)
+        if row_count is not None:
+            summary_parts.append(f"{row_count:,} rows returned")
+        summary_text = "\n".join(summary_parts) + "\n\n"
+        summary_html = "".join(
+            f"<p style='margin: 5px 0; color: #333;'>{part}</p>"
+            for part in summary_parts
+        )
 
     body_text = f"""Your query has completed successfully.
 
-View results: {query_url}
+{summary_text}View results: {query_url}
+
+Download CSV: {download_url}
 
 ---
 You received this email because you requested a notification when your query completed.
@@ -113,7 +135,12 @@ You received this email because you requested a notification when your query com
 <body>
     <p>Your query has completed successfully.</p>
 
-    <p><a href="{query_url}">View results</a></p>
+    {summary_html}
+
+    <p style="margin-top: 20px;">
+        <a href="{query_url}" style="display: inline-block; padding: 10px 20px; background-color: #1976d2; color: white; text-decoration: none; border-radius: 4px; margin-right: 10px;">View Results</a>
+        <a href="{download_url}" style="display: inline-block; padding: 10px 20px; background-color: #388e3c; color: white; text-decoration: none; border-radius: 4px;">Download CSV</a>
+    </p>
 
     <hr>
     <p style="font-size: 12px; color: #666;">

@@ -4,6 +4,7 @@ import {
   Cancel,
   ChevronLeft,
   ChevronRight,
+  Download,
   Notifications,
   Refresh,
 } from "@mui/icons-material";
@@ -26,6 +27,7 @@ interface QueryDataGridFooterProps {
   onRefresh: () => void;
   onRefreshWithNotify: () => void;
   onCancel: () => void;
+  onDownload?: () => void;
   // Pagination
   paginationMode?: PaginationMode;
   currentRows: number;
@@ -42,6 +44,7 @@ export const QueryDataGridFooter = ({
   onRefresh,
   onRefreshWithNotify,
   onCancel,
+  onDownload,
   paginationMode = "infinite",
   currentRows,
   totalRows,
@@ -112,8 +115,18 @@ export const QueryDataGridFooter = ({
         )}
       </Box>
 
-      {/* Right side: Pagination info */}
+      {/* Right side: Download + Pagination info */}
       <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+        {onDownload && currentRows > 0 && (
+          <IconButton
+            size="small"
+            onClick={onDownload}
+            disabled={isFetching}
+            title="Download CSV"
+          >
+            <Download fontSize="small" />
+          </IconButton>
+        )}
         {paginationMode === "infinite" ? (
           // Infinite scroll: show "Total Rows: X of Y"
           <Typography variant="body2" color="text.secondary">

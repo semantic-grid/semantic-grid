@@ -37,6 +37,8 @@ export interface QueryDataGridProps {
   // Notification settings
   notify?: boolean;
   userEmail?: string;
+  // Auto-download when data is ready (triggered by URL param)
+  autoDownload?: boolean;
 }
 
 export type UIState =
