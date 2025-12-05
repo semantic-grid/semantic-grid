@@ -468,8 +468,8 @@ export const QueryDataGrid = ({
   const handleDownload = useCallback(() => {
     if (!rows || rows.length === 0) return;
 
-    // Get column headers from the grid columns (excluding special columns)
-    const dataColumns = enhancedColumns.filter(
+    // Get column headers from the external columns (excluding special columns)
+    const dataColumns = externalColumns.filter(
       (col) => col.field !== "__add_column__" && !col.field.startsWith("__"),
     );
     const headers = dataColumns.map((col) => col.field);
@@ -505,7 +505,7 @@ export const QueryDataGrid = ({
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-  }, [rows, enhancedColumns, queryId]);
+  }, [rows, externalColumns, queryId]);
 
   // Auto-download when data is ready (triggered by URL param ?download=true)
   const hasAutoDownloaded = useRef(false);
