@@ -1416,7 +1416,7 @@ async def get_query_data(
                     "offset": offset,
                 },
             )
-            # Manual dict conversion (avoid .mappings() which can fail on connection drops)
+            # Manual dict conversion (avoid .mappings() which can fail on drops)
             columns = result.keys()
             rows = [dict(zip(columns, row)) for row in result.fetchall()]
 
@@ -1876,7 +1876,8 @@ async def telemetry_sse(request: Request):
         try:
             # Use operational DB (engine) not warehouse DB (wh_engine)
             # since wh queries run in Celery workers with separate pools
-            pool = engine.pool
+            # For async engine, access pool via sync_engine
+            pool = engine.sync_engine.pool
             return {
                 "size": pool.size(),
                 "checked_in": pool.checkedin(),

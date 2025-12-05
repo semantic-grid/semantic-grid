@@ -81,8 +81,10 @@ def send_email(
         return True
 
     except ClientError as e:
+        obfuscated = obfuscate_email(to_email)
+        error_msg = e.response["Error"]["Message"]
         logger.error(
-            f"Failed to send email to {to_email}: {e.response['Error']['Message']}",
+            f"Failed to send email to {obfuscated}: {error_msg}",
             exc_info=True,
         )
         return False
@@ -154,8 +156,12 @@ You received this email because you requested a notification when your query com
     {summary_html}
 
     <p style="margin-top: 20px;">
-        <a href="{query_url}" style="display: inline-block; padding: 10px 20px; background-color: #1976d2; color: white; text-decoration: none; border-radius: 4px; margin-right: 10px;">View Results</a>
-        <a href="{download_url}" style="display: inline-block; padding: 10px 20px; background-color: #388e3c; color: white; text-decoration: none; border-radius: 4px;">Download CSV</a>
+        <a href="{query_url}" style="display: inline-block; padding: 10px 20px;
+           background-color: #1976d2; color: white; text-decoration: none;
+           border-radius: 4px; margin-right: 10px;">View Results</a>
+        <a href="{download_url}" style="display: inline-block; padding: 10px 20px;
+           background-color: #388e3c; color: white; text-decoration: none;
+           border-radius: 4px;">Download CSV</a>
     </p>
 
     <hr>
