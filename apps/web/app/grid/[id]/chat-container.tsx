@@ -427,6 +427,7 @@ export const ChatContainer = ({
                                   requestId={section.requestId || ""}
                                   sessionId={id}
                                   initialRating={msg.rating}
+                                  initialReview={msg.comment}
                                 >
                                   <Stack
                                     direction="row"
