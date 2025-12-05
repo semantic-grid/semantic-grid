@@ -151,8 +151,9 @@ export const updateRequest = async ({ sessionId, requestId, data }: any) => {
   await updateUserRequest({ requestId, data });
   // revalidatePath("/", "layout");
   if (sessionId) {
-    console.log("revalidatePath", `/query/${sessionId}`, `/grid/${sessionId}`);
-    revalidatePath(`/query/${sessionId}`, "page");
+    console.log("revalidatePath", `/grid/${sessionId}`);
+    // console.log("revalidatePath", `/query/${sessionId}`, `/grid/${sessionId}`);
+    // revalidatePath(`/query/${sessionId}`, "page");
     revalidatePath(`/grid/${sessionId}`, "page");
   }
 };
