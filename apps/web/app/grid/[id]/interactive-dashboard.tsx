@@ -29,6 +29,7 @@ import {
   normalizeDataSet,
   timeKey,
 } from "@/app/helpers/chart";
+import { useAppUser } from "@/app/hooks/useAppUser";
 import { useLocalStorage } from "@/app/hooks/useLocalStorage";
 import type { TColumn } from "@/app/lib/types";
 
@@ -107,6 +108,7 @@ export const InteractiveDashboard = ({
     onFetchData,
     query: sessionQuery,
   } = useGridSession();
+  const { user: appUser } = useAppUser();
   const { mode, isLarge } = useContext(ThemeContext);
   const { tab, setTab } = useContext(AppContext);
   const [panel, setPanel] = useState(0);
@@ -618,6 +620,7 @@ export const InteractiveDashboard = ({
                         onSelectionModelChange={setSelectionModel}
                         showAddColumn={true}
                         onAddColumn={handleAddColumn}
+                        userEmail={appUser?.email}
                       />
                     )}
                     {/* <Popover
@@ -746,6 +749,7 @@ export const InteractiveDashboard = ({
                         onSelectionModelChange={setSelectionModel}
                         showAddColumn={true}
                         onAddColumn={handleAddColumn}
+                        userEmail={appUser?.email}
                       />
                     )}
                   </Box>
