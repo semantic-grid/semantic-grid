@@ -27,9 +27,12 @@ export const ItemViewSwitcher = () => {
 
   if (!ctx) return null; // not on /item/[id]
 
-  const { view, setView, chartType, setChartType } = ctx;
+  const { view, setView, chartType, setChartType, availableChartTypes } = ctx;
 
   if (!isItemPage) return null;
+
+  // Only show chart types that are available for this data
+  const filteredChartTypes = availableChartTypes || ["line", "bar", "pie"];
 
   const handleChartTypeSelect = (type: ChartType) => {
     console.log("select chart type", type);
@@ -112,24 +115,15 @@ export const ItemViewSwitcher = () => {
           },
         }}
       >
-        <MenuItem
-          selected={chartType === "pie"}
-          onClick={() => handleChartTypeSelect("pie")}
-        >
-          Pie Chart
-        </MenuItem>
-        <MenuItem
-          selected={chartType === "line"}
-          onClick={() => handleChartTypeSelect("line")}
-        >
-          Line Chart
-        </MenuItem>
-        <MenuItem
-          selected={chartType === "bar"}
-          onClick={() => handleChartTypeSelect("bar")}
-        >
-          Bar Chart
-        </MenuItem>
+        {filteredChartTypes.map((type) => (
+          <MenuItem
+            key={type}
+            selected={chartType === type}
+            onClick={() => handleChartTypeSelect(type)}
+          >
+            {CHART_TYPE_LABELS[type]} Chart
+          </MenuItem>
+        ))}
       </Menu>
     </>
   );

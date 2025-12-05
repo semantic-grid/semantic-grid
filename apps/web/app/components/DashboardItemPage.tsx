@@ -38,16 +38,38 @@ export const DashboardItemPage = ({
     if (chartType === "line" || chartType === "bar" || chartType === "pie") {
       return chartType;
     }
-    // Guess based on first column type
-    if (timeKey(gridColumns[0]?.type)) return "bar";
-    return "pie";
+    // Guess based on first column type (use _dbType for original DB type)
+    const firstColType =
+      (gridColumns[0] as any)?._dbType || gridColumns[0]?.type;
+    if (timeKey(firstColType)) return "line"; // Time series -> line chart
+    return "pie"; // Categorical -> pie chart
   }, [chartType, gridColumns]);
 
   const {
     view,
     chartType: selectedChartType,
     setChartType,
+    setAvailableChartTypes,
   } = useItemViewContext();
+
+  // Determine available chart types based on data shape
+  // Time series data: line, bar (not pie)
+  // Categorical data: pie, bar (not line)
+  const isTimeSeries = useMemo(() => {
+    if (gridColumns.length === 0) return false;
+    const firstColType =
+      (gridColumns[0] as any)?._dbType || gridColumns[0]?.type;
+    return timeKey(firstColType);
+  }, [gridColumns]);
+
+  // Set available chart types based on data shape
+  useEffect(() => {
+    if (isTimeSeries) {
+      setAvailableChartTypes(["line", "bar"]);
+    } else {
+      setAvailableChartTypes(["pie", "bar"]);
+    }
+  }, [isTimeSeries, setAvailableChartTypes]);
 
   // Set initial chart type based on guessed value
   useEffect(() => {

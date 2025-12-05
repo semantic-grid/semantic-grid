@@ -123,7 +123,8 @@ const hydrateFromLocalStorage = (): Map<string, QueryState> => {
       > = JSON.parse(rawDataContextCache);
 
       for (const [queryId, data] of Object.entries(cache)) {
-        if (data.rows && data.rows.length > 0) {
+        // Hydrate all cached queries, including those with 0 rows
+        if (data.rows) {
           states.set(queryId, {
             status: "success",
             rows: data.rows,
@@ -309,11 +310,13 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     [queryStates],
   );
 
-  // Check if cached data exists
+  // Check if cached data exists (includes queries that returned 0 rows)
   const hasCachedData = useCallback(
     (queryId: string): boolean => {
       const state = queryStates.get(queryId);
-      return !!state && state.rows.length > 0;
+      // Consider data cached if we have a successful fetch (even with 0 rows)
+      // or if we have actual rows from hydration
+      return !!state && (state.status === "success" || state.rows.length > 0);
     },
     [queryStates],
   );

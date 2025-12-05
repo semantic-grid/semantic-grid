@@ -21,6 +21,9 @@ type Ctx = {
   chartType: ChartType;
   setChartType: (next: ChartType) => void;
   itemId: string;
+  // Available chart types based on data shape (set by parent component)
+  availableChartTypes: ChartType[];
+  setAvailableChartTypes: (types: ChartType[]) => void;
 };
 
 function useBaseUrl() {
@@ -73,8 +76,13 @@ export const ItemViewProvider = ({
   const [view, setViewState] = useState<ViewKey>(initial);
 
   // Chart type state (localStorage > default)
-  const initialChartType = (readChartTypeLocal() ?? defaultChartType) as ChartType;
+  const initialChartType = (readChartTypeLocal() ??
+    defaultChartType) as ChartType;
   const [chartType, setChartTypeState] = useState<ChartType>(initialChartType);
+
+  // Available chart types (defaults to all, can be filtered by parent based on data)
+  const [availableChartTypes, setAvailableChartTypes] =
+    useState<ChartType[]>(CHART_TYPES);
 
   // Ensure URL reflects the resolved initial view on mount
   useEffect(() => {
@@ -129,8 +137,16 @@ export const ItemViewProvider = ({
   };
 
   const value = useMemo(
-    () => ({ view, setView, chartType, setChartType, itemId }),
-    [view, chartType, itemId]
+    () => ({
+      view,
+      setView,
+      chartType,
+      setChartType,
+      itemId,
+      availableChartTypes,
+      setAvailableChartTypes,
+    }),
+    [view, chartType, itemId, availableChartTypes],
   );
 
   return <Index.Provider value={value}>{children}</Index.Provider>;
