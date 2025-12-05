@@ -3,6 +3,7 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import React, {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -117,24 +118,30 @@ export const ItemViewProvider = ({
     return () => window.removeEventListener("storage", onStorage);
   }, [itemId, baseUrl, router, view]);
 
-  const setView = (next: ViewKey) => {
-    if (!VIEW_KEYS.includes(next)) return;
-    setViewState(next);
-    // Update URL fragment (no RSC refetch), also persist per item
-    router.replace(`${baseUrl}#${next}`, { scroll: false });
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(`itemView:${itemId}`, next);
-    }
-  };
+  const setView = useCallback(
+    (next: ViewKey) => {
+      if (!VIEW_KEYS.includes(next)) return;
+      setViewState(next);
+      // Update URL fragment (no RSC refetch), also persist per item
+      router.replace(`${baseUrl}#${next}`, { scroll: false });
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(`itemView:${itemId}`, next);
+      }
+    },
+    [baseUrl, itemId, router],
+  );
 
-  const setChartType = (next: ChartType) => {
-    if (!CHART_TYPES.includes(next)) return;
-    setChartTypeState(next);
-    // Persist chart type per item
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(`chartType:${itemId}`, next);
-    }
-  };
+  const setChartType = useCallback(
+    (next: ChartType) => {
+      if (!CHART_TYPES.includes(next)) return;
+      setChartTypeState(next);
+      // Persist chart type per item
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(`chartType:${itemId}`, next);
+      }
+    },
+    [itemId],
+  );
 
   const value = useMemo(
     () => ({
@@ -146,7 +153,7 @@ export const ItemViewProvider = ({
       availableChartTypes,
       setAvailableChartTypes,
     }),
-    [view, chartType, itemId, availableChartTypes],
+    [view, setView, chartType, setChartType, itemId, availableChartTypes],
   );
 
   return <Index.Provider value={value}>{children}</Index.Provider>;
