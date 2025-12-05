@@ -564,7 +564,7 @@ def wrk_fetch_data(self, args):
 
     # Check cache first (skip if force=True)
     try:
-        from fm_app.cache.query_cache import run_async
+        from fm_app.cache.query_cache import invalidate_query_cache, run_async
 
         cached_result = None
         if not force:
@@ -572,7 +572,11 @@ def wrk_fetch_data(self, args):
                 get_cached_query(query_id, limit, offset, sort_by, sort_order)
             )
         else:
-            logger.info(f"Force refresh requested, skipping cache for query {query_id}")
+            # Invalidate all cache entries for this query before fetching fresh data
+            invalidated_count = run_async(invalidate_query_cache(query_id))
+            logger.info(
+                f"Force refresh requested, invalidated {invalidated_count} cache entries for query {query_id}"
+            )
 
         if cached_result:
             logger.info(f"Returning cached data for query {query_id}")
