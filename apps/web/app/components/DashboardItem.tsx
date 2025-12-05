@@ -13,7 +13,7 @@ import Link from "next/link";
 import { DashboardChartItem } from "@/app/components/DashboardChartItem";
 import { DashboardItemMenu } from "@/app/components/DashboardItemMenu";
 import { DashboardTableItem } from "@/app/components/DashboardTableItem";
-import { useQuery } from "@/app/hooks/useQuery";
+import { useData } from "@/app/contexts/DataContext";
 import { useQueryObject } from "@/app/hooks/useQueryObject";
 
 const exportRowsAsCSV = (rows: any[]) => {
@@ -50,16 +50,21 @@ const DashboardCard = ({
   slugPath: string;
   maxItemsPerRow: number;
 }) => {
-  // console.log("card", { id, title, href, type, subtype, queryUid });
   const { data: query } = useQueryObject(queryUid!);
-  // console.log("card query data", data);
+  const { fetchQuery, getQueryState } = useData();
   const minHeight = maxItemsPerRow ? 400 * (3 / maxItemsPerRow) : 400;
-  const { refresh, fetchedAt, data } = useQuery({
-    id: queryUid,
-    sql: query?.sql,
-    limit: 20,
-    offset: 0,
-  });
+
+  // Get data from DataContext
+  const queryState = queryUid ? getQueryState(queryUid) : null;
+  const data = queryState ? { rows: queryState.rows } : null;
+  const fetchedAt = queryState?.cachedAt;
+
+  // Refresh using DataContext with force flag
+  const refresh = () => {
+    if (queryUid) {
+      fetchQuery(queryUid, { force: true, pageSize: 100, paginate: false });
+    }
+  };
 
   const onCopyUrl = async () => {
     if (!queryUid) return;
