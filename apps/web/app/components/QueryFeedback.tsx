@@ -4,7 +4,14 @@ import CheckIcon from "@mui/icons-material/Check";
 import SendIcon from "@mui/icons-material/Send";
 import ThumbDownIcon from "@mui/icons-material/ThumbDown";
 import ThumbUpIcon from "@mui/icons-material/ThumbUp";
-import { Box, Collapse, IconButton, TextField, Tooltip } from "@mui/material";
+import {
+  Box,
+  Collapse,
+  IconButton,
+  TextField,
+  Tooltip,
+  Typography,
+} from "@mui/material";
 import React, { useCallback, useState } from "react";
 
 import { updateRequest } from "@/app/actions";
@@ -215,6 +222,20 @@ export const QueryFeedback = ({
           </Tooltip>
         </Box>
       </Collapse>
+      {/* Display saved review when not editing */}
+      {!showReviewInput && review && (
+        <Typography
+          variant="body2"
+          sx={{
+            mt: 1,
+            color: "text.secondary",
+            fontStyle: "italic",
+            fontSize: "0.8rem",
+          }}
+        >
+          Feedback: {review}
+        </Typography>
+      )}
     </Box>
   );
 };
