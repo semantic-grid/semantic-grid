@@ -31,16 +31,6 @@ export const ItemViewSwitcher = () => {
 
   if (!isItemPage) return null;
 
-  const handleChartButtonClick = (event: React.MouseEvent<HTMLElement>) => {
-    // If already in chart view, open menu to change chart type
-    if (view === "chart") {
-      setChartMenuAnchor(event.currentTarget);
-    } else {
-      // Otherwise, switch to chart view
-      setView("chart");
-    }
-  };
-
   const handleChartTypeSelect = (type: ChartType) => {
     console.log("select chart type", type);
     setChartType(type);
@@ -51,24 +41,24 @@ export const ItemViewSwitcher = () => {
     setChartMenuAnchor(null);
   };
 
+  const handleViewChange = (
+    _event: React.MouseEvent<HTMLElement>,
+    next: ViewKey | null,
+  ) => {
+    console.log("ToggleButtonGroup onChange:", next, "current view:", view);
+    // Handle all view changes here
+    if (next) {
+      setView(next);
+    }
+  };
+
   return (
     <>
       <ToggleButtonGroup
         exclusive
         size="small"
         value={view}
-        onChange={(_, next: ViewKey) => {
-          console.log(
-            "ToggleButtonGroup onChange:",
-            next,
-            "current view:",
-            view,
-          );
-          // Only handle grid/sql here - chart is handled by onClick
-          if (next && next !== "chart") {
-            setView(next);
-          }
-        }}
+        onChange={handleViewChange}
         aria-label="Item view"
         sx={{
           // Make it look like it belongs in the toolbar
@@ -82,7 +72,14 @@ export const ItemViewSwitcher = () => {
         <ToggleButton
           value="chart"
           aria-label="Chart view"
-          onClick={handleChartButtonClick}
+          onClick={(e) => {
+            // If already in chart view, open menu to change chart type
+            // Don't prevent default - let onChange handle the view switch
+            if (view === "chart") {
+              e.stopPropagation(); // Prevent onChange from firing
+              setChartMenuAnchor(e.currentTarget);
+            }
+          }}
         >
           {CHART_TYPE_LABELS[chartType]} Chart
         </ToggleButton>

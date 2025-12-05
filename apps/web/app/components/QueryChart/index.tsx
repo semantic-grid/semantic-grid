@@ -71,11 +71,12 @@ export const QueryChart = ({
     }));
   }, [gridColumns]);
 
-  // Pie chart series - use existing helper
+  // Pie chart series - use existing helper with RAW rows (not normalized dataset)
+  // because buildPieChartSeries expects string labels, not Date objects
   const pieSeries = useMemo(() => {
-    if (gridColumns.length < 2 || dataset.length === 0) return [];
-    return buildPieChartSeries(dataset, gridColumns);
-  }, [gridColumns, dataset]);
+    if (gridColumns.length < 2 || rows.length === 0) return [];
+    return buildPieChartSeries(rows, gridColumns);
+  }, [gridColumns, rows]);
 
   // Fetch handlers
   const handleFetch = useCallback(() => {
