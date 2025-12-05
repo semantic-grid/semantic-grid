@@ -306,5 +306,129 @@ Update subscription settings for running fetch.
 | `cancelled` | `{message}` | Fetch was cancelled |
 | `workers_busy` | `{message}` | Workers busy, waiting |
 
+## QueryDataGrid Integration Plan (Monolithic Webapp)
+
+### Target Pages
+
+| Page | Current State | Complexity |
+|------|--------------|------------|
+| `/q/[id]` | Uses `QueryDataProvider` + manual infinite scroll | Low |
+| `/grid/[session_id]` | Uses `GridSessionProvider` + manual infinite scroll | Medium |
+| Dashboard | **Does not exist yet** | New implementation |
+
+### 1. `/q/[id]` Query Page (Simplest)
+
+**Current architecture:**
+- `QueryDataProvider` wraps page with custom context
+- `QueryContainer` has manual infinite scroll event listener
+- `DataTable` renders `DataGridPro` with custom overlays
+
+**Migration:**
+```typescript
+// Before: 3 layers of components + custom context
+<QueryDataProvider>
+  <QueryContainer>  // Manual scroll listener
+    <DataTable />   // DataGridPro wrapper
+  </QueryContainer>
+</QueryDataProvider>
+
+// After: Single component, state in parent
+<QueryContainer>
+  <QueryDataGrid
+    queryId={id}
+    columns={gridColumns}
+    queryMetadata={query}
+    paginate={true}
+    performanceWarning={query?.performance_warning}
+    ...
+  />
+</QueryContainer>
+```
+
+**Files to delete:** `table.tsx`, custom overlay components
+**Files to simplify:** `query-container.tsx` (remove scroll listener)
+
+### 2. `/grid/[session_id]` Grid Page (Medium)
+
+**Current architecture:**
+- `GridSessionProvider` manages session + data + chat
+- `InteractiveDashboard` has resizable split pane + manual scroll
+- `DataTable` similar to `/q/[id]`
+- Multi-view tabs: Grid, Charts, SQL
+
+**Migration:**
+```typescript
+// Keep: Split pane, chat, tabs, charts
+// Replace: DataTable with QueryDataGrid
+
+<InteractiveDashboard>
+  <LeftPane>
+    <ChatContainer />
+  </LeftPane>
+  <Divider />
+  <RightPane>
+    <Tabs>
+      <TabPanel index={0}>
+        <QueryDataGrid ... />  // Replaces DataTable
+      </TabPanel>
+      <TabPanel index={1}>
+        <ChartView rows={rows} />  // Uses same data
+      </TabPanel>
+      <TabPanel index={2}>
+        <HighlightedSQL />
+      </TabPanel>
+    </Tabs>
+  </RightPane>
+</InteractiveDashboard>
+```
+
+**Keep:** `GridSessionProvider` for session-specific state (chat, sections)
+**Delete:** `table.tsx`, `data-grid-overlays.tsx`
+**Modify:** `interactive-dashboard.tsx` (remove scroll listener)
+
+### 3. Dashboard Widgets (New)
+
+**Proposed structure:**
+```typescript
+// New: /app/dashboard/page.tsx
+<DashboardPage>
+  <Grid container>
+    {widgets.map((widget) => (
+      <Grid item xs={12} md={6} lg={4}>
+        <Paper>
+          <Typography>{widget.title}</Typography>
+          <QueryDataGrid
+            queryId={widget.queryId}
+            columns={widget.columns}
+            paginate={false}  // Fetch all for widgets
+            pageSize={50}
+            ...
+          />
+        </Paper>
+      </Grid>
+    ))}
+  </Grid>
+</DashboardPage>
+```
+
+Each widget is an independent `QueryDataGrid` instance with its own state.
+
+### Key Differences: Current vs QueryDataGrid
+
+| Feature | Current | QueryDataGrid |
+|---------|---------|---------------|
+| Infinite scroll | Manual event listener | Built-in |
+| Overlays | Custom per-page | 5 standardized |
+| CSV export | None | Built-in |
+| Notifications | Manual state | Props-based |
+| Cache | SWR `app-cache` | DataContext (with legacy fallback) |
+| Row ID | `id: index` | `_gridId: row.id ?? index` |
+
+### Migration Order
+
+1. **`/q/[id]`** - Lowest risk, establishes pattern
+2. **`/grid/[session_id]`** - Slightly more complex, has split pane
+3. **Dashboard** - New implementation using established pattern
+
 ## Related Docs
 - `docs/future/data-freshness-strategy.md` - TTL and max_age strategy

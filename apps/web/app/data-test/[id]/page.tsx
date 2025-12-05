@@ -49,6 +49,7 @@ interface TelemetryData {
 
 import type { DataGridRefs } from "@/app/components/QueryDataGrid";
 import { QueryDataGrid } from "@/app/components/QueryDataGrid";
+import { QueryDataView } from "@/app/components/QueryDataView";
 import { useData } from "@/app/contexts/DataContext";
 import { useAppUser } from "@/app/hooks/useAppUser";
 import { useQueryObject } from "@/app/hooks/useQueryObject";
@@ -226,6 +227,7 @@ const DataTestPage = () => {
   const [selectionModel, setSelectionModel] = useState<number[]>([]);
   const [showAddColumn, setShowAddColumn] = useState(true);
   const [refs, setRefs] = useState<DataGridRefs>({});
+  const [useDataView, setUseDataView] = useState(false); // Toggle between QueryDataGrid and QueryDataView
 
   // Telemetry state
   const [telemetry, setTelemetry] = useState<TelemetryData | null>(null);
@@ -307,15 +309,17 @@ const DataTestPage = () => {
   const getFetchOptions = useCallback(
     (force: boolean = false) => {
       const currentSort = sortModel[0];
+      const sortOrder =
+        currentSort?.sort === "asc" || currentSort?.sort === "desc"
+          ? currentSort.sort
+          : undefined;
       return {
         notify: manualNotify,
         useSSE,
         paginate,
         pageSize,
         offset,
-        ...(currentSort
-          ? { sortBy: currentSort.field, sortOrder: currentSort.sort }
-          : {}),
+        ...(currentSort ? { sortBy: currentSort.field, sortOrder } : {}),
         ...(force ? { force: true } : {}),
         ...(userEmail ? { userEmail } : {}),
       };
@@ -419,42 +423,81 @@ const DataTestPage = () => {
           </Stack>
         </Box>
 
-        {/* DataGrid */}
+        {/* DataGrid or DataView */}
         <Box sx={{ flex: 1, overflow: "hidden" }}>
           {queryId ? (
-            <QueryDataGrid
-              queryId={queryId}
-              columns={columns}
-              queryMetadata={queryMetadata}
-              useSSE={useSSE}
-              paginate={paginate}
-              pageSize={pageSize}
-              performanceWarning={performanceWarning}
-              estimatedRows={estimatedRows}
-              estimatedSizeGb={estimatedSizeGb}
-              sortModel={sortModel}
-              onSortModelChange={setSortModel}
-              activeColumn={activeColumn}
-              onActiveColumnChange={setActiveColumn}
-              activeRows={activeRows}
-              onActiveRowsChange={setActiveRows}
-              selectionModel={selectionModel}
-              onSelectionModelChange={setSelectionModel}
-              showAddColumn={showAddColumn}
-              onAddColumn={() => {
-                // Select the __add_column__ column (updates refs)
-                setActiveColumn({
-                  field: "__add_column__",
-                  headerName: "New Column",
-                });
-                setActiveRows(undefined);
-                setSelectionModel([]);
-              }}
-              onRefsChange={setRefs}
-              notify={manualNotify}
-              userEmail={userEmail}
-              autoDownload={autoDownload}
-            />
+            useDataView ? (
+              <QueryDataView
+                queryId={queryId}
+                columns={columns}
+                queryMetadata={queryMetadata}
+                sql={queryMetadata?.sql}
+                defaultView="grid"
+                defaultChartType="line"
+                allowViewSwitch={true}
+                allowChartTypeSwitch={true}
+                useSSE={useSSE}
+                paginate={paginate}
+                pageSize={pageSize}
+                performanceWarning={performanceWarning}
+                estimatedRows={estimatedRows}
+                estimatedSizeGb={estimatedSizeGb}
+                sortModel={sortModel}
+                onSortModelChange={setSortModel}
+                activeColumn={activeColumn}
+                onActiveColumnChange={setActiveColumn}
+                activeRows={activeRows}
+                onActiveRowsChange={setActiveRows}
+                selectionModel={selectionModel}
+                onSelectionModelChange={setSelectionModel}
+                showAddColumn={showAddColumn}
+                onAddColumn={() => {
+                  setActiveColumn({
+                    field: "__add_column__",
+                    headerName: "New Column",
+                  });
+                  setActiveRows(undefined);
+                  setSelectionModel([]);
+                }}
+                onRefsChange={setRefs}
+                notify={manualNotify}
+                userEmail={userEmail}
+                autoDownload={autoDownload}
+              />
+            ) : (
+              <QueryDataGrid
+                queryId={queryId}
+                columns={columns}
+                queryMetadata={queryMetadata}
+                useSSE={useSSE}
+                paginate={paginate}
+                pageSize={pageSize}
+                performanceWarning={performanceWarning}
+                estimatedRows={estimatedRows}
+                estimatedSizeGb={estimatedSizeGb}
+                sortModel={sortModel}
+                onSortModelChange={setSortModel}
+                activeColumn={activeColumn}
+                onActiveColumnChange={setActiveColumn}
+                activeRows={activeRows}
+                onActiveRowsChange={setActiveRows}
+                selectionModel={selectionModel}
+                onSelectionModelChange={setSelectionModel}
+                showAddColumn={showAddColumn}
+                onAddColumn={() => {
+                  setActiveColumn({
+                    field: "__add_column__",
+                    headerName: "New Column",
+                  });
+                  setActiveRows(undefined);
+                  setSelectionModel([]);
+                }}
+                onRefsChange={setRefs}
+                notify={manualNotify}
+                userEmail={userEmail}
+                autoDownload={autoDownload}
+              />
+            )
           ) : (
             <Box
               sx={{
@@ -705,6 +748,16 @@ const DataTestPage = () => {
                           />
                         }
                         label="Add Column Btn"
+                      />
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={useDataView}
+                            onChange={(e) => setUseDataView(e.target.checked)}
+                            size="small"
+                          />
+                        }
+                        label="DataView"
                       />
                     </Stack>
                   </Stack>
