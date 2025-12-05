@@ -315,9 +315,9 @@ class GetRequestModel(BaseModel):
 
 
 class UpdateRequestStatusModel(BaseModel):
-    review: Optional[str]
-    rating: Optional[int]
-    status: Optional[RequestStatus]
+    review: Optional[str] = None
+    rating: Optional[int] = None
+    status: Optional[RequestStatus] = None
 
 
 class AddRequestModel(BaseModel):

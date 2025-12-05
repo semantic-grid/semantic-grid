@@ -1051,13 +1051,20 @@ async def update_single_request(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="No user name"
         )
+    logger.info(
+        f"update_single_request: request_id={request_id}, rating={user_request.rating}, review={user_request.review}, status={user_request.status}"
+    )
     if user_request.rating is not None and user_request.review is not None:
+        logger.info(f"Updating review for request_id={request_id}")
         response = await update_review(
             rating=user_request.rating,
             review=user_request.review,
             db=db,
             request_id=request_id,
             user_owner=user_owner,
+        )
+        logger.info(
+            f"Review updated, response rating={response.rating if response else 'None'}"
         )
     elif user_request.status is not None:
         response = await update_request_status(
