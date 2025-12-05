@@ -12,6 +12,22 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 
+def obfuscate_email(email: str) -> str:
+    """Obfuscate email for logging: leo@apegpt.ai -> l*o@a*****i"""
+    if not email or "@" not in email:
+        return "***"
+    local, domain = email.split("@", 1)
+    if len(local) <= 2:
+        local_obf = local[0] + "*" if len(local) > 0 else "*"
+    else:
+        local_obf = local[0] + "*" * (len(local) - 2) + local[-1]
+    if len(domain) <= 2:
+        domain_obf = domain[0] + "*" if len(domain) > 0 else "*"
+    else:
+        domain_obf = domain[0] + "*" * (len(domain) - 2) + domain[-1]
+    return f"{local_obf}@{domain_obf}"
+
+
 def send_email(
     to_email: str,
     subject: str,
@@ -59,7 +75,7 @@ def send_email(
         )
 
         logger.info(
-            f"Email sent successfully to {to_email}",
+            f"Email sent successfully to {obfuscate_email(to_email)}",
             extra={"message_id": response["MessageId"]},
         )
         return True

@@ -25,7 +25,7 @@ from sse_starlette import EventSourceResponse
 from starlette import status
 
 from fm_app.api.auth0 import VerifyGuestToken, VerifyToken
-from fm_app.api.db_session import get_db, wh_engine
+from fm_app.api.db_session import engine, get_db, wh_engine
 from fm_app.api.model import (
     AddLinkedRequestModel,
     AddRequestModel,
@@ -1872,9 +1872,11 @@ async def telemetry_sse(request: Request):
             return {"workers": [], "total": 0, "busy": 0, "idle": 0, "error": str(e)}
 
     async def get_db_pool_stats():
-        """Get database connection pool statistics."""
+        """Get operational database connection pool statistics."""
         try:
-            pool = wh_engine.pool
+            # Use operational DB (engine) not warehouse DB (wh_engine)
+            # since wh queries run in Celery workers with separate pools
+            pool = engine.pool
             return {
                 "size": pool.size(),
                 "checked_in": pool.checkedin(),
