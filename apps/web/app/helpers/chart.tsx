@@ -24,6 +24,28 @@ export const columnWidth = (name: string) => {
   return 200; // Default width for other columns
 };
 
+// Map database column types to MUI DataGrid-safe types
+// MUI DataGrid's "date" type expects Date objects, but we have strings
+// So we use "string" for dates and let renderCell handle formatting
+const mapColumnType = (dbType?: string): string | undefined => {
+  if (!dbType) return undefined;
+  const lower = dbType.toLowerCase();
+  // Don't use MUI's "date" type - it expects Date objects
+  // Our data has string dates, so treat as string and format in renderCell
+  if (lower.includes("date") || lower.includes("time")) {
+    return "string";
+  }
+  if (
+    lower.includes("int") ||
+    lower.includes("float") ||
+    lower.includes("double") ||
+    lower.includes("decimal")
+  ) {
+    return "number";
+  }
+  return "string";
+};
+
 export const buildGridColumns = (query: TQuery) => {
   if (!query || !query.columns) return [];
 
@@ -36,7 +58,10 @@ export const buildGridColumns = (query: TQuery) => {
       headerDescription: col.column_description,
       width: col.column_alias ? columnWidth(col.column_alias) : 200,
       sortable: false,
-      type: col.column_type,
+      // Use mapped type for MUI DataGrid (not raw DB type)
+      type: mapColumnType(col.column_type),
+      // Store original DB type for chart helpers
+      _dbType: col.column_type,
       renderCell: (params: any) => (
         <StyledValue
           columnType={col.column_type?.replace("Nullable(", "")}
@@ -49,7 +74,12 @@ export const buildGridColumns = (query: TQuery) => {
   );
 };
 
+// Check if column type is date/time - checks both _dbType (original) and type
 export const timeKey = (t?: string) => t?.toLowerCase()?.includes("date");
+
+// Helper to get the original DB type from a grid column
+const getDbType = (col: GridColDef): string | undefined =>
+  (col as any)?._dbType || col?.type;
 
 export const normalizeDataSet = (rows: any[], gridColumns: GridColDef[]) =>
   // map each row element, analyzing all its elements according to gridColumns schema.
@@ -59,7 +89,7 @@ export const normalizeDataSet = (rows: any[], gridColumns: GridColDef[]) =>
       Object.entries(row).reduce(
         (res, [k, v], i) => ({
           ...res,
-          [k.replace("col_", "")]: timeKey(gridColumns[i]?.type)
+          [k.replace("col_", "")]: timeKey(getDbType(gridColumns[i]))
             ? new Date(v?.toString() || Date.now()) // store as epoch millis
             : v,
         }),
@@ -75,7 +105,7 @@ export const normalizeDataSet = (rows: any[], gridColumns: GridColDef[]) =>
     )
     .sort((a: Record<string, any>, b: Record<string, any>) => {
       // if first column is time-like, sort ascending by it
-      if (gridColumns.length > 0 && timeKey(gridColumns[0]?.type)) {
+      if (gridColumns.length > 0 && timeKey(getDbType(gridColumns[0]))) {
         const key = gridColumns[0]?.field?.replace("col_", "") || "";
         return (a[key]?.getTime?.() || 0) - (b[key]?.getTime?.() || 0);
       }
