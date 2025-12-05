@@ -423,34 +423,28 @@ export const ChatContainer = ({
                             Boolean(requestId) &&
                             section.requestId === requestId && (
                               <Box sx={{ width: "100%", mt: 0.5 }}>
-                                <Stack
-                                  direction="row"
-                                  spacing={1}
-                                  alignItems="center"
-                                  justifyContent="space-between"
+                                <QueryFeedback
+                                  requestId={section.requestId || ""}
+                                  sessionId={id}
+                                  initialRating={msg.rating}
                                 >
                                   <Stack
                                     direction="row"
-                                    spacing={1}
+                                    spacing={0}
                                     alignItems="center"
                                   >
-                                    <QueryFeedback
-                                      requestId={section.requestId || ""}
-                                      initialRating={msg.rating}
-                                    />
                                     <Typography
                                       variant="body2"
                                       color="textSecondary"
+                                      sx={{ mr: 1 }}
                                     >
                                       {rows(section.query?.row_count)}
                                     </Typography>
-                                  </Stack>
-                                  <Box>
                                     <CopyQueryUrl section={section} />
                                     <ShareQueryUrl section={section} />
                                     <SaveQueryUrl section={section} />
-                                  </Box>
-                                </Stack>
+                                  </Stack>
+                                </QueryFeedback>
                               </Box>
                             )}
                         </Box>
