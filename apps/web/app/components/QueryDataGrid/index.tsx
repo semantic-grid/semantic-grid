@@ -141,7 +141,8 @@ export const QueryDataGrid = ({
     isValidating,
   } = queryState;
 
-  // Ensure rows have unique IDs - stabilize with length check
+  // API returns rows like [{date: "2024-01-01", new_subs: 100}, ...]
+  // Column field names should match row keys
   const rows = useMemo(() => {
     if (rawRows.length === 0) return [];
     return rawRows.map((row, index) => ({
@@ -152,11 +153,10 @@ export const QueryDataGrid = ({
 
   // Helper to find canonical column from metadata
   const getColumnMetadata = useCallback(
-    (field: string) => {
-      return queryMetadata?.columns?.find(
+    (field: string) =>
+      queryMetadata?.columns?.find(
         (c) => c.id === field || c.column_name === field,
-      );
-    },
+      ),
     [queryMetadata],
   );
 
@@ -557,10 +557,10 @@ export const QueryDataGrid = ({
           <FetchOverlay
             onFetch={handleRefresh}
             onFetchWithNotify={handleRefreshWithNotify}
-            showNotifyOption={true}
+            showNotifyOption
             estimatedRows={estimatedRows}
             estimatedSizeGb={estimatedSizeGb}
-            isStale={true}
+            isStale
           />
         );
       default:

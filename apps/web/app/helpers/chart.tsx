@@ -81,20 +81,33 @@ export const timeKey = (t?: string) => t?.toLowerCase()?.includes("date");
 const getDbType = (col: GridColDef): string | undefined =>
   (col as any)?._dbType || col?.type;
 
+// Find column by matching field name (with or without col_ prefix)
+const findColumnByKey = (
+  key: string,
+  gridColumns: GridColDef[],
+): GridColDef | undefined => {
+  const normalizedKey = key.replace("col_", "");
+  return gridColumns.find((col) => {
+    const colField = col.field?.replace("col_", "");
+    return colField === normalizedKey || col.field === key;
+  });
+};
+
 export const normalizeDataSet = (rows: any[], gridColumns: GridColDef[]) =>
   // map each row element, analyzing all its elements according to gridColumns schema.
   // if necessary, map date-time strings to Date values
   rows
     .map((row: any) =>
-      Object.entries(row).reduce(
-        (res, [k, v], i) => ({
+      Object.entries(row).reduce((res, [k, v]) => {
+        const col = findColumnByKey(k, gridColumns);
+        const normalizedKey = k.replace("col_", "");
+        return {
           ...res,
-          [k.replace("col_", "")]: timeKey(getDbType(gridColumns[i]))
-            ? new Date(v?.toString() || Date.now()) // store as epoch millis
+          [normalizedKey]: timeKey(getDbType(col))
+            ? new Date(v?.toString() || Date.now())
             : v,
-        }),
-        {},
-      ),
+        };
+      }, {}),
     )
     .map((row) =>
       // add 'id' field required by DataGrid
