@@ -2,7 +2,6 @@ import { Box, Container, Paper, Typography } from "@mui/material";
 import type { Metadata } from "next";
 import { Suspense } from "react";
 
-import { QueryDataProvider } from "@/app/contexts/QueryData";
 import { getQuery } from "@/app/lib/gptAPI";
 import { QueryContainer } from "@/app/q/[id]/query-container";
 
@@ -85,9 +84,7 @@ const QueryPage = async ({ params: { id } }: { params: { id: string } }) => {
           </Box>
         </Container>
       ) : (
-        <QueryDataProvider query={query} queryId={id}>
-          <QueryContainer key={id} id={id} query={query} />
-        </QueryDataProvider>
+        <QueryContainer key={id} id={id} query={query} />
       )}
     </Suspense>
   );
