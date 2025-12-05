@@ -5,35 +5,14 @@ import { BarChart, ChartsTooltip, LineChart, PieChart } from "@mui/x-charts";
 import React, { useCallback, useMemo } from "react";
 
 import { useData } from "@/app/contexts/DataContext";
+import {
+  buildGridColumns,
+  buildPieChartSeries,
+  normalizeDataSet,
+} from "@/app/helpers/chart";
 
-import { FetchOverlay, ErrorOverlay, LoadingOverlay } from "./overlays";
-import type { QueryChartProps, ChartType } from "./types";
-
-// Helper to detect if column type is datetime
-const isDateTimeColumn = (type?: string): boolean => {
-  if (!type) return false;
-  const lower = type.toLowerCase();
-  return (
-    lower.includes("date") ||
-    lower.includes("time") ||
-    lower.includes("timestamp")
-  );
-};
-
-// Helper to detect if column type is numeric
-const isNumericColumn = (type?: string): boolean => {
-  if (!type) return false;
-  const lower = type.toLowerCase();
-  return (
-    lower.includes("int") ||
-    lower.includes("float") ||
-    lower.includes("double") ||
-    lower.includes("decimal") ||
-    lower.includes("numeric") ||
-    lower.includes("bigint") ||
-    lower.includes("uint")
-  );
-};
+import { ErrorOverlay, FetchOverlay, LoadingOverlay } from "./overlays";
+import type { QueryChartProps } from "./types";
 
 export const QueryChart = ({
   queryId,
@@ -53,60 +32,26 @@ export const QueryChart = ({
   const queryState = getQueryState(queryId);
   const { status, rows, error, isFetching } = queryState;
 
-  // Build column definitions from metadata
+  // Build column definitions from metadata using existing helper
   const gridColumns = useMemo(() => {
-    if (!queryMetadata?.columns) return [];
-    return queryMetadata.columns.map((col, idx) => ({
-      field: col.column_name || `col_${idx}`,
-      headerName: col.column_alias || col.column_name || `col_${idx}`,
-      type: col.column_type,
-    }));
+    if (!queryMetadata) return [];
+    return buildGridColumns(queryMetadata);
   }, [queryMetadata]);
 
-  // Normalize dataset for charts (convert dates, ensure proper types)
+  // Normalize dataset for charts using existing helper (handles date conversion)
   const dataset = useMemo(() => {
     if (!rows || rows.length === 0 || gridColumns.length === 0) return [];
-
-    return rows
-      .map((row: Record<string, unknown>) =>
-        Object.entries(row).reduce(
-          (res, [k, v]) => {
-            // Find matching column to check type
-            const col = gridColumns.find((c) => c.field === k);
-            let value: string | number | Date | null | undefined = v as any;
-
-            if (isDateTimeColumn(col?.type)) {
-              value = new Date(v?.toString() || Date.now());
-            } else if (isNumericColumn(col?.type)) {
-              value = Number(v) || 0;
-            } else if (v !== null && v !== undefined) {
-              value = String(v);
-            }
-
-            return { ...res, [k]: value };
-          },
-          {} as Record<string, string | number | Date | null | undefined>,
-        ),
-      )
-      .sort((a, b) => {
-        // Sort by first column if it's datetime
-        if (gridColumns.length > 0 && isDateTimeColumn(gridColumns[0]?.type)) {
-          const key = gridColumns[0]?.field || "";
-          const aTime = (a[key] as Date)?.getTime?.() || 0;
-          const bTime = (b[key] as Date)?.getTime?.() || 0;
-          return aTime - bTime;
-        }
-        return 0;
-      });
+    return normalizeDataSet(rows, gridColumns);
   }, [rows, gridColumns]);
 
-  // X-axis configuration
+  // X-axis configuration - use field without col_ prefix (matches normalizeDataSet)
   const xAxis = useMemo(() => {
     if (gridColumns.length === 0) return [];
     const firstCol = gridColumns[0];
+    const dataKey = firstCol?.field?.replace("col_", "") || "";
     return [
       {
-        dataKey: firstCol?.field,
+        dataKey,
         scaleType: chartType === "bar" ? "band" : "time",
         valueFormatter: (value: Date) =>
           value instanceof Date ? value.toLocaleDateString() : String(value),
@@ -114,32 +59,22 @@ export const QueryChart = ({
     ];
   }, [gridColumns, chartType]);
 
-  // Series configuration for line/bar charts
+  // Series configuration for line/bar charts - use field without col_ prefix
   const series = useMemo(() => {
     if (gridColumns.length < 2) return [];
     // Skip first column (x-axis), use remaining numeric columns as series
     return gridColumns.slice(1).map((col) => ({
-      id: col.field,
+      id: col.field?.replace("col_", ""),
       label: col.headerName,
-      dataKey: col.field,
+      dataKey: col.field?.replace("col_", ""),
       showMark: false,
     }));
   }, [gridColumns]);
 
-  // Pie chart series
+  // Pie chart series - use existing helper
   const pieSeries = useMemo(() => {
     if (gridColumns.length < 2 || dataset.length === 0) return [];
-
-    const categoryCol = gridColumns[0];
-    const valueCol = gridColumns[gridColumns.length - 1];
-
-    const seriesData = dataset.map((row) => ({
-      id: String(row[categoryCol?.field || ""]),
-      label: String(row[categoryCol?.field || ""]),
-      value: Number(row[valueCol?.field || ""]) || 0,
-    }));
-
-    return [{ data: seriesData }];
+    return buildPieChartSeries(dataset, gridColumns);
   }, [gridColumns, dataset]);
 
   // Fetch handlers

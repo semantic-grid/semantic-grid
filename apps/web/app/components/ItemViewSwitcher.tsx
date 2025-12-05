@@ -58,7 +58,16 @@ export const ItemViewSwitcher = () => {
         size="small"
         value={view}
         onChange={(_, next: ViewKey) => {
-          if (next && next !== "chart") setView(next);
+          console.log(
+            "ToggleButtonGroup onChange:",
+            next,
+            "current view:",
+            view,
+          );
+          // Only handle grid/sql here - chart is handled by onClick
+          if (next && next !== "chart") {
+            setView(next);
+          }
         }}
         aria-label="Item view"
         sx={{
