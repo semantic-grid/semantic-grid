@@ -15,6 +15,7 @@ import type { TQuery } from "@/app/lib/types";
 export interface IQueryContainerProps {
   query?: TQuery;
   id?: string;
+  autoDownload?: boolean;
 }
 
 interface TabPanelProps {
@@ -39,7 +40,11 @@ const CustomTabPanel = (props: TabPanelProps) => {
   );
 };
 
-export const QueryContainer = ({ id, query }: IQueryContainerProps) => {
+export const QueryContainer = ({
+  id,
+  query,
+  autoDownload = false,
+}: IQueryContainerProps) => {
   const { tab } = useContext(AppContext);
   const { user: appUser } = useAppUser();
 
@@ -99,6 +104,7 @@ export const QueryContainer = ({ id, query }: IQueryContainerProps) => {
                     selectionModel={selectionModel}
                     onSelectionModelChange={setSelectionModel}
                     userEmail={appUser?.email}
+                    autoDownload={autoDownload}
                   />
                 </ScrollLockWrapper>
               </Box>

@@ -52,9 +52,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   }
 }
 
-const QueryPage = async ({ params: { id } }: { params: { id: string } }) => {
+const QueryPage = async ({ params, searchParams }: Props) => {
+  const { id } = await params;
+  const resolvedSearchParams = await searchParams;
   const query = await getQueryById(id);
-  console.log("query", query);
+  const autoDownload = resolvedSearchParams.download === "true";
 
   return (
     <Suspense fallback={<div>Loading messages...</div>}>
@@ -84,7 +86,12 @@ const QueryPage = async ({ params: { id } }: { params: { id: string } }) => {
           </Box>
         </Container>
       ) : (
-        <QueryContainer key={id} id={id} query={query} />
+        <QueryContainer
+          key={id}
+          id={id}
+          query={query}
+          autoDownload={autoDownload}
+        />
       )}
     </Suspense>
   );
