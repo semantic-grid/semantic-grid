@@ -177,7 +177,17 @@ export const QueryDataGrid = ({
     [sortModel, handleSortModelChange],
   );
 
+  // Store sortModel in a ref so renderHeader can access it without being a dependency
+  const sortModelRef = useRef(sortModel);
+
+  // Store handleSortClick in a ref to avoid column recreation
+  const handleSortClickRef = useRef(handleSortClick);
+  useEffect(() => {
+    handleSortClickRef.current = handleSortClick;
+  }, [handleSortClick]);
+
   // Enhance columns with descriptions, tooltips, and custom sort buttons
+  // Note: sortModel is NOT in deps - we use refs to avoid recreating columns on sort change
   const columns = useMemo(() => {
     const enhancedColumns: GridColDef[] = externalColumns.map((col) => {
       const metadata = getColumnMetadata(col.field);
@@ -192,26 +202,36 @@ export const QueryDataGrid = ({
         headerClassName:
           activeColumn?.field === col.field ? "highlight-column-header" : "",
         // Custom header with tooltip and sort button
-        renderHeader: (params: any) => (
-          <Tooltip title={description}>
-            <Box display="flex" alignItems="center">
-              <span>{params.colDef.headerName}</span>
-              <IconButton size="small" onClick={handleSortClick(col.field)}>
-                {sortModel[0]?.field === col.field &&
-                  sortModel[0]?.sort === "asc" && (
-                    <ArrowDownward sx={{ fontSize: 16 }} />
+        renderHeader: (params: any) => {
+          // Access sort state from ref to avoid column recreation on sort change
+          const currentSort = sortModelRef.current;
+          const isSortedAsc =
+            currentSort[0]?.field === col.field &&
+            currentSort[0]?.sort === "asc";
+          const isSortedDesc =
+            currentSort[0]?.field === col.field &&
+            currentSort[0]?.sort === "desc";
+          const isNotSorted =
+            !currentSort[0] || currentSort[0]?.field !== col.field;
+
+          return (
+            <Tooltip title={description}>
+              <Box display="flex" alignItems="center">
+                <span>{params.colDef.headerName}</span>
+                <IconButton
+                  size="small"
+                  onClick={handleSortClickRef.current(col.field)}
+                >
+                  {isSortedAsc && <ArrowDownward sx={{ fontSize: 16 }} />}
+                  {isSortedDesc && <ArrowUpward sx={{ fontSize: 16 }} />}
+                  {isNotSorted && (
+                    <SwapVert color="disabled" sx={{ fontSize: 16 }} />
                   )}
-                {sortModel[0]?.field === col.field &&
-                  sortModel[0]?.sort === "desc" && (
-                    <ArrowUpward sx={{ fontSize: 16 }} />
-                  )}
-                {(!sortModel[0] || sortModel[0]?.field !== col.field) && (
-                  <SwapVert color="disabled" sx={{ fontSize: 16 }} />
-                )}
-              </IconButton>
-            </Box>
-          </Tooltip>
-        ),
+                </IconButton>
+              </Box>
+            </Tooltip>
+          );
+        },
       };
     });
 
@@ -258,9 +278,13 @@ export const QueryDataGrid = ({
     showAddColumn,
     onAddColumn,
     getColumnMetadata,
-    sortModel,
-    handleSortClick,
   ]);
+
+  // Update sortModel ref when sort changes - the DataGrid's sortModel prop
+  // change will trigger a re-render, and renderHeader will read from the updated ref
+  useEffect(() => {
+    sortModelRef.current = sortModel;
+  }, [sortModel]);
 
   // Compute and expose refs when selection changes
   useEffect(() => {
@@ -646,7 +670,6 @@ export const QueryDataGrid = ({
         sortingMode="server"
         paginationMode="server"
         sortModel={sortModel}
-        disableAutosize
         disableMultipleRowSelection={false}
         paginationModel={paginationModel}
         onPaginationModelChange={setPaginationModel}
