@@ -425,6 +425,7 @@ const Page = withPageAuthRequired(
                 />
               }
               label="Has feedback"
+              sx={{ color: "text.primary" }}
             />
           </FormGroup>
           <TextField
