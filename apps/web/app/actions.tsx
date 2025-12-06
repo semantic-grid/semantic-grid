@@ -237,16 +237,18 @@ export const addQueryToDashboard = async ({
 export const addQueryToUserDashboard = async ({
   queryUid,
   itemType = "table",
+  name,
 }: {
   queryUid: string;
   itemType?: "table" | "chart";
+  name?: string;
 }) => {
   const { uid, userId } = await ensureSession();
-  console.log("addQueryToUserDashboard", { uid, queryUid, userId });
+  console.log("addQueryToUserDashboard", { uid, queryUid, userId, name });
   if (!uid) throw new Error("No user");
   if (!queryUid) throw new Error("No queryId");
 
-  await attachQueryToUserDashboard({ userId: uid, queryUid, itemType });
+  await attachQueryToUserDashboard({ userId: uid, queryUid, itemType, name });
 
   revalidatePath(`/user/${userId}`, "page");
   return `/user/${userId}`;

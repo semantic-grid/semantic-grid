@@ -23,10 +23,22 @@ const SaveQueryUrl = ({ section }: { section: TChatSection }) => {
 
   const handleSelect = async (type: "table" | "chart") => {
     const queryUid = section.query?.query_id;
-    console.log("save query Uid", queryUid, "as", type);
+    const querySummary = section.query?.summary || section.query?.intent;
+    console.log(
+      "save query Uid",
+      queryUid,
+      "as",
+      type,
+      "summary:",
+      querySummary,
+    );
     if (!queryUid) return;
 
-    await addQueryToUserDashboard({ queryUid, itemType: type });
+    await addQueryToUserDashboard({
+      queryUid,
+      itemType: type,
+      name: querySummary,
+    });
     setSaved(true);
     setTimeout(() => setSaved(false), 2000); // Reset copied state after 2 seconds
     setAnchorEl(null);

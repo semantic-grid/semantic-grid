@@ -321,30 +321,36 @@ export const attachQueryToUserDashboard = async (input: {
   itemType: "chart" | "table";
   chartType?: string;
   position?: number;
+  name?: string;
 }) => {
   if (!input.userId) {
     throw new Error("No userId provided");
   }
 
-  // Fetch the query to get its summary/intent for the item name
-  const queryWhere = { queryUid: { equals: input.queryUid } };
-  const queryQuery = stringify(
-    {
-      where: queryWhere,
-      limit: 1,
-    },
-    { addQueryPrefix: true },
-  );
-  const [queryData] = await getFromPayload("queries", queryQuery).then(
-    (r) => r?.docs || [],
-  );
+  // Use provided name, or fetch from Payload as fallback
+  let itemName = input.name;
 
-  // Use query summary, intent, or description as the item name
-  const itemName =
-    queryData?.summary ||
-    queryData?.intent ||
-    queryData?.description ||
-    "New Item";
+  if (!itemName) {
+    // Fetch the query to get its summary/intent for the item name
+    const queryWhere = { queryUid: { equals: input.queryUid } };
+    const queryQuery = stringify(
+      {
+        where: queryWhere,
+        limit: 1,
+      },
+      { addQueryPrefix: true },
+    );
+    const [queryData] = await getFromPayload("queries", queryQuery).then(
+      (r) => r?.docs || [],
+    );
+
+    // Use query summary, intent, or description as the item name
+    itemName =
+      queryData?.summary ||
+      queryData?.intent ||
+      queryData?.description ||
+      "New Item";
+  }
 
   const where = { ownerUserId: { equals: input.userId } };
   const query = stringify(
