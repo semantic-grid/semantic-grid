@@ -218,23 +218,7 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
-  "/api/v1/admin/requests/v2": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /** Admin Get All Requests V2 */
-    get: operations["admin_get_all_requests_v2_api_v1_admin_requests_v2_get"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
+
   "/api/v1/chart": {
     parameters: {
       query?: never;
@@ -1265,39 +1249,6 @@ export interface operations {
     };
   };
   admin_get_all_requests_api_v1_admin_requests_get: {
-    parameters: {
-      query?: {
-        limit?: number;
-        offset?: number;
-        status?: components["schemas"]["RequestStatus"];
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Successful Response */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["GetRequestModel"][];
-        };
-      };
-      /** @description Validation Error */
-      422: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["HTTPValidationError"];
-        };
-      };
-    };
-  };
-  admin_get_all_requests_v2_api_v1_admin_requests_v2_get: {
     parameters: {
       query?: {
         limit?: number;

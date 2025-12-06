@@ -34,7 +34,7 @@ export const useAdminRequests = (
   };
 
   const { data, error, isLoading, mutate } = useSWR<AdminRequestsResponse>(
-    ["/api/apegpt/admin/requests/v2", limit, offset, status, search],
+    ["/api/apegpt/admin/requests", limit, offset, status, search],
     fetcher,
     {
       shouldRetryOnError: false,

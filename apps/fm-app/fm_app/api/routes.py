@@ -1118,25 +1118,6 @@ async def admin_get_all_requests(
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
     status_param: RequestStatus = Query(RequestStatus.done, alias="status"),
-    auth_result: dict = Security(auth.verify, scopes=["admin:requests"]),
-) -> list[GetRequestModel]:
-    if auth_result is None or auth_result.get("sub") is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Not an admin"
-        )
-    admin = auth_result.get("sub")
-    response = await get_all_requests_admin(
-        limit=limit, offset=offset, status=status_param, admin=admin, db=db
-    )
-    return response
-
-
-@api_router.get("/admin/requests/v2")
-async def admin_get_all_requests_v2(
-    db: AsyncSession = Depends(get_db),
-    limit: int = Query(50, ge=1, le=100),
-    offset: int = Query(0, ge=0),
-    status_param: RequestStatus = Query(RequestStatus.done, alias="status"),
     search: Optional[str] = Query(None, description="Search in request, SQL, or user"),
     auth_result: dict = Security(auth.verify, scopes=["admin:requests"]),
 ) -> AdminRequestsResponse:
