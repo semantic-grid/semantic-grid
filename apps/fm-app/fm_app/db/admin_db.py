@@ -82,6 +82,7 @@ async def get_all_requests_admin_v2(
     admin: str,
     status: RequestStatus,
     search: str | None,
+    has_feedback: bool | None,
     db: AsyncSession,
 ) -> AdminRequestsResult:
     """
@@ -103,6 +104,9 @@ async def get_all_requests_admin_v2(
             "OR s.user_owner ILIKE :search)"
         )
         params["search"] = f"%{search}%"
+
+    if has_feedback:
+        where_conditions.append("(r.rating IS NOT NULL OR r.review IS NOT NULL)")
 
     where_clause = " AND ".join(where_conditions)
 

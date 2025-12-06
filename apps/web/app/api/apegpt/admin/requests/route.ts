@@ -10,6 +10,8 @@ const GET = async (req: NextRequest) => {
     const offset = Number(req.nextUrl.searchParams.get("offset") || "0");
     const status: any = req.nextUrl.searchParams.get("status") || "Done";
     const search = req.nextUrl.searchParams.get("search") || undefined;
+    const hasFeedback =
+      req.nextUrl.searchParams.get("has_feedback") === "true" || undefined;
     const token = await getAccessToken({ scopes: ["admin:requests"] });
 
     if (!token) {
@@ -17,7 +19,7 @@ const GET = async (req: NextRequest) => {
     }
     const res = await client.GET("/api/v1/admin/requests", {
       params: {
-        query: { limit, offset, status, search },
+        query: { limit, offset, status, search, has_feedback: hasFeedback },
       },
       headers: { Authorization: `Bearer ${token.accessToken}` },
     });

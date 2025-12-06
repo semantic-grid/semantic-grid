@@ -11,13 +11,15 @@ export const useAdminRequests = (
   offset: number = 0,
   status: string = "Done",
   search?: string,
+  hasFeedback: boolean = false,
 ) => {
-  const fetcher = ([url, limit, offset, status, search]: [
+  const fetcher = ([url, limit, offset, status, search, hasFeedback]: [
     string,
     number,
     number,
     string,
     string | undefined,
+    boolean,
   ]) => {
     const params = new URLSearchParams({
       limit: String(limit),
@@ -27,6 +29,9 @@ export const useAdminRequests = (
     if (search) {
       params.set("search", search);
     }
+    if (hasFeedback) {
+      params.set("has_feedback", "true");
+    }
     return fetch(`${url}?${params.toString()}`).then((res) => {
       if (res.ok) return res.json();
       throw UnauthorizedError;
@@ -34,7 +39,7 @@ export const useAdminRequests = (
   };
 
   const { data, error, isLoading, mutate } = useSWR<AdminRequestsResponse>(
-    ["/api/apegpt/admin/requests", limit, offset, status, search],
+    ["/api/apegpt/admin/requests", limit, offset, status, search, hasFeedback],
     fetcher,
     {
       shouldRetryOnError: false,

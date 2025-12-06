@@ -5,10 +5,16 @@ import { Close, Search } from "@mui/icons-material";
 import {
   Box,
   Button,
+  Checkbox,
   Drawer,
+  FormControl,
+  FormControlLabel,
   IconButton,
   InputAdornment,
+  InputLabel,
+  MenuItem,
   Rating,
+  Select,
   TextField,
   Typography,
 } from "@mui/material";
@@ -227,6 +233,20 @@ const RequestDetailDrawer = ({
   );
 };
 
+const REQUEST_STATUSES = [
+  "Done",
+  "New",
+  "Intent",
+  "SQL",
+  "DataFetch",
+  "Retry",
+  "Finalizing",
+  "InProgress",
+  "Scheduled",
+  "Error",
+  "Cancelled",
+];
+
 const Page = withPageAuthRequired(
   () => {
     const [paginationModel, setPaginationModel] = useState({
@@ -235,6 +255,8 @@ const Page = withPageAuthRequired(
     });
     const [searchInput, setSearchInput] = useState("");
     const [search, setSearch] = useState("");
+    const [status, setStatus] = useState("Done");
+    const [hasFeedback, setHasFeedback] = useState(false);
     const [selectedRequest, setSelectedRequest] =
       useState<GetRequestModel | null>(null);
     const [drawerOpen, setDrawerOpen] = useState(false);
@@ -242,8 +264,9 @@ const Page = withPageAuthRequired(
     const { data, total, isLoading } = useAdminRequests(
       paginationModel.pageSize,
       paginationModel.page * paginationModel.pageSize,
-      "Done",
+      status,
       search || undefined,
+      hasFeedback,
     );
 
     const handleSearch = useCallback(() => {
@@ -371,6 +394,35 @@ const Page = withPageAuthRequired(
             Admin Requests
           </Typography>
           <Box sx={{ flex: 1 }} />
+          <FormControl size="small" sx={{ minWidth: 140 }}>
+            <InputLabel>Status</InputLabel>
+            <Select
+              value={status}
+              label="Status"
+              onChange={(e) => {
+                setStatus(e.target.value);
+                setPaginationModel((prev) => ({ ...prev, page: 0 }));
+              }}
+            >
+              {REQUEST_STATUSES.map((s) => (
+                <MenuItem key={s} value={s}>
+                  {s}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={hasFeedback}
+                onChange={(e) => {
+                  setHasFeedback(e.target.checked);
+                  setPaginationModel((prev) => ({ ...prev, page: 0 }));
+                }}
+              />
+            }
+            label="Has feedback"
+          />
           <TextField
             size="small"
             placeholder="Search requests, SQL, or users..."

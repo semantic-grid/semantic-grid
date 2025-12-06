@@ -1119,6 +1119,9 @@ async def admin_get_all_requests(
     offset: int = Query(0, ge=0),
     status_param: RequestStatus = Query(RequestStatus.done, alias="status"),
     search: Optional[str] = Query(None, description="Search in request, SQL, or user"),
+    has_feedback: Optional[bool] = Query(
+        None, description="Filter to requests with rating or review"
+    ),
     auth_result: dict = Security(auth.verify, scopes=["admin:requests"]),
 ) -> AdminRequestsResponse:
     """
@@ -1135,6 +1138,7 @@ async def admin_get_all_requests(
         offset=offset,
         status=status_param,
         search=search,
+        has_feedback=has_feedback,
         admin=admin,
         db=db,
     )

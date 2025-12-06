@@ -1255,6 +1255,7 @@ export interface operations {
         offset?: number;
         status?: components["schemas"]["RequestStatus"];
         search?: string;
+        has_feedback?: boolean;
       };
       header?: never;
       path?: never;
