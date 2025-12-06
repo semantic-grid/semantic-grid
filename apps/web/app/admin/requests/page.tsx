@@ -156,7 +156,7 @@ const RequestDetailDrawer = ({
             variant="body1"
             sx={{
               whiteSpace: "pre-wrap",
-              backgroundColor: "grey.100",
+              backgroundColor: "action.hover",
               p: 2,
               borderRadius: 1,
             }}
