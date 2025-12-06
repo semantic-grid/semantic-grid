@@ -9,6 +9,7 @@ import {
   Drawer,
   FormControl,
   FormControlLabel,
+  FormGroup,
   IconButton,
   InputAdornment,
   InputLabel,
@@ -411,18 +412,20 @@ const Page = withPageAuthRequired(
               ))}
             </Select>
           </FormControl>
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={hasFeedback}
-                onChange={(e) => {
-                  setHasFeedback(e.target.checked);
-                  setPaginationModel((prev) => ({ ...prev, page: 0 }));
-                }}
-              />
-            }
-            label="Has feedback"
-          />
+          <FormGroup>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={hasFeedback}
+                  onChange={(e) => {
+                    setHasFeedback(e.target.checked);
+                    setPaginationModel((prev) => ({ ...prev, page: 0 }));
+                  }}
+                />
+              }
+              label="Has feedback"
+            />
+          </FormGroup>
           <TextField
             size="small"
             placeholder="Search requests, SQL, or users..."
@@ -436,6 +439,20 @@ const Page = withPageAuthRequired(
                   <Search />
                 </InputAdornment>
               ),
+              endAdornment: searchInput ? (
+                <InputAdornment position="end">
+                  <IconButton
+                    size="small"
+                    onClick={() => {
+                      setSearchInput("");
+                      setSearch("");
+                      setPaginationModel((prev) => ({ ...prev, page: 0 }));
+                    }}
+                  >
+                    <Close fontSize="small" />
+                  </IconButton>
+                </InputAdornment>
+              ) : null,
             }}
           />
           <Button variant="contained" onClick={handleSearch}>
