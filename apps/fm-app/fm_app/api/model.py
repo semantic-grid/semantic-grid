@@ -417,3 +417,15 @@ class McpServerRequest(BaseModel):
     flow: FlowType = FlowType.mcp
     model: ModelType = ModelType.openai_default
     db: DBType = DBType.legacy
+
+
+### Admin Models
+
+
+class AdminRequestsResponse(BaseModel):
+    """Paginated response for admin requests endpoint."""
+
+    requests: list[GetRequestModel]
+    total: int
+    limit: int
+    offset: int

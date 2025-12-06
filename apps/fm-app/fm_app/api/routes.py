@@ -29,6 +29,7 @@ from fm_app.api.db_session import engine, get_db, wh_engine
 from fm_app.api.model import (
     AddLinkedRequestModel,
     AddRequestModel,
+    AdminRequestsResponse,
     ChartRequest,
     ChartStructuredRequest,
     ChartType,
@@ -49,7 +50,11 @@ from fm_app.api.model import (
     View,
     WorkerRequest,
 )
-from fm_app.db.admin_db import get_all_requests_admin, get_all_sessions_admin
+from fm_app.db.admin_db import (
+    get_all_requests_admin,
+    get_all_requests_admin_v2,
+    get_all_sessions_admin,
+)
 from fm_app.db.db import (
     add_new_session,
     add_request,
@@ -1124,6 +1129,40 @@ async def admin_get_all_requests(
         limit=limit, offset=offset, status=status_param, admin=admin, db=db
     )
     return response
+
+
+@api_router.get("/admin/requests/v2")
+async def admin_get_all_requests_v2(
+    db: AsyncSession = Depends(get_db),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    status_param: RequestStatus = Query(RequestStatus.done, alias="status"),
+    search: Optional[str] = Query(None, description="Search in request, SQL, or user"),
+    auth_result: dict = Security(auth.verify, scopes=["admin:requests"]),
+) -> AdminRequestsResponse:
+    """
+    Get all requests for admin with pagination metadata, user info, and search.
+    Returns total count for proper pagination.
+    """
+    if auth_result is None or auth_result.get("sub") is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Not an admin"
+        )
+    admin = auth_result.get("sub")
+    result = await get_all_requests_admin_v2(
+        limit=limit,
+        offset=offset,
+        status=status_param,
+        search=search,
+        admin=admin,
+        db=db,
+    )
+    return AdminRequestsResponse(
+        requests=result.requests,
+        total=result.total,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @api_router.post("/chart")

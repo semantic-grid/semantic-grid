@@ -1,8 +1,18 @@
 "use client";
 
 import { withPageAuthRequired } from "@auth0/nextjs-auth0/client";
-import { Button, Container, Rating } from "@mui/material";
-import type { GridColDef } from "@mui/x-data-grid-pro";
+import { Close, Search } from "@mui/icons-material";
+import {
+  Box,
+  Button,
+  Drawer,
+  IconButton,
+  InputAdornment,
+  Rating,
+  TextField,
+  Typography,
+} from "@mui/material";
+import type { GridColDef, GridRowParams } from "@mui/x-data-grid-pro";
 import {
   DataGridPro as DataGrid,
   GridFooter,
@@ -10,56 +20,16 @@ import {
   useGridApiContext,
 } from "@mui/x-data-grid-pro";
 import { saveAs } from "file-saver";
-import { useEffect, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import * as React from "react";
 
+import type { components } from "@/app/api/apegpt/types.gen";
+import HighlightedSQL from "@/app/components/SqlView";
 import { useAdminRequests } from "@/app/hooks/useAdminRequests";
 
-const ROWS = 20;
+type GetRequestModel = components["schemas"]["GetRequestModel"];
 
-const columns: GridColDef[] = [
-  {
-    field: "created_at",
-    headerName: "Date",
-    width: 200,
-    sortable: true,
-    valueFormatter: (params) =>
-      new Date(params.value as string).toLocaleString(),
-  },
-  {
-    field: "request",
-    headerName: "Request",
-    width: 500,
-    sortable: true,
-  },
-  {
-    field: "sql",
-    headerName: "SQL",
-    width: 500,
-    sortable: false,
-  },
-  {
-    field: "rating",
-    headerName: "Rating",
-    width: 150,
-    sortable: true,
-    renderCell: (params) => (
-      <Rating
-        size="small"
-        value={params.row.rating}
-        max={10}
-        precision={1}
-        readOnly
-      />
-    ),
-  },
-  {
-    field: "data",
-    headerName: "CSV Data",
-    width: 500,
-    sortable: false,
-  },
-];
+const ROWS_PER_PAGE = 50;
 
 function exportRowsAsCSV(rows: any[]) {
   if (rows.length === 0) return;
@@ -81,7 +51,6 @@ const CustomFooter = () => {
 
   const handleExport = () => {
     const selectedIDs = apiRef.current.getSelectedRows();
-    console.log(selectedIDs);
     const selectedRows = Array.from(selectedIDs.values());
     exportRowsAsCSV(selectedRows);
   };
@@ -96,49 +65,368 @@ const CustomFooter = () => {
   );
 };
 
-const regex = /```csv([\s\S]*?)```/;
+const RequestDetailDrawer = ({
+  request,
+  open,
+  onClose,
+}: {
+  request: GetRequestModel | null;
+  open: boolean;
+  onClose: () => void;
+}) => {
+  if (!request) return null;
+
+  return (
+    <Drawer
+      anchor="right"
+      open={open}
+      onClose={onClose}
+      PaperProps={{
+        sx: { width: { xs: "100%", sm: "600px", md: "800px" }, p: 3 },
+      }}
+    >
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          mb: 3,
+        }}
+      >
+        <Typography variant="h6">Request Details</Typography>
+        <IconButton onClick={onClose}>
+          <Close />
+        </IconButton>
+      </Box>
+
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
+        {/* User & Date */}
+        <Box>
+          <Typography variant="subtitle2" color="text.secondary">
+            User
+          </Typography>
+          <Typography variant="body1">
+            {request.session?.user || "Unknown"}
+          </Typography>
+        </Box>
+
+        <Box>
+          <Typography variant="subtitle2" color="text.secondary">
+            Date
+          </Typography>
+          <Typography variant="body1">
+            {new Date(request.created_at).toLocaleString()}
+          </Typography>
+        </Box>
+
+        {/* Rating */}
+        {request.rating !== null && request.rating !== undefined && (
+          <Box>
+            <Typography variant="subtitle2" color="text.secondary">
+              Rating
+            </Typography>
+            <Rating value={request.rating} max={10} precision={1} readOnly />
+          </Box>
+        )}
+
+        {/* Review */}
+        {request.review && (
+          <Box>
+            <Typography variant="subtitle2" color="text.secondary">
+              Review
+            </Typography>
+            <Typography variant="body1">{request.review}</Typography>
+          </Box>
+        )}
+
+        {/* Request */}
+        <Box>
+          <Typography variant="subtitle2" color="text.secondary">
+            Request
+          </Typography>
+          <Typography
+            variant="body1"
+            sx={{
+              whiteSpace: "pre-wrap",
+              backgroundColor: "grey.100",
+              p: 2,
+              borderRadius: 1,
+            }}
+          >
+            {request.request}
+          </Typography>
+        </Box>
+
+        {/* SQL */}
+        {request.sql && (
+          <Box>
+            <Typography
+              variant="subtitle2"
+              color="text.secondary"
+              sx={{ mb: 1 }}
+            >
+              SQL
+            </Typography>
+            <Box
+              sx={{
+                maxHeight: "300px",
+                overflow: "auto",
+                backgroundColor: "grey.900",
+                borderRadius: 1,
+              }}
+            >
+              <HighlightedSQL code={request.sql} />
+            </Box>
+          </Box>
+        )}
+
+        {/* Intent */}
+        {request.intent && (
+          <Box>
+            <Typography variant="subtitle2" color="text.secondary">
+              Intent
+            </Typography>
+            <Typography variant="body1">{request.intent}</Typography>
+          </Box>
+        )}
+
+        {/* Error */}
+        {request.err && (
+          <Box>
+            <Typography variant="subtitle2" color="error">
+              Error
+            </Typography>
+            <Typography
+              variant="body1"
+              sx={{
+                color: "error.main",
+                whiteSpace: "pre-wrap",
+                backgroundColor: "error.light",
+                p: 2,
+                borderRadius: 1,
+              }}
+            >
+              {request.err}
+            </Typography>
+          </Box>
+        )}
+
+        {/* Session & Request IDs */}
+        <Box
+          sx={{ mt: 2, pt: 2, borderTop: "1px solid", borderColor: "divider" }}
+        >
+          <Typography variant="caption" color="text.secondary" display="block">
+            Session ID: {request.session_id}
+          </Typography>
+          <Typography variant="caption" color="text.secondary" display="block">
+            Request ID: {request.request_id}
+          </Typography>
+        </Box>
+      </Box>
+    </Drawer>
+  );
+};
 
 const Page = withPageAuthRequired(
   () => {
-    const [rowCount, setRowCount] = useState(ROWS);
     const [paginationModel, setPaginationModel] = useState({
-      pageSize: ROWS,
+      pageSize: ROWS_PER_PAGE,
       page: 0,
     });
-    const { data, isLoading } = useAdminRequests(
-      ROWS,
-      paginationModel.page * ROWS,
+    const [searchInput, setSearchInput] = useState("");
+    const [search, setSearch] = useState("");
+    const [selectedRequest, setSelectedRequest] =
+      useState<GetRequestModel | null>(null);
+    const [drawerOpen, setDrawerOpen] = useState(false);
+
+    const { data, total, isLoading } = useAdminRequests(
+      paginationModel.pageSize,
+      paginationModel.page * paginationModel.pageSize,
+      "Done",
+      search || undefined,
     );
-    console.log("data", data);
-    useEffect(() => {
-      if (data) {
-        setRowCount((c) => c + (data?.length || 0));
-      }
-    }, [data]);
+
+    const handleSearch = useCallback(() => {
+      setSearch(searchInput);
+      setPaginationModel((prev) => ({ ...prev, page: 0 }));
+    }, [searchInput]);
+
+    const handleSearchKeyDown = useCallback(
+      (e: React.KeyboardEvent) => {
+        if (e.key === "Enter") {
+          handleSearch();
+        }
+      },
+      [handleSearch],
+    );
+
+    const handleRowClick = useCallback((params: GridRowParams) => {
+      setSelectedRequest(params.row as GetRequestModel);
+      setDrawerOpen(true);
+    }, []);
+
+    const handleCloseDrawer = useCallback(() => {
+      setDrawerOpen(false);
+    }, []);
+
+    const columns = useMemo<GridColDef<GetRequestModel>[]>(
+      () => [
+        {
+          field: "created_at",
+          headerName: "Date",
+          width: 180,
+          sortable: true,
+          renderCell: (params) =>
+            new Date(params.value as string).toLocaleString(),
+        },
+        {
+          field: "user",
+          headerName: "User",
+          width: 250,
+          sortable: true,
+          renderCell: (params) => params.row.session?.user || "Unknown",
+        },
+        {
+          field: "request",
+          headerName: "Request",
+          flex: 1,
+          minWidth: 300,
+          sortable: true,
+        },
+        {
+          field: "sql",
+          headerName: "SQL",
+          width: 300,
+          sortable: false,
+          renderCell: (params) => (
+            <Box
+              sx={{
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                fontFamily: "monospace",
+                fontSize: "0.75rem",
+              }}
+            >
+              {params.value}
+            </Box>
+          ),
+        },
+        {
+          field: "rating",
+          headerName: "Rating",
+          width: 150,
+          sortable: true,
+          renderCell: (params) =>
+            params.value != null ? (
+              <Rating
+                size="small"
+                value={params.value}
+                max={10}
+                precision={1}
+                readOnly
+              />
+            ) : null,
+        },
+        {
+          field: "status",
+          headerName: "Status",
+          width: 100,
+          sortable: true,
+        },
+      ],
+      [],
+    );
+
+    const rows = useMemo(
+      () =>
+        (data || []).map((r: GetRequestModel) => ({
+          ...r,
+          id: `${r.session_id}_${r.request_id}`,
+        })),
+      [data],
+    );
 
     return (
-      <Container maxWidth={false} sx={{ height: "100vh", width: "100%" }}>
-        <DataGrid
-          loading={isLoading}
-          rows={(data || []).map((r: any) => ({
-            ...r,
-            id: `${r.session_id}_${r.request_id}`,
-            data: regex.exec(r.response)?.[1],
-          }))}
-          columns={columns}
-          autoHeight
-          density="compact"
-          checkboxSelection
-          pageSizeOptions={[ROWS, ROWS * 2, ROWS * 3]}
-          slots={{
-            footer: CustomFooter,
+      <Box
+        sx={{
+          height: "100vh",
+          width: "100%",
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        {/* Header with search */}
+        <Box
+          sx={{
+            p: 2,
+            display: "flex",
+            alignItems: "center",
+            gap: 2,
+            borderBottom: "1px solid",
+            borderColor: "divider",
           }}
-          paginationModel={paginationModel}
-          paginationMode="server"
-          onPaginationModelChange={setPaginationModel}
-          rowCount={rowCount}
+        >
+          <Typography variant="h5" sx={{ fontWeight: 600 }}>
+            Admin Requests
+          </Typography>
+          <Box sx={{ flex: 1 }} />
+          <TextField
+            size="small"
+            placeholder="Search requests, SQL, or users..."
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            onKeyDown={handleSearchKeyDown}
+            sx={{ width: 350 }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <Search />
+                </InputAdornment>
+              ),
+            }}
+          />
+          <Button variant="contained" onClick={handleSearch}>
+            Search
+          </Button>
+        </Box>
+
+        {/* DataGrid */}
+        <Box sx={{ flex: 1, width: "100%" }}>
+          <DataGrid
+            loading={isLoading}
+            rows={rows}
+            columns={columns}
+            density="compact"
+            checkboxSelection
+            pageSizeOptions={[25, 50, 100]}
+            slots={{
+              footer: CustomFooter,
+            }}
+            paginationModel={paginationModel}
+            paginationMode="server"
+            onPaginationModelChange={setPaginationModel}
+            rowCount={total}
+            onRowClick={handleRowClick}
+            sx={{
+              border: "none",
+              "& .MuiDataGrid-row": {
+                cursor: "pointer",
+              },
+              "& .MuiDataGrid-row:hover": {
+                backgroundColor: "action.hover",
+              },
+            }}
+          />
+        </Box>
+
+        {/* Detail Drawer */}
+        <RequestDetailDrawer
+          request={selectedRequest}
+          open={drawerOpen}
+          onClose={handleCloseDrawer}
         />
-      </Container>
+      </Box>
     );
   },
   { returnTo: "/admin/requests" },

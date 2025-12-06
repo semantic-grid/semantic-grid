@@ -1,30 +1,43 @@
 import useSWR from "swr";
 
+import type { components } from "@/app/api/apegpt/types.gen";
+
+type AdminRequestsResponse = components["schemas"]["AdminRequestsResponse"];
+
 export const UnauthorizedError = new Error("Unauthorized");
 
 export const useAdminRequests = (
   limit: number = 20,
   offset: number = 0,
   status: string = "Done",
+  search?: string,
 ) => {
-  const fetcher = ([url, limit, offset, status]: [
+  const fetcher = ([url, limit, offset, status, search]: [
     string,
     number,
     number,
     string,
-  ]) =>
-    fetch(`${url}?limit=${limit}&offset=${offset}&status=${status}`).then(
-      (res) => {
-        if (res.ok) return res.json();
-        throw UnauthorizedError;
-      },
-    );
-  const { data, error, isLoading, mutate } = useSWR(
-    ["/api/apegpt/admin/requests", limit, offset, status],
+    string | undefined,
+  ]) => {
+    const params = new URLSearchParams({
+      limit: String(limit),
+      offset: String(offset),
+      status,
+    });
+    if (search) {
+      params.set("search", search);
+    }
+    return fetch(`${url}?${params.toString()}`).then((res) => {
+      if (res.ok) return res.json();
+      throw UnauthorizedError;
+    });
+  };
+
+  const { data, error, isLoading, mutate } = useSWR<AdminRequestsResponse>(
+    ["/api/apegpt/admin/requests/v2", limit, offset, status, search],
     fetcher,
     {
       shouldRetryOnError: false,
-      // cacheTime: 0,
       revalidateOnFocus: false,
       revalidateOnMount: true,
       revalidateOnReconnect: false,
@@ -33,6 +46,12 @@ export const useAdminRequests = (
       refreshInterval: 0,
     },
   );
-  console.log("useAdminRequests", { data, error, isLoading });
-  return { data, error, isLoading, mutate };
+
+  return {
+    data: data?.requests,
+    total: data?.total ?? 0,
+    error,
+    isLoading,
+    mutate,
+  };
 };
