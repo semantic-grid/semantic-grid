@@ -22,8 +22,8 @@ import {
 import type { GridColDef, GridRowParams } from "@mui/x-data-grid-pro";
 import {
   DataGridPro as DataGrid,
-  GridFooter,
   GridFooterContainer,
+  GridPagination,
   useGridApiContext,
 } from "@mui/x-data-grid-pro";
 import { saveAs } from "file-saver";
@@ -67,7 +67,8 @@ const CustomFooter = () => {
       <Button onClick={handleExport} variant="outlined" sx={{ m: 1 }}>
         Export Selected to CSV
       </Button>
-      <GridFooter />
+      <Box sx={{ flex: 1 }} />
+      <GridPagination />
     </GridFooterContainer>
   );
 };
