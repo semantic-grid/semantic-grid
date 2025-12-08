@@ -95,8 +95,12 @@ async def get_all_requests_admin_v2(
     )
 
     # Build WHERE clause
-    where_conditions = ["r.status = :status", "r.sql is not null"]
+    where_conditions = ["r.status = :status"]
     params: dict = {"status": status, "limit": limit, "offset": offset}
+
+    # Only filter for non-null SQL when not looking at Error status
+    if status != RequestStatus.error:
+        where_conditions.append("r.sql is not null")
 
     if search:
         where_conditions.append(
