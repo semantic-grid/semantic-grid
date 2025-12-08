@@ -470,6 +470,7 @@ const Page = withPageAuthRequired(
             columns={columns}
             density="compact"
             checkboxSelection
+            disableRowSelectionOnClick
             autoPageSize
             slots={{
               footer: CustomFooter,
