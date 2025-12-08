@@ -7,6 +7,7 @@
     "install": "bun install",
     "generate": "npx openapi-typescript https://api.apegpt.ai/openapi.json --output ./app/api/apegpt/types.gen.ts",
     "generate_local": "npx openapi-typescript http://web.local/openapi.json --output ./app/api/apegpt/types.gen.ts",
+    "generate-amir-dwh": "npx openapi-typescript https://api.dwh.amirgpt.xyz/openapi.json --output ./app/api/apegpt/types.gen.ts",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",

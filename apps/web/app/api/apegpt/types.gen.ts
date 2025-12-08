@@ -4,1601 +4,1795 @@
  */
 
 export interface paths {
-  "/api/v1/session": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Sessions */
+        get: operations["get_sessions_api_v1_session_get"];
+        put?: never;
+        /** Create Session */
+        post: operations["create_session_api_v1_session_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** Get Sessions */
-    get: operations["get_sessions_api_v1_session_get"];
-    put?: never;
-    /** Create Session */
-    post: operations["create_session_api_v1_session_post"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/session/{session_id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/session/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Session */
+        get: operations["get_session_api_v1_session__session_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Change Session */
+        patch: operations["change_session_api_v1_session__session_id__patch"];
+        trace?: never;
     };
-    /** Get Session */
-    get: operations["get_session_api_v1_session__session_id__get"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    /** Change Session */
-    patch: operations["change_session_api_v1_session__session_id__patch"];
-    trace?: never;
-  };
-  "/api/v1/admin/sessions": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/admin/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Admin Get All Sessions */
+        get: operations["admin_get_all_sessions_api_v1_admin_sessions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** Admin Get All Sessions */
-    get: operations["admin_get_all_sessions_api_v1_admin_sessions_get"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/request/{session_id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/request/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Request */
+        post: operations["create_request_api_v1_request__session_id__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /** Create Request */
-    post: operations["create_request_api_v1_request__session_id__post"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/request/{session_id}/for_query/{query_id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/request/{session_id}/for_query/{query_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Request For Query */
+        post: operations["create_request_for_query_api_v1_request__session_id__for_query__query_id__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /** Create Request For Query */
-    post: operations["create_request_for_query_api_v1_request__session_id__for_query__query_id__post"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/request/{session_id}/from_query/{query_id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/request/{session_id}/from_query/{query_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Request From Query */
+        post: operations["create_request_from_query_api_v1_request__session_id__from_query__query_id__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /** Create Request From Query */
-    post: operations["create_request_from_query_api_v1_request__session_id__from_query__query_id__post"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/request/{session_id}/from_sql": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/request/{session_id}/from_sql": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Request From Sql */
+        post: operations["create_request_from_sql_api_v1_request__session_id__from_sql_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /** Create Request From Sql */
-    post: operations["create_request_from_sql_api_v1_request__session_id__from_sql_post"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/session/{session_id}/linked": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/session/{session_id}/linked": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Linked Session Request
+         * @description Create a request in a new session that is linked to the previous session.
+         */
+        post: operations["create_linked_session_request_api_v1_session__session_id__linked_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /**
-     * Create Linked Session Request
-     * @description Create a request in a new session that is linked to the previous session.
-     */
-    post: operations["create_linked_session_request_api_v1_session__session_id__linked_post"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/request/{session_id}/{seq_num}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/request/{session_id}/{seq_num}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Single Request */
+        get: operations["get_single_request_api_v1_request__session_id___seq_num__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** Get Single Request */
-    get: operations["get_single_request_api_v1_request__session_id___seq_num__get"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/session/get_requests/{session_id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/session/get_requests/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Requests For Session */
+        get: operations["get_requests_for_session_api_v1_session_get_requests__session_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** Get Requests For Session */
-    get: operations["get_requests_for_session_api_v1_session_get_requests__session_id__get"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/request/{request_id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/request/{request_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Request
+         * @description Delete a request and revert the session to the state
+         *     before this request was added.
+         */
+        delete: operations["delete_request_api_v1_request__request_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Single Request */
+        patch: operations["update_single_request_api_v1_request__request_id__patch"];
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    post?: never;
-    /**
-     * Delete Request
-     * @description Delete a request and revert the session to the state
-     *     before this request was added.
-     */
-    delete: operations["delete_request_api_v1_request__request_id__delete"];
-    options?: never;
-    head?: never;
-    /** Update Single Request */
-    patch: operations["update_single_request_api_v1_request__request_id__patch"];
-    trace?: never;
-  };
-  "/api/v1/admin/requests": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/admin/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Admin Get All Requests
+         * @description Get all requests for admin with pagination metadata, user info, and search.
+         *     Returns total count for proper pagination.
+         */
+        get: operations["admin_get_all_requests_api_v1_admin_requests_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** Admin Get All Requests */
-    get: operations["admin_get_all_requests_api_v1_admin_requests_get"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-
-  "/api/v1/chart": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/admin/requests/{request_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Admin Update Request
+         * @description Update admin-specific fields on a request (is_test, is_fixed, fix_comment).
+         *     When is_fixed is set to True, fixed_by and fixed_ts are automatically populated.
+         */
+        patch: operations["admin_update_request_api_v1_admin_requests__request_id__patch"];
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /** Generate Chart */
-    post: operations["generate_chart_api_v1_chart_post"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/chart/{filename}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/chart": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Generate Chart */
+        post: operations["generate_chart_api_v1_chart_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** Get Chart */
-    get: operations["get_chart_api_v1_chart__filename__get"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/chart/html": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/chart/{filename}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Chart */
+        get: operations["get_chart_api_v1_chart__filename__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /** Generate Chart Html */
-    post: operations["generate_chart_html_api_v1_chart_html_post"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/chart/html/{filename}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/chart/html": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Generate Chart Html */
+        post: operations["generate_chart_html_api_v1_chart_html_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** Get Chart Html */
-    get: operations["get_chart_html_api_v1_chart_html__filename__get"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/query": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/chart/html/{filename}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Chart Html */
+        get: operations["get_chart_html_api_v1_chart_html__filename__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** Get All Queries */
-    get: operations["get_all_queries_api_v1_query_get"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/data/{query_id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get All Queries */
+        get: operations["get_all_queries_api_v1_query_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** Get Query Data */
-    get: operations["get_query_data_api_v1_data__query_id__get"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/data/sse/{query_id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/data/{query_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Query Data */
+        get: operations["get_query_data_api_v1_data__query_id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Cancel Data Fetch
+         * @description Cancel or unsubscribe from a running data fetch.
+         *
+         *     Behavior:
+         *     - If user is the only subscriber → cancel the Celery task entirely
+         *     - If other users are subscribed → just unsubscribe this user (task continues)
+         *
+         *     Returns:
+         *         - status: "cancelled" if task was terminated
+         *         - status: "unsubscribed" if user was removed but task continues
+         *         - status: "not_found" if no running task exists
+         */
+        delete: operations["cancel_data_fetch_api_v1_data__query_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Data Fetch Notification
+         * @description Update notification settings for a running data fetch.
+         *
+         *     Allows users to add or remove email notification for when the fetch completes.
+         *
+         *     Request body:
+         *         - notify: bool - Whether to send notification on complete
+         *         - user_email: str (optional) - Email for notification
+         *           (uses auth email if not provided)
+         *
+         *     Returns:
+         *         - status: "updated" if notification setting was updated
+         *         - status: "not_found" if no running task exists
+         */
+        patch: operations["update_data_fetch_notification_api_v1_data__query_id__patch"];
+        trace?: never;
     };
-    /**
-     * Stream Data Fetch
-     * @description SSE endpoint for async data fetching.
-     *
-     *     Flow:
-     *     1. Validates query and auth
-     *     2. Launches Celery task for data fetching
-     *     3. Streams progress events to client
-     *     4. Returns final data when ready
-     */
-    get: operations["stream_data_fetch_api_v1_data_sse__query_id__get"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/query/{query_id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/data/sse/{query_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stream Data Fetch
+         * @description SSE endpoint for async data fetching.
+         *
+         *     Flow:
+         *     1. Validates query and auth
+         *     2. Launches Celery task for data fetching
+         *     3. Streams progress events to client
+         *     4. Returns final data when ready
+         */
+        get: operations["stream_data_fetch_api_v1_data_sse__query_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /** Get Query Metadata */
-    get: operations["get_query_metadata_api_v1_query__query_id__get"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/sse/{session_id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/telemetry/sse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Telemetry Sse
+         * @description SSE endpoint for system telemetry (worker stats, DB pool stats).
+         *     Sends updates every 5 seconds.
+         */
+        get: operations["telemetry_sse_api_v1_telemetry_sse_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /**
-     * Stream Request Updates
-     * @description Server-Sent Events endpoint for real-time request status updates.
-     *
-     *     Listens to PostgreSQL NOTIFY events on the 'request_update' channel
-     *     and streams updates for the specified session to connected clients.
-     *
-     *     The trigger sends notifications with this payload:
-     *     {
-     *         "request_id": "uuid",
-     *         "session_id": "uuid",
-     *         "status": "status_enum",
-     *         "updated_at": timestamp,
-     *         "has_response": bool,
-     *         "has_error": bool,
-     *         "sequence_number": int
-     *     }
-     */
-    get: operations["stream_request_updates_api_v1_sse__session_id__get"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
+    "/api/v1/query/{query_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Query Metadata */
+        get: operations["get_query_metadata_api_v1_query__query_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sse/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stream Request Updates
+         * @description Server-Sent Events endpoint for real-time request status updates.
+         *
+         *     Listens to PostgreSQL NOTIFY events on the 'request_update' channel
+         *     and streams updates for the specified session to connected clients.
+         *
+         *     The trigger sends notifications with this payload:
+         *     {
+         *         "request_id": "uuid",
+         *         "session_id": "uuid",
+         *         "status": "status_enum",
+         *         "updated_at": timestamp,
+         *         "has_response": bool,
+         *         "has_error": bool,
+         *         "sequence_number": int
+         *     }
+         */
+        get: operations["stream_request_updates_api_v1_sse__session_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
-  schemas: {
-    /** AddLinkedRequestModel */
-    AddLinkedRequestModel: {
-      /** Name */
-      name?: string | null;
-      /** Tags */
-      tags?: string | null;
-      /** @default 2 */
-      version: components["schemas"]["Version"];
-      /** Request */
-      request: string;
-      /** @default Multistep */
-      flow: components["schemas"]["FlowType"] | null;
-      /** @default OpenAI */
-      model: components["schemas"]["ModelType"] | null;
-      /** @default  */
-      db: components["schemas"]["DBType"] | null;
-      refs?: components["schemas"]["Refs"] | null;
+    schemas: {
+        /** AddLinkedRequestModel */
+        AddLinkedRequestModel: {
+            /** Name */
+            name?: string | null;
+            /** Tags */
+            tags?: string | null;
+            /** @default 2 */
+            version: components["schemas"]["Version"];
+            /** Request */
+            request: string;
+            /** @default Multistep */
+            flow: components["schemas"]["FlowType"] | null;
+            /** @default OpenAI */
+            model: components["schemas"]["ModelType"] | null;
+            /** @default  */
+            db: components["schemas"]["DBType"] | null;
+            refs?: components["schemas"]["Refs"] | null;
+        };
+        /** AddRequestModel */
+        AddRequestModel: {
+            /** @default 1 */
+            version: components["schemas"]["Version"];
+            /** Request */
+            request: string;
+            /** @default tbd */
+            request_type: components["schemas"]["InteractiveRequestType"] | null;
+            /** @default Multistep */
+            flow: components["schemas"]["FlowType"] | null;
+            /** @default OpenAI */
+            model: components["schemas"]["ModelType"] | null;
+            /** @default  */
+            db: components["schemas"]["DBType"] | null;
+            refs?: components["schemas"]["Refs"] | null;
+            /** Query Id */
+            query_id?: string | null;
+        };
+        /**
+         * AdminRequestsResponse
+         * @description Paginated response for admin requests endpoint.
+         */
+        AdminRequestsResponse: {
+            /** Requests */
+            requests: components["schemas"]["GetRequestModel"][];
+            /** Total */
+            total: number;
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+        };
+        /**
+         * ChartMetadata
+         * @description Chart visualization metadata for query results.
+         *
+         *     - suggested_chart: LLM's suggested chart type based on query intent
+         *     - available_charts: Empirically validated chart types based on result structure
+         *     - chart_config: Optional hints for chart rendering (axis labels, title, etc.)
+         */
+        ChartMetadata: {
+            /** Suggested Chart */
+            suggested_chart?: string | null;
+            /** Available Charts */
+            available_charts?: string[] | null;
+            /** Chart Config */
+            chart_config?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ChartRequest */
+        ChartRequest: {
+            /** Code */
+            code: string;
+        };
+        /** ChartStructuredRequest */
+        ChartStructuredRequest: {
+            chart_type: components["schemas"]["ChartType"];
+            /** Labels */
+            labels: string[];
+            /** Rows */
+            rows: unknown[][];
+        };
+        /**
+         * ChartType
+         * @enum {string}
+         */
+        ChartType: "Pie" | "Bar";
+        /** Column */
+        Column: {
+            /** Id */
+            id?: string;
+            /** Summary */
+            summary?: string | null;
+            /** Column Name */
+            column_name?: string | null;
+            /** Column Alias */
+            column_alias?: string | null;
+            /** Column Type */
+            column_type?: string | null;
+            /** Column Description */
+            column_description?: string | null;
+        };
+        /** CreateQueryFromSqlModel */
+        CreateQueryFromSqlModel: {
+            /** Request */
+            request: string;
+            /** Sql */
+            sql?: string;
+            /**
+             * Ai Generated
+             * @default false
+             */
+            ai_generated: boolean;
+            /** Ai Context */
+            ai_context?: {
+                [key: string]: unknown;
+            } | null;
+            /** Data Source */
+            data_source?: string | null;
+            /** Db Dialect */
+            db_dialect?: string | null;
+        };
+        /** CreateSessionModel */
+        CreateSessionModel: {
+            /** Name */
+            name?: string | null;
+            /** Tags */
+            tags?: string | null;
+            /** Parent */
+            parent?: string | null;
+            refs?: components["schemas"]["Refs"] | null;
+        };
+        /**
+         * DBType
+         * @enum {string}
+         */
+        DBType: "" | "NWH" | "V2";
+        /**
+         * FlowType
+         * @enum {string}
+         */
+        FlowType: "OpenAISimple" | "OpenAISimpleNWH" | "OpenAISimpleV2" | "GeminiSimple" | "GeminiSimpleNWH" | "GeminiSimpleV2" | "DeepseekSimple" | "DeepseekSimpleNWH" | "DeepseekSimpleV2" | "AnthropicSimple" | "AnthropicSimpleNWH" | "AnthropicSimpleV2" | "OpenAIMultisteps" | "OpenAIMultistep" | "GeminiMultistep" | "DeepseekMultistep" | "AnthropicMultistep" | "Simple" | "Multistep" | "DataOnly" | "MCP" | "Flex" | "LangGraph" | "Interactive";
+        /** GetQueryModel */
+        GetQueryModel: {
+            /** Request */
+            request: string;
+            /** Intent */
+            intent?: string | null;
+            /** Summary */
+            summary?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Sql */
+            sql?: string | null;
+            /** Row Count */
+            row_count?: number | null;
+            /** Columns */
+            columns?: components["schemas"]["Column"][] | null;
+            chart?: components["schemas"]["ChartMetadata"] | null;
+            /**
+             * Ai Generated
+             * @default true
+             */
+            ai_generated: boolean;
+            /** Ai Context */
+            ai_context?: {
+                [key: string]: unknown;
+            } | null;
+            /** Data Source */
+            data_source?: string | null;
+            /** Db Dialect */
+            db_dialect?: string | null;
+            /** Explanation */
+            explanation?: {
+                [key: string]: unknown;
+            } | null;
+            /** Parent Id */
+            parent_id?: string | null;
+            /** Err */
+            err?: string | null;
+            /**
+             * Query Id
+             * Format: uuid
+             */
+            query_id: string;
+        };
+        /** GetRequestModel */
+        GetRequestModel: {
+            /**
+             * Session Id
+             * Format: uuid
+             */
+            session_id: string;
+            /**
+             * Request Id
+             * Format: uuid
+             */
+            request_id: string;
+            /** Sequence Number */
+            sequence_number: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Request */
+            request: string;
+            /** Response */
+            response?: string | null;
+            /** Sql */
+            sql?: string | null;
+            /** Rating */
+            rating?: number | null;
+            /** Review */
+            review?: string | null;
+            status: components["schemas"]["RequestStatus"];
+            /** Intent */
+            intent?: string | null;
+            /** Assumptions */
+            assumptions?: string | null;
+            /** Intro */
+            intro?: string | null;
+            /** Outro */
+            outro?: string | null;
+            /** Raw Data Labels */
+            raw_data_labels?: string[] | null;
+            /** Raw Data Rows */
+            raw_data_rows?: (string | number)[][] | null;
+            /** Csv */
+            csv?: string | null;
+            /** Chart */
+            chart?: string | null;
+            /** Chart Url */
+            chart_url?: string | null;
+            /** Err */
+            err?: string | null;
+            /** Preset */
+            preset?: string | null;
+            session?: components["schemas"]["GetSessionModel"] | null;
+            refs?: components["schemas"]["Refs"] | null;
+            /** Linked Session Id */
+            linked_session_id?: string | null;
+            query?: components["schemas"]["GetQueryModel"] | null;
+            view?: components["schemas"]["View"] | null;
+            /** Is Test */
+            is_test?: boolean | null;
+            /** Is Fixed */
+            is_fixed?: boolean | null;
+            /** Fixed By */
+            fixed_by?: string | null;
+            /** Fixed Ts */
+            fixed_ts?: string | null;
+            /** Fix Comment */
+            fix_comment?: string | null;
+        };
+        /** GetSessionModel */
+        GetSessionModel: {
+            /** User */
+            user: string;
+            /**
+             * Session Id
+             * Format: uuid
+             */
+            session_id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Name */
+            name?: string | null;
+            /** Tags */
+            tags?: string | null;
+            /** Metadata */
+            metadata?: {
+                [key: string]: unknown;
+            } | null;
+            /** Parent */
+            parent?: string | null;
+            refs?: components["schemas"]["Refs"] | null;
+            /** Message Count */
+            message_count?: number | null;
+        };
+        /** HTTPValidationError */
+        HTTPValidationError: {
+            /** Detail */
+            detail?: components["schemas"]["ValidationError"][];
+        };
+        /**
+         * InteractiveRequestType
+         * @enum {string}
+         */
+        InteractiveRequestType: "tbd" | "interactive_query" | "data_analysis" | "general_chat" | "disambiguation" | "linked_session" | "linked_query" | "manual_query" | "discovery";
+        /**
+         * ModelType
+         * @enum {string}
+         */
+        ModelType: "OpenAI" | "Gemini" | "Deepseek" | "Anthropic";
+        /**
+         * PatchAdminRequestModel
+         * @description Model for updating admin-specific fields on a request.
+         */
+        PatchAdminRequestModel: {
+            /** Is Test */
+            is_test?: boolean | null;
+            /** Is Fixed */
+            is_fixed?: boolean | null;
+            /** Fix Comment */
+            fix_comment?: string | null;
+        };
+        /** PatchSessionModel */
+        PatchSessionModel: {
+            /** Name */
+            name?: string | null;
+            /** Tags */
+            tags?: string | null;
+        };
+        /** Refs */
+        Refs: {
+            /** Parent */
+            parent?: string | null;
+            /** Steps */
+            steps?: string[] | null;
+            /** Cols */
+            cols?: string[] | null;
+            /** Rows */
+            rows?: (string | number)[][] | null;
+        };
+        /**
+         * RequestStatus
+         * @enum {string}
+         */
+        RequestStatus: "New" | "Intent" | "SQL" | "DataFetch" | "Retry" | "Finalizing" | "InProgress" | "Scheduled" | "Error" | "Done" | "Cancelled";
+        /**
+         * UpdateNotificationRequest
+         * @description Request body for updating notification settings.
+         */
+        UpdateNotificationRequest: {
+            /** Notify */
+            notify: boolean;
+            /** User Email */
+            user_email?: string | null;
+        };
+        /** UpdateRequestStatusModel */
+        UpdateRequestStatusModel: {
+            /** Review */
+            review?: string | null;
+            /** Rating */
+            rating?: number | null;
+            status?: components["schemas"]["RequestStatus"] | null;
+        };
+        /** ValidationError */
+        ValidationError: {
+            /** Location */
+            loc: (string | number)[];
+            /** Message */
+            msg: string;
+            /** Error Type */
+            type: string;
+        };
+        /**
+         * Version
+         * @enum {integer}
+         */
+        Version: 1 | 2;
+        /** View */
+        View: {
+            /** Sort By */
+            sort_by?: string | null;
+            /** Sort Order */
+            sort_order?: string | null;
+            /** Limit */
+            limit?: number | null;
+            /** Offset */
+            offset?: number | null;
+        };
     };
-    /** AddRequestModel */
-    AddRequestModel: {
-      /** @default 1 */
-      version: components["schemas"]["Version"];
-      /** Request */
-      request: string;
-      /** @default tbd */
-      request_type: components["schemas"]["InteractiveRequestType"] | null;
-      /** @default Multistep */
-      flow: components["schemas"]["FlowType"] | null;
-      /** @default OpenAI */
-      model: components["schemas"]["ModelType"] | null;
-      /** @default  */
-      db: components["schemas"]["DBType"] | null;
-      refs?: components["schemas"]["Refs"] | null;
-      /** Query Id */
-      query_id?: string | null;
-    };
-    /**
-     * ChartMetadata
-     * @description Chart visualization metadata for query results.
-     *
-     *     - suggested_chart: LLM's suggested chart type based on query intent
-     *     - available_charts: Empirically validated chart types based on result structure
-     *     - chart_config: Optional hints for chart rendering (axis labels, title, etc.)
-     */
-    ChartMetadata: {
-      /** Suggested Chart */
-      suggested_chart?: string | null;
-      /** Available Charts */
-      available_charts?: string[] | null;
-      /** Chart Config */
-      chart_config?: {
-        [key: string]: unknown;
-      } | null;
-    };
-    /** ChartRequest */
-    ChartRequest: {
-      /** Code */
-      code: string;
-    };
-    /** ChartStructuredRequest */
-    ChartStructuredRequest: {
-      chart_type: components["schemas"]["ChartType"];
-      /** Labels */
-      labels: string[];
-      /** Rows */
-      rows: unknown[][];
-    };
-    /**
-     * ChartType
-     * @enum {string}
-     */
-    ChartType: "Pie" | "Bar";
-    /** Column */
-    Column: {
-      /** Id */
-      id?: string;
-      /** Summary */
-      summary?: string | null;
-      /** Column Name */
-      column_name?: string | null;
-      /** Column Alias */
-      column_alias?: string | null;
-      /** Column Type */
-      column_type?: string | null;
-      /** Column Description */
-      column_description?: string | null;
-    };
-    /** CreateQueryFromSqlModel */
-    CreateQueryFromSqlModel: {
-      /** Request */
-      request: string;
-      /** Sql */
-      sql?: string;
-      /**
-       * Ai Generated
-       * @default false
-       */
-      ai_generated: boolean;
-      /** Ai Context */
-      ai_context?: {
-        [key: string]: unknown;
-      } | null;
-      /** Data Source */
-      data_source?: string | null;
-      /** Db Dialect */
-      db_dialect?: string | null;
-    };
-    /** CreateSessionModel */
-    CreateSessionModel: {
-      /** Name */
-      name?: string | null;
-      /** Tags */
-      tags?: string | null;
-      /** Parent */
-      parent?: string | null;
-      refs?: components["schemas"]["Refs"] | null;
-    };
-    /**
-     * DBType
-     * @enum {string}
-     */
-    DBType: "" | "NWH" | "V2";
-    /**
-     * FlowType
-     * @enum {string}
-     */
-    FlowType:
-      | "OpenAISimple"
-      | "OpenAISimpleNWH"
-      | "OpenAISimpleV2"
-      | "GeminiSimple"
-      | "GeminiSimpleNWH"
-      | "GeminiSimpleV2"
-      | "DeepseekSimple"
-      | "DeepseekSimpleNWH"
-      | "DeepseekSimpleV2"
-      | "AnthropicSimple"
-      | "AnthropicSimpleNWH"
-      | "AnthropicSimpleV2"
-      | "OpenAIMultisteps"
-      | "OpenAIMultistep"
-      | "GeminiMultistep"
-      | "DeepseekMultistep"
-      | "AnthropicMultistep"
-      | "Simple"
-      | "Multistep"
-      | "DataOnly"
-      | "MCP"
-      | "Flex"
-      | "LangGraph"
-      | "Interactive";
-    /** GetQueryModel */
-    GetQueryModel: {
-      /** Request */
-      request: string;
-      /** Intent */
-      intent?: string | null;
-      /** Summary */
-      summary?: string | null;
-      /** Description */
-      description?: string | null;
-      /** Sql */
-      sql?: string | null;
-      /** Row Count */
-      row_count?: number | null;
-      /** Columns */
-      columns?: components["schemas"]["Column"][] | null;
-      chart?: components["schemas"]["ChartMetadata"] | null;
-      /**
-       * Ai Generated
-       * @default true
-       */
-      ai_generated: boolean;
-      /** Ai Context */
-      ai_context?: {
-        [key: string]: unknown;
-      } | null;
-      /** Data Source */
-      data_source?: string | null;
-      /** Db Dialect */
-      db_dialect?: string | null;
-      /** Explanation */
-      explanation?: {
-        [key: string]: unknown;
-      } | null;
-      /** Parent Id */
-      parent_id?: string | null;
-      /** Err */
-      err?: string | null;
-      /**
-       * Query Id
-       * Format: uuid
-       */
-      query_id: string;
-    };
-    /** GetRequestModel */
-    GetRequestModel: {
-      /**
-       * Session Id
-       * Format: uuid
-       */
-      session_id: string;
-      /**
-       * Request Id
-       * Format: uuid
-       */
-      request_id: string;
-      /** Sequence Number */
-      sequence_number: number;
-      /**
-       * Created At
-       * Format: date-time
-       */
-      created_at: string;
-      /** Request */
-      request: string;
-      /** Response */
-      response?: string | null;
-      /** Sql */
-      sql?: string | null;
-      /** Rating */
-      rating?: number | null;
-      /** Review */
-      review?: string | null;
-      status: components["schemas"]["RequestStatus"];
-      /** Intent */
-      intent?: string | null;
-      /** Assumptions */
-      assumptions?: string | null;
-      /** Intro */
-      intro?: string | null;
-      /** Outro */
-      outro?: string | null;
-      /** Raw Data Labels */
-      raw_data_labels?: string[] | null;
-      /** Raw Data Rows */
-      raw_data_rows?: (string | number)[][] | null;
-      /** Csv */
-      csv?: string | null;
-      /** Chart */
-      chart?: string | null;
-      /** Chart Url */
-      chart_url?: string | null;
-      /** Err */
-      err?: string | null;
-      /** Preset */
-      preset?: string | null;
-      session?: components["schemas"]["GetSessionModel"] | null;
-      refs?: components["schemas"]["Refs"] | null;
-      /** Linked Session Id */
-      linked_session_id?: string | null;
-      query?: components["schemas"]["GetQueryModel"] | null;
-      view?: components["schemas"]["View"] | null;
-    };
-    /** AdminRequestsResponse */
-    AdminRequestsResponse: {
-      /** Requests */
-      requests: components["schemas"]["GetRequestModel"][];
-      /** Total */
-      total: number;
-      /** Limit */
-      limit: number;
-      /** Offset */
-      offset: number;
-    };
-    /** GetSessionModel */
-    GetSessionModel: {
-      /** User */
-      user: string;
-      /**
-       * Session Id
-       * Format: uuid
-       */
-      session_id: string;
-      /**
-       * Created At
-       * Format: date-time
-       */
-      created_at: string;
-      /** Name */
-      name?: string | null;
-      /** Tags */
-      tags?: string | null;
-      /** Metadata */
-      metadata?: {
-        [key: string]: unknown;
-      } | null;
-      /** Parent */
-      parent?: string | null;
-      refs?: components["schemas"]["Refs"] | null;
-      /** Message Count */
-      message_count?: number | null;
-    };
-    /** HTTPValidationError */
-    HTTPValidationError: {
-      /** Detail */
-      detail?: components["schemas"]["ValidationError"][];
-    };
-    /**
-     * InteractiveRequestType
-     * @enum {string}
-     */
-    InteractiveRequestType:
-      | "tbd"
-      | "interactive_query"
-      | "data_analysis"
-      | "general_chat"
-      | "disambiguation"
-      | "linked_session"
-      | "linked_query"
-      | "manual_query"
-      | "discovery";
-    /**
-     * ModelType
-     * @enum {string}
-     */
-    ModelType: "OpenAI" | "Gemini" | "Deepseek" | "Anthropic";
-    /** PatchSessionModel */
-    PatchSessionModel: {
-      /** Name */
-      name?: string | null;
-      /** Tags */
-      tags?: string | null;
-    };
-    /** Refs */
-    Refs: {
-      /** Parent */
-      parent?: string | null;
-      /** Steps */
-      steps?: string[] | null;
-      /** Cols */
-      cols?: string[] | null;
-      /** Rows */
-      rows?: (string | number)[][] | null;
-    };
-    /**
-     * RequestStatus
-     * @enum {string}
-     */
-    RequestStatus:
-      | "New"
-      | "Intent"
-      | "SQL"
-      | "DataFetch"
-      | "Retry"
-      | "Finalizing"
-      | "InProgress"
-      | "Scheduled"
-      | "Error"
-      | "Done"
-      | "Cancelled";
-    /** UpdateRequestStatusModel */
-    UpdateRequestStatusModel: {
-      /** Review */
-      review?: string | null;
-      /** Rating */
-      rating?: number | null;
-      status?: components["schemas"]["RequestStatus"] | null;
-    };
-    /** ValidationError */
-    ValidationError: {
-      /** Location */
-      loc: (string | number)[];
-      /** Message */
-      msg: string;
-      /** Error Type */
-      type: string;
-    };
-    /**
-     * Version
-     * @enum {integer}
-     */
-    Version: 1 | 2;
-    /** View */
-    View: {
-      /** Sort By */
-      sort_by?: string | null;
-      /** Sort Order */
-      sort_order?: string | null;
-      /** Limit */
-      limit?: number | null;
-      /** Offset */
-      offset?: number | null;
-    };
-  };
-  responses: never;
-  parameters: never;
-  requestBodies: never;
-  headers: never;
-  pathItems: never;
+    responses: never;
+    parameters: never;
+    requestBodies: never;
+    headers: never;
+    pathItems: never;
 }
 export type $defs = Record<string, never>;
 export interface operations {
-  get_sessions_api_v1_session_get: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    get_sessions_api_v1_session_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GetSessionModel"][];
+                };
+            };
+        };
     };
-    requestBody?: never;
-    responses: {
-      /** @description Successful Response */
-      200: {
-        headers: {
-          [name: string]: unknown;
+    create_session_api_v1_session_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
         };
-        content: {
-          "application/json": components["schemas"]["GetSessionModel"][];
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSessionModel"];
+            };
         };
-      };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GetSessionModel"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
     };
-  };
-  create_session_api_v1_session_post: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    get_session_api_v1_session__session_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GetSessionModel"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
     };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["CreateSessionModel"];
-      };
+    change_session_api_v1_session__session_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchSessionModel"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GetSessionModel"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
     };
-    responses: {
-      /** @description Successful Response */
-      200: {
-        headers: {
-          [name: string]: unknown;
+    admin_get_all_sessions_api_v1_admin_sessions_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
         };
-        content: {
-          "application/json": components["schemas"]["GetSessionModel"];
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GetSessionModel"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
-      };
-      /** @description Validation Error */
-      422: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["HTTPValidationError"];
-        };
-      };
     };
-  };
-  get_session_api_v1_session__session_id__get: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        session_id: string;
-      };
-      cookie?: never;
+    create_request_api_v1_request__session_id__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddRequestModel"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GetRequestModel"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
     };
-    requestBody?: never;
-    responses: {
-      /** @description Successful Response */
-      200: {
-        headers: {
-          [name: string]: unknown;
+    create_request_for_query_api_v1_request__session_id__for_query__query_id__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+                query_id: string;
+            };
+            cookie?: never;
         };
-        content: {
-          "application/json": components["schemas"]["GetSessionModel"];
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddRequestModel"];
+            };
         };
-      };
-      /** @description Validation Error */
-      422: {
-        headers: {
-          [name: string]: unknown;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GetRequestModel"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
-        content: {
-          "application/json": components["schemas"]["HTTPValidationError"];
-        };
-      };
     };
-  };
-  change_session_api_v1_session__session_id__patch: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        session_id: string;
-      };
-      cookie?: never;
+    create_request_from_query_api_v1_request__session_id__from_query__query_id__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+                query_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GetRequestModel"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
     };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["PatchSessionModel"];
-      };
+    create_request_from_sql_api_v1_request__session_id__from_sql_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateQueryFromSqlModel"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GetRequestModel"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
     };
-    responses: {
-      /** @description Successful Response */
-      200: {
-        headers: {
-          [name: string]: unknown;
+    create_linked_session_request_api_v1_session__session_id__linked_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
         };
-        content: {
-          "application/json": components["schemas"]["GetSessionModel"];
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddLinkedRequestModel"];
+            };
         };
-      };
-      /** @description Validation Error */
-      422: {
-        headers: {
-          [name: string]: unknown;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GetRequestModel"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
-        content: {
-          "application/json": components["schemas"]["HTTPValidationError"];
-        };
-      };
     };
-  };
-  admin_get_all_sessions_api_v1_admin_sessions_get: {
-    parameters: {
-      query?: {
-        limit?: number;
-        offset?: number;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
+    get_single_request_api_v1_request__session_id___seq_num__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+                seq_num: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GetRequestModel"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
     };
-    requestBody?: never;
-    responses: {
-      /** @description Successful Response */
-      200: {
-        headers: {
-          [name: string]: unknown;
+    get_requests_for_session_api_v1_session_get_requests__session_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
         };
-        content: {
-          "application/json": components["schemas"]["GetSessionModel"][];
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GetRequestModel"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
-      };
-      /** @description Validation Error */
-      422: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["HTTPValidationError"];
-        };
-      };
     };
-  };
-  create_request_api_v1_request__session_id__post: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        session_id: string;
-      };
-      cookie?: never;
+    delete_request_api_v1_request__request_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
     };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["AddRequestModel"];
-      };
+    update_single_request_api_v1_request__request_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateRequestStatusModel"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GetRequestModel"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
     };
-    responses: {
-      /** @description Successful Response */
-      200: {
-        headers: {
-          [name: string]: unknown;
+    admin_get_all_requests_api_v1_admin_requests_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                status?: components["schemas"]["RequestStatus"];
+                /** @description Search in request, SQL, or user */
+                search?: string | null;
+                /** @description Filter to requests with rating or review */
+                has_feedback?: boolean | null;
+                /** @description Filter by is_test flag */
+                is_test?: boolean | null;
+                /** @description Filter by is_fixed flag */
+                is_fixed?: boolean | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
         };
-        content: {
-          "application/json": components["schemas"]["GetRequestModel"];
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminRequestsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
-      };
-      /** @description Validation Error */
-      422: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["HTTPValidationError"];
-        };
-      };
     };
-  };
-  create_request_for_query_api_v1_request__session_id__for_query__query_id__post: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        session_id: string;
-        query_id: string;
-      };
-      cookie?: never;
+    admin_update_request_api_v1_admin_requests__request_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchAdminRequestModel"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GetRequestModel"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
     };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["AddRequestModel"];
-      };
+    generate_chart_api_v1_chart_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChartRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
     };
-    responses: {
-      /** @description Successful Response */
-      200: {
-        headers: {
-          [name: string]: unknown;
+    get_chart_api_v1_chart__filename__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                filename: string;
+            };
+            cookie?: never;
         };
-        content: {
-          "application/json": components["schemas"]["GetRequestModel"];
+        requestBody?: never;
+        responses: {
+            /** @description Returns a PNG image file */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": unknown;
+                };
+            };
+            /** @description Chart not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /** @example {
+                     *       "detail": "Chart not found"
+                     *     } */
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
-      };
-      /** @description Validation Error */
-      422: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["HTTPValidationError"];
-        };
-      };
     };
-  };
-  create_request_from_query_api_v1_request__session_id__from_query__query_id__post: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        session_id: string;
-        query_id: string;
-      };
-      cookie?: never;
+    generate_chart_html_api_v1_chart_html_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChartStructuredRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
     };
-    requestBody?: never;
-    responses: {
-      /** @description Successful Response */
-      200: {
-        headers: {
-          [name: string]: unknown;
+    get_chart_html_api_v1_chart_html__filename__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                filename: string;
+            };
+            cookie?: never;
         };
-        content: {
-          "application/json": components["schemas"]["GetRequestModel"];
+        requestBody?: never;
+        responses: {
+            /** @description Returns a HTML file */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": unknown;
+                };
+            };
+            /** @description Chart not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /** @example {
+                     *       "detail": "Chart not found"
+                     *     } */
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
-      };
-      /** @description Validation Error */
-      422: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["HTTPValidationError"];
-        };
-      };
     };
-  };
-  create_request_from_sql_api_v1_request__session_id__from_sql_post: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        session_id: string;
-      };
-      cookie?: never;
+    get_all_queries_api_v1_query_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GetQueryModel"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
     };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["CreateQueryFromSqlModel"];
-      };
+    get_query_data_api_v1_data__query_id__get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                sort_by?: string | null;
+                sort_order?: string;
+            };
+            header?: never;
+            path: {
+                query_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
     };
-    responses: {
-      /** @description Successful Response */
-      200: {
-        headers: {
-          [name: string]: unknown;
+    cancel_data_fetch_api_v1_data__query_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                query_id: string;
+            };
+            cookie?: never;
         };
-        content: {
-          "application/json": components["schemas"]["GetRequestModel"];
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
-      };
-      /** @description Validation Error */
-      422: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["HTTPValidationError"];
-        };
-      };
     };
-  };
-  create_linked_session_request_api_v1_session__session_id__linked_post: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        session_id: string;
-      };
-      cookie?: never;
+    update_data_fetch_notification_api_v1_data__query_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                query_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateNotificationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
     };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["AddLinkedRequestModel"];
-      };
+    stream_data_fetch_api_v1_data_sse__query_id__get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                sort_by?: string | null;
+                sort_order?: string;
+                notify_on_complete?: boolean;
+                user_email?: string | null;
+                force?: boolean;
+            };
+            header?: never;
+            path: {
+                query_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
     };
-    responses: {
-      /** @description Successful Response */
-      200: {
-        headers: {
-          [name: string]: unknown;
+    telemetry_sse_api_v1_telemetry_sse_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
         };
-        content: {
-          "application/json": components["schemas"]["GetRequestModel"];
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
         };
-      };
-      /** @description Validation Error */
-      422: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["HTTPValidationError"];
-        };
-      };
     };
-  };
-  get_single_request_api_v1_request__session_id___seq_num__get: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        session_id: string;
-        seq_num: number;
-      };
-      cookie?: never;
+    get_query_metadata_api_v1_query__query_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                query_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GetQueryModel"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
     };
-    requestBody?: never;
-    responses: {
-      /** @description Successful Response */
-      200: {
-        headers: {
-          [name: string]: unknown;
+    stream_request_updates_api_v1_sse__session_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
         };
-        content: {
-          "application/json": components["schemas"]["GetRequestModel"];
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
-      };
-      /** @description Validation Error */
-      422: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["HTTPValidationError"];
-        };
-      };
     };
-  };
-  get_requests_for_session_api_v1_session_get_requests__session_id__get: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        session_id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Successful Response */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["GetRequestModel"][];
-        };
-      };
-      /** @description Validation Error */
-      422: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["HTTPValidationError"];
-        };
-      };
-    };
-  };
-  delete_request_api_v1_request__request_id__delete: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        request_id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Successful Response */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": unknown;
-        };
-      };
-      /** @description Validation Error */
-      422: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["HTTPValidationError"];
-        };
-      };
-    };
-  };
-  update_single_request_api_v1_request__request_id__patch: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        request_id: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["UpdateRequestStatusModel"];
-      };
-    };
-    responses: {
-      /** @description Successful Response */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["GetRequestModel"];
-        };
-      };
-      /** @description Validation Error */
-      422: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["HTTPValidationError"];
-        };
-      };
-    };
-  };
-  admin_get_all_requests_api_v1_admin_requests_get: {
-    parameters: {
-      query?: {
-        limit?: number;
-        offset?: number;
-        status?: components["schemas"]["RequestStatus"];
-        search?: string;
-        has_feedback?: boolean;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Successful Response */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["AdminRequestsResponse"];
-        };
-      };
-      /** @description Validation Error */
-      422: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["HTTPValidationError"];
-        };
-      };
-    };
-  };
-  generate_chart_api_v1_chart_post: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["ChartRequest"];
-      };
-    };
-    responses: {
-      /** @description Successful Response */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": unknown;
-        };
-      };
-      /** @description Validation Error */
-      422: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["HTTPValidationError"];
-        };
-      };
-    };
-  };
-  get_chart_api_v1_chart__filename__get: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        filename: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Returns a PNG image file */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "image/png": unknown;
-        };
-      };
-      /** @description Chart not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          /** @example {
-           *       "detail": "Chart not found"
-           *     } */
-          "application/json": unknown;
-        };
-      };
-      /** @description Validation Error */
-      422: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["HTTPValidationError"];
-        };
-      };
-    };
-  };
-  generate_chart_html_api_v1_chart_html_post: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["ChartStructuredRequest"];
-      };
-    };
-    responses: {
-      /** @description Successful Response */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": unknown;
-        };
-      };
-      /** @description Validation Error */
-      422: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["HTTPValidationError"];
-        };
-      };
-    };
-  };
-  get_chart_html_api_v1_chart_html__filename__get: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        filename: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Returns a HTML file */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "text/html": unknown;
-        };
-      };
-      /** @description Chart not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          /** @example {
-           *       "detail": "Chart not found"
-           *     } */
-          "application/json": unknown;
-        };
-      };
-      /** @description Validation Error */
-      422: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["HTTPValidationError"];
-        };
-      };
-    };
-  };
-  get_all_queries_api_v1_query_get: {
-    parameters: {
-      query?: {
-        limit?: number;
-        offset?: number;
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Successful Response */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["GetQueryModel"][];
-        };
-      };
-      /** @description Validation Error */
-      422: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["HTTPValidationError"];
-        };
-      };
-    };
-  };
-  get_query_data_api_v1_data__query_id__get: {
-    parameters: {
-      query?: {
-        limit?: number;
-        offset?: number;
-        sort_by?: string | null;
-        sort_order?: string;
-      };
-      header?: never;
-      path: {
-        query_id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Successful Response */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": unknown;
-        };
-      };
-      /** @description Validation Error */
-      422: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["HTTPValidationError"];
-        };
-      };
-    };
-  };
-  stream_data_fetch_api_v1_data_sse__query_id__get: {
-    parameters: {
-      query?: {
-        limit?: number;
-        offset?: number;
-        sort_by?: string | null;
-        sort_order?: string;
-      };
-      header?: never;
-      path: {
-        query_id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Successful Response */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": unknown;
-        };
-      };
-      /** @description Validation Error */
-      422: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["HTTPValidationError"];
-        };
-      };
-    };
-  };
-  get_query_metadata_api_v1_query__query_id__get: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        query_id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Successful Response */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["GetQueryModel"];
-        };
-      };
-      /** @description Validation Error */
-      422: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["HTTPValidationError"];
-        };
-      };
-    };
-  };
-  stream_request_updates_api_v1_sse__session_id__get: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        session_id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Successful Response */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": unknown;
-        };
-      };
-      /** @description Validation Error */
-      422: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["HTTPValidationError"];
-        };
-      };
-    };
-  };
 }

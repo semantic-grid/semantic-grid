@@ -1,11 +1,12 @@
 "use client";
 
 import { withPageAuthRequired } from "@auth0/nextjs-auth0/client";
-import { Close, Search } from "@mui/icons-material";
+import { Check, Close, Science, Search } from "@mui/icons-material";
 import {
   Box,
   Button,
   Checkbox,
+  Chip,
   Drawer,
   FormControl,
   FormControlLabel,
@@ -16,6 +17,7 @@ import {
   MenuItem,
   Rating,
   Select,
+  Switch,
   TextField,
   Typography,
 } from "@mui/material";
@@ -32,7 +34,10 @@ import * as React from "react";
 
 import type { components } from "@/app/api/apegpt/types.gen";
 import HighlightedSQL from "@/app/components/SqlView";
-import { useAdminRequests } from "@/app/hooks/useAdminRequests";
+import {
+  updateAdminRequest,
+  useAdminRequests,
+} from "@/app/hooks/useAdminRequests";
 
 type GetRequestModel = components["schemas"]["GetRequestModel"];
 
@@ -77,12 +82,51 @@ const RequestDetailDrawer = ({
   request,
   open,
   onClose,
+  onUpdate,
 }: {
   request: GetRequestModel | null;
   open: boolean;
   onClose: () => void;
+  onUpdate: () => void;
 }) => {
+  const [isTest, setIsTest] = useState(false);
+  const [isFixed, setIsFixed] = useState(false);
+  const [fixComment, setFixComment] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  // Sync local state when request changes
+  React.useEffect(() => {
+    if (request) {
+      setIsTest(request.is_test ?? false);
+      setIsFixed(request.is_fixed ?? false);
+      setFixComment(request.fix_comment ?? "");
+    }
+  }, [request]);
+
+  const handleSave = async () => {
+    if (!request) return;
+    setSaving(true);
+    try {
+      await updateAdminRequest(request.request_id, {
+        is_test: isTest,
+        is_fixed: isFixed,
+        fix_comment: fixComment || null,
+      });
+      onUpdate();
+      onClose();
+    } catch (err) {
+      console.error("Failed to save:", err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (!request) return null;
+
+  const hasChanges =
+    isTest !== (request.is_test ?? false) ||
+    isFixed !== (request.is_fixed ?? false) ||
+    fixComment !== (request.fix_comment ?? "");
 
   return (
     <Drawer
@@ -108,6 +152,66 @@ const RequestDetailDrawer = ({
       </Box>
 
       <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
+        {/* Admin Controls */}
+        <Box
+          sx={{
+            p: 2,
+            borderRadius: 1,
+            backgroundColor: "action.hover",
+            display: "flex",
+            flexDirection: "column",
+            gap: 2,
+          }}
+        >
+          <Typography variant="subtitle2" fontWeight={600}>
+            Admin Controls
+          </Typography>
+          <Box sx={{ display: "flex", gap: 3 }}>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={isTest}
+                  onChange={(e) => setIsTest(e.target.checked)}
+                />
+              }
+              label="Is Test"
+            />
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={isFixed}
+                  onChange={(e) => setIsFixed(e.target.checked)}
+                />
+              }
+              label="Is Fixed"
+            />
+          </Box>
+          <TextField
+            label="Fix Comment"
+            multiline
+            rows={2}
+            value={fixComment}
+            onChange={(e) => setFixComment(e.target.value)}
+            size="small"
+            fullWidth
+          />
+          {request.fixed_by && (
+            <Typography variant="caption" color="text.secondary">
+              Fixed by: {request.fixed_by}
+              {request.fixed_ts &&
+                ` on ${new Date(request.fixed_ts).toLocaleString()}`}
+            </Typography>
+          )}
+          <Button
+            variant="contained"
+            onClick={handleSave}
+            disabled={!hasChanges || saving}
+            sx={{ alignSelf: "flex-start" }}
+          >
+            {saving ? "Saving..." : "Save Changes"}
+          </Button>
+        </Box>
+
         {/* User & Date */}
         <Box>
           <Typography variant="subtitle2" color="text.secondary">
@@ -249,6 +353,13 @@ const REQUEST_STATUSES = [
   "Cancelled",
 ];
 
+// Filter options for is_test and is_fixed
+const BOOL_FILTER_OPTIONS = [
+  { value: "all", label: "All" },
+  { value: "true", label: "Yes" },
+  { value: "false", label: "No" },
+];
+
 const Page = withPageAuthRequired(
   () => {
     const [paginationModel, setPaginationModel] = useState({
@@ -259,16 +370,25 @@ const Page = withPageAuthRequired(
     const [search, setSearch] = useState("");
     const [status, setStatus] = useState("Done");
     const [hasFeedback, setHasFeedback] = useState(false);
+    const [isTestFilter, setIsTestFilter] = useState<string>("all");
+    const [isFixedFilter, setIsFixedFilter] = useState<string>("all");
     const [selectedRequest, setSelectedRequest] =
       useState<GetRequestModel | null>(null);
     const [drawerOpen, setDrawerOpen] = useState(false);
 
-    const { data, total, isLoading } = useAdminRequests(
+    // Convert filter string to boolean | null
+    const isTestValue = isTestFilter === "all" ? null : isTestFilter === "true";
+    const isFixedValue =
+      isFixedFilter === "all" ? null : isFixedFilter === "true";
+
+    const { data, total, isLoading, mutate } = useAdminRequests(
       paginationModel.pageSize,
       paginationModel.page * paginationModel.pageSize,
       status,
       search || undefined,
       hasFeedback,
+      isTestValue,
+      isFixedValue,
     );
 
     const handleSearch = useCallback(() => {
@@ -354,6 +474,38 @@ const Page = withPageAuthRequired(
             ) : null,
         },
         {
+          field: "is_test",
+          headerName: "Test",
+          width: 70,
+          sortable: true,
+          renderCell: (params) =>
+            params.value ? (
+              <Chip
+                icon={<Science />}
+                label="Test"
+                size="small"
+                color="warning"
+                variant="outlined"
+              />
+            ) : null,
+        },
+        {
+          field: "is_fixed",
+          headerName: "Fixed",
+          width: 80,
+          sortable: true,
+          renderCell: (params) =>
+            params.value ? (
+              <Chip
+                icon={<Check />}
+                label="Fixed"
+                size="small"
+                color="success"
+                variant="outlined"
+              />
+            ) : null,
+        },
+        {
           field: "status",
           headerName: "Status",
           width: 100,
@@ -409,6 +561,40 @@ const Page = withPageAuthRequired(
               {REQUEST_STATUSES.map((s) => (
                 <MenuItem key={s} value={s}>
                   {s}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControl size="small" sx={{ minWidth: 100 }}>
+            <InputLabel>Test</InputLabel>
+            <Select
+              value={isTestFilter}
+              label="Test"
+              onChange={(e) => {
+                setIsTestFilter(e.target.value);
+                setPaginationModel((prev) => ({ ...prev, page: 0 }));
+              }}
+            >
+              {BOOL_FILTER_OPTIONS.map((opt) => (
+                <MenuItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControl size="small" sx={{ minWidth: 100 }}>
+            <InputLabel>Fixed</InputLabel>
+            <Select
+              value={isFixedFilter}
+              label="Fixed"
+              onChange={(e) => {
+                setIsFixedFilter(e.target.value);
+                setPaginationModel((prev) => ({ ...prev, page: 0 }));
+              }}
+            >
+              {BOOL_FILTER_OPTIONS.map((opt) => (
+                <MenuItem key={opt.value} value={opt.value}>
+                  {opt.label}
                 </MenuItem>
               ))}
             </Select>
@@ -498,6 +684,7 @@ const Page = withPageAuthRequired(
           request={selectedRequest}
           open={drawerOpen}
           onClose={handleCloseDrawer}
+          onUpdate={() => mutate()}
         />
       </Box>
     );

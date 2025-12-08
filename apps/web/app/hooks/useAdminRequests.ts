@@ -3,6 +3,7 @@ import useSWR from "swr";
 import type { components } from "@/app/api/apegpt/types.gen";
 
 type AdminRequestsResponse = components["schemas"]["AdminRequestsResponse"];
+type PatchAdminRequestModel = components["schemas"]["PatchAdminRequestModel"];
 
 export const UnauthorizedError = new Error("Unauthorized");
 
@@ -12,14 +13,27 @@ export const useAdminRequests = (
   status: string = "Done",
   search?: string,
   hasFeedback: boolean = false,
+  isTest?: boolean | null,
+  isFixed?: boolean | null,
 ) => {
-  const fetcher = ([url, limit, offset, status, search, hasFeedback]: [
+  const fetcher = ([
+    url,
+    limit,
+    offset,
+    status,
+    search,
+    hasFeedback,
+    isTest,
+    isFixed,
+  ]: [
     string,
     number,
     number,
     string,
     string | undefined,
     boolean,
+    boolean | null | undefined,
+    boolean | null | undefined,
   ]) => {
     const params = new URLSearchParams({
       limit: String(limit),
@@ -32,6 +46,12 @@ export const useAdminRequests = (
     if (hasFeedback) {
       params.set("has_feedback", "true");
     }
+    if (isTest !== null && isTest !== undefined) {
+      params.set("is_test", String(isTest));
+    }
+    if (isFixed !== null && isFixed !== undefined) {
+      params.set("is_fixed", String(isFixed));
+    }
     return fetch(`${url}?${params.toString()}`).then((res) => {
       if (res.ok) return res.json();
       throw UnauthorizedError;
@@ -39,7 +59,16 @@ export const useAdminRequests = (
   };
 
   const { data, error, isLoading, mutate } = useSWR<AdminRequestsResponse>(
-    ["/api/apegpt/admin/requests", limit, offset, status, search, hasFeedback],
+    [
+      "/api/apegpt/admin/requests",
+      limit,
+      offset,
+      status,
+      search,
+      hasFeedback,
+      isTest,
+      isFixed,
+    ],
     fetcher,
     {
       shouldRetryOnError: false,
@@ -59,4 +88,20 @@ export const useAdminRequests = (
     isLoading,
     mutate,
   };
+};
+
+export const updateAdminRequest = async (
+  requestId: string,
+  patch: PatchAdminRequestModel,
+): Promise<void> => {
+  const res = await fetch(`/api/apegpt/admin/requests/${requestId}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(patch),
+  });
+  if (!res.ok) {
+    throw new Error("Failed to update request");
+  }
 };
