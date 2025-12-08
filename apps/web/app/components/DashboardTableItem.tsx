@@ -60,6 +60,7 @@ export const DashboardTableItem = ({
         paginate={false}
         pageSize={100}
         userEmail={appUser?.email}
+        compact
       />
     </Box>
   );

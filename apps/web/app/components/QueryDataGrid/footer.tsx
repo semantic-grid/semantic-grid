@@ -24,6 +24,7 @@ interface QueryDataGridFooterProps {
   isFetching: boolean;
   isValidating: boolean;
   showNotifyOption: boolean;
+  compact?: boolean;
   onRefresh: () => void;
   onRefreshWithNotify: () => void;
   onCancel: () => void;
@@ -41,6 +42,7 @@ export const QueryDataGridFooter = ({
   isFetching,
   isValidating,
   showNotifyOption,
+  compact = false,
   onRefresh,
   onRefreshWithNotify,
   onCancel,
@@ -76,7 +78,7 @@ export const QueryDataGridFooter = ({
       <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
         {isFetchingMore && <PulsingMonoText>Loading more...</PulsingMonoText>}
 
-        {!isFetching && !isValidating && (
+        {!compact && !isFetching && !isValidating && (
           <>
             <Button
               variant="text"
@@ -101,7 +103,7 @@ export const QueryDataGridFooter = ({
           </>
         )}
 
-        {(isFetching || isValidating) && (
+        {!compact && (isFetching || isValidating) && (
           <Button
             variant="text"
             size="small"

@@ -66,6 +66,21 @@ const DashboardCard = ({
     }
   };
 
+  // Refresh with email notification
+  const refreshWithNotify = () => {
+    if (queryUid) {
+      fetchQuery(queryUid, {
+        force: true,
+        pageSize: 100,
+        paginate: false,
+        notify: true,
+      });
+    }
+  };
+
+  // Check if query has performance warning
+  const performanceWarning = query?.explanation?.performance_warning ?? false;
+
   const onCopyUrl = async () => {
     if (!queryUid) return;
     const url = `${window.location.origin}/q/${queryUid}`;
@@ -111,10 +126,12 @@ const DashboardCard = ({
                     query={query}
                     slugPath={slugPath}
                     refresh={refresh}
+                    refreshWithNotify={refreshWithNotify}
                     fetchedAt={fetchedAt || undefined}
                     onDownloadCsvFull={async () => {}}
                     onDownloadCsvVisible={onDownloadCsvVisible}
                     onCopyUrl={onCopyUrl}
+                    performanceWarning={performanceWarning}
                   />
                 )}
               </Stack>

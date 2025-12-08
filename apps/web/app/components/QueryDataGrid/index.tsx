@@ -52,6 +52,7 @@ export const QueryDataGrid = ({
   notify = false,
   userEmail,
   autoDownload = false,
+  compact = false,
 }: QueryDataGridProps) => {
   const apiRef = useGridApiRef();
   const gridRef = useRef<HTMLDivElement>(null);
@@ -715,6 +716,7 @@ export const QueryDataGrid = ({
               isFetching={isFetching}
               isValidating={isValidating}
               showNotifyOption={performanceWarning}
+              compact={compact}
               onRefresh={handleRefresh}
               onRefreshWithNotify={handleRefreshWithNotify}
               onCancel={handleCancel}

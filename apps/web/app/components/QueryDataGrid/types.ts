@@ -1,6 +1,6 @@
 import type { GridColDef, GridSortItem } from "@mui/x-data-grid-pro";
 
-import type { TColumn, TQuery } from "@/app/lib/types";
+import type { TQuery } from "@/app/lib/types";
 
 // Refs object exposed for AI context
 export interface DataGridRefs {
@@ -39,6 +39,8 @@ export interface QueryDataGridProps {
   userEmail?: string;
   // Auto-download when data is ready (triggered by URL param)
   autoDownload?: boolean;
+  // Compact mode - hides refresh buttons in footer (for dashboard items)
+  compact?: boolean;
 }
 
 export type UIState =
