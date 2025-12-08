@@ -386,6 +386,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
           isValidating: false,
           cachedAt: Date.now(),
           error: undefined,
+          notifyPending: false,
         });
 
         // Persist to localStorage
@@ -479,6 +480,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
           isValidating: false,
           cachedAt: Date.now(),
           error: undefined,
+          notifyPending: false,
         });
 
         // Persist to localStorage
@@ -505,6 +507,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
           error: errorData.error || "Failed to fetch data",
           isFetching: false,
           isValidating: false,
+          notifyPending: false,
         });
 
         // Notify subscribers
@@ -523,6 +526,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
           status: "idle",
           isFetching: false,
           isValidating: false,
+          notifyPending: false,
         });
 
         // Notify subscribers
@@ -617,6 +621,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
           isFetching: !hasData,
           isValidating: hasData,
           status: "pending",
+          notifyPending: options.notify === true,
         });
 
         // Start fetch based on method

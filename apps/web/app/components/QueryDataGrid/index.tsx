@@ -24,6 +24,7 @@ import {
   FetchOverlay,
   LoadingOverlay,
   NoDataOverlay,
+  NotifyPendingOverlay,
   SpinnerOverlay,
 } from "./overlays";
 import type { DataGridRefs, QueryDataGridProps, UIState } from "./types";
@@ -140,6 +141,7 @@ export const QueryDataGrid = ({
     error,
     isFetching,
     isValidating,
+    notifyPending,
   } = queryState;
 
   // API returns rows like [{date: "2024-01-01", new_subs: 100}, ...]
@@ -567,7 +569,12 @@ export const QueryDataGrid = ({
         );
       case "no_cache_pending":
         // eslint-disable-next-line react/no-unstable-nested-components
-        return () => <LoadingOverlay onCancel={handleCancel} />;
+        return () =>
+          notifyPending ? (
+            <NotifyPendingOverlay onCancel={handleCancel} />
+          ) : (
+            <LoadingOverlay onCancel={handleCancel} />
+          );
       case "no_cache_no_pending":
       case "no_cache_no_pending_warning":
         // eslint-disable-next-line react/no-unstable-nested-components
@@ -607,6 +614,7 @@ export const QueryDataGrid = ({
     performanceWarning,
     estimatedRows,
     estimatedSizeGb,
+    notifyPending,
   ]);
 
   // Cell/column click handlers

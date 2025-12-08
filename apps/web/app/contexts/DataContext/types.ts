@@ -9,6 +9,7 @@ export interface QueryState {
   ttl?: number; // time-to-live in ms (from query max_age)
   isFetching: boolean;
   isValidating: boolean; // re-fetching with existing data
+  notifyPending?: boolean; // true when fetch with notify=true is in progress
 }
 
 export interface FetchOptions {

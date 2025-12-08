@@ -214,3 +214,49 @@ export const NoDataOverlay = () => (
     </Typography>
   </Box>
 );
+
+interface NotifyPendingOverlayProps {
+  onCancel?: () => void;
+}
+
+export const NotifyPendingOverlay = ({
+  onCancel,
+}: NotifyPendingOverlayProps) => (
+  <Box
+    sx={{
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      height: "100%",
+      gap: 1,
+      px: 3,
+    }}
+  >
+    <Notifications sx={{ fontSize: 24, color: "text.secondary", mb: 0.5 }} />
+    <Typography variant="body2" color="text.secondary">
+      Data fetch request sent.
+    </Typography>
+    <Typography variant="body2" color="text.secondary">
+      You&apos;ll receive an email once it completes.
+    </Typography>
+    <Typography
+      variant="caption"
+      color="text.secondary"
+      sx={{ fontStyle: "italic" }}
+    >
+      It&apos;s safe to close the tab now.
+    </Typography>
+    {onCancel && (
+      <Button
+        variant="outlined"
+        size="small"
+        startIcon={<Cancel />}
+        onClick={onCancel}
+        sx={{ textTransform: "none", mt: 1 }}
+      >
+        Cancel
+      </Button>
+    )}
+  </Box>
+);
