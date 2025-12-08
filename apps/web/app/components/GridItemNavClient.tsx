@@ -70,6 +70,7 @@ const GridItemNavClient = ({
       addQueryToUserDashboard({
         queryUid,
         itemType: view === "chart" ? "chart" : "table",
+        name: metadata?.summary || metadata?.intent,
       }).then(() => {
         setEditMode("");
         router.replace(`/user/${uid}`);
