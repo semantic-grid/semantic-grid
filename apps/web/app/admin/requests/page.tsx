@@ -463,14 +463,14 @@ const Page = withPageAuthRequired(
         </Box>
 
         {/* DataGrid */}
-        <Box sx={{ flex: 1, width: "100%" }}>
+        <Box sx={{ flex: 1, width: "100%", minHeight: 0 }}>
           <DataGrid
             loading={isLoading}
             rows={rows}
             columns={columns}
             density="compact"
             checkboxSelection
-            pageSizeOptions={[25, 50, 100]}
+            autoPageSize
             slots={{
               footer: CustomFooter,
             }}
@@ -480,6 +480,7 @@ const Page = withPageAuthRequired(
             rowCount={total}
             onRowClick={handleRowClick}
             sx={{
+              height: "100%",
               border: "none",
               "& .MuiDataGrid-row": {
                 cursor: "pointer",
