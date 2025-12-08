@@ -571,7 +571,7 @@ export const QueryDataGrid = ({
         // eslint-disable-next-line react/no-unstable-nested-components
         return () =>
           notifyPending ? (
-            <NotifyPendingOverlay onCancel={handleCancel} />
+            <NotifyPendingOverlay onCancel={handleCancel} compact={compact} />
           ) : (
             <LoadingOverlay onCancel={handleCancel} />
           );
@@ -615,6 +615,7 @@ export const QueryDataGrid = ({
     estimatedRows,
     estimatedSizeGb,
     notifyPending,
+    compact,
   ]);
 
   // Cell/column click handlers
