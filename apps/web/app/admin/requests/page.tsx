@@ -1,12 +1,11 @@
 "use client";
 
 import { withPageAuthRequired } from "@auth0/nextjs-auth0/client";
-import { Check, Close, Science, Search } from "@mui/icons-material";
+import { Check, Close, Search } from "@mui/icons-material";
 import {
   Box,
   Button,
   Checkbox,
-  Chip,
   Drawer,
   FormControl,
   FormControlLabel,
@@ -476,34 +475,16 @@ const Page = withPageAuthRequired(
         {
           field: "is_test",
           headerName: "Test",
-          width: 70,
+          width: 60,
           sortable: true,
-          renderCell: (params) =>
-            params.value ? (
-              <Chip
-                icon={<Science />}
-                label="Test"
-                size="small"
-                color="warning"
-                variant="outlined"
-              />
-            ) : null,
+          renderCell: (params) => (params.value ? <Check /> : null),
         },
         {
           field: "is_fixed",
           headerName: "Fixed",
-          width: 80,
+          width: 60,
           sortable: true,
-          renderCell: (params) =>
-            params.value ? (
-              <Chip
-                icon={<Check />}
-                label="Fixed"
-                size="small"
-                color="success"
-                variant="outlined"
-              />
-            ) : null,
+          renderCell: (params) => (params.value ? <Check /> : null),
         },
         {
           field: "status",
