@@ -312,6 +312,12 @@ class GetRequestModel(BaseModel):
     linked_session_id: Optional[UUID] = None
     query: Optional[GetQueryModel] = None
     view: Optional[View] = None
+    # admin fields
+    is_test: Optional[bool] = None
+    is_fixed: Optional[bool] = None
+    fixed_by: Optional[str] = None
+    fixed_ts: Optional[datetime] = None
+    fix_comment: Optional[str] = None
 
 
 class UpdateRequestStatusModel(BaseModel):
@@ -429,3 +435,11 @@ class AdminRequestsResponse(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+class PatchAdminRequestModel(BaseModel):
+    """Model for updating admin-specific fields on a request."""
+
+    is_test: Optional[bool] = None
+    is_fixed: Optional[bool] = None
+    fix_comment: Optional[str] = None

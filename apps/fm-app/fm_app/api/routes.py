@@ -43,6 +43,7 @@ from fm_app.api.model import (
     GetSessionModel,
     InteractiveRequestType,
     ModelType,
+    PatchAdminRequestModel,
     PatchSessionModel,
     RequestStatus,
     UpdateRequestStatusModel,
@@ -51,9 +52,9 @@ from fm_app.api.model import (
     WorkerRequest,
 )
 from fm_app.db.admin_db import (
-    get_all_requests_admin,
     get_all_requests_admin_v2,
     get_all_sessions_admin,
+    update_request_admin,
 )
 from fm_app.db.db import (
     add_new_session,
@@ -1122,6 +1123,8 @@ async def admin_get_all_requests(
     has_feedback: Optional[bool] = Query(
         None, description="Filter to requests with rating or review"
     ),
+    is_test: Optional[bool] = Query(None, description="Filter by is_test flag"),
+    is_fixed: Optional[bool] = Query(None, description="Filter by is_fixed flag"),
     auth_result: dict = Security(auth.verify, scopes=["admin:requests"]),
 ) -> AdminRequestsResponse:
     """
@@ -1139,6 +1142,8 @@ async def admin_get_all_requests(
         status=status_param,
         search=search,
         has_feedback=has_feedback,
+        is_test=is_test,
+        is_fixed=is_fixed,
         admin=admin,
         db=db,
     )
@@ -1148,6 +1153,35 @@ async def admin_get_all_requests(
         limit=limit,
         offset=offset,
     )
+
+
+@api_router.patch("/admin/requests/{request_id}")
+async def admin_update_request(
+    request_id: UUID,
+    patch: PatchAdminRequestModel,
+    db: AsyncSession = Depends(get_db),
+    auth_result: dict = Security(auth.verify, scopes=["admin:requests"]),
+) -> GetRequestModel:
+    """
+    Update admin-specific fields on a request (is_test, is_fixed, fix_comment).
+    When is_fixed is set to True, fixed_by and fixed_ts are automatically populated.
+    """
+    if auth_result is None or auth_result.get("sub") is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Not an admin"
+        )
+    admin = auth_result.get("sub")
+    result = await update_request_admin(
+        request_id=str(request_id),
+        admin=admin,
+        patch=patch,
+        db=db,
+    )
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Request not found"
+        )
+    return result
 
 
 @api_router.post("/chart")

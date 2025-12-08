@@ -5,7 +5,12 @@ from pydantic import ValidationError
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from fm_app.api.model import GetRequestModel, GetSessionModel, RequestStatus
+from fm_app.api.model import (
+    GetRequestModel,
+    GetSessionModel,
+    PatchAdminRequestModel,
+    RequestStatus,
+)
 
 
 async def get_all_sessions_admin(
@@ -83,6 +88,8 @@ async def get_all_requests_admin_v2(
     status: RequestStatus,
     search: str | None,
     has_feedback: bool | None,
+    is_test: bool | None,
+    is_fixed: bool | None,
     db: AsyncSession,
 ) -> AdminRequestsResult:
     """
@@ -111,6 +118,14 @@ async def get_all_requests_admin_v2(
 
     if has_feedback:
         where_conditions.append("(r.rating IS NOT NULL OR r.review IS NOT NULL)")
+
+    if is_test is not None:
+        where_conditions.append("r.is_test = :is_test")
+        params["is_test"] = is_test
+
+    if is_fixed is not None:
+        where_conditions.append("r.is_fixed = :is_fixed")
+        params["is_fixed"] = is_fixed
 
     where_clause = " AND ".join(where_conditions)
 
@@ -162,3 +177,72 @@ async def get_all_requests_admin_v2(
             raise HTTPException(status_code=500, detail=str("Internal error"))
 
     return AdminRequestsResult(requests=result, total=total)
+
+
+async def update_request_admin(
+    request_id: str,
+    admin: str,
+    patch: PatchAdminRequestModel,
+    db: AsyncSession,
+) -> GetRequestModel | None:
+    """
+    Update admin-specific fields on a request.
+    Automatically sets fixed_by and fixed_ts when is_fixed is set to True.
+    """
+    logging.debug(
+        "Update request admin fields",
+        extra={
+            "admin": admin,
+            "request_id": request_id,
+            "action": "db::update_request_admin",
+        },
+    )
+
+    # Build dynamic SET clause based on provided fields
+    set_clauses = ["updated_at = now()"]
+    params: dict = {"request_id": request_id, "admin": admin}
+
+    if patch.is_test is not None:
+        set_clauses.append("is_test = :is_test")
+        params["is_test"] = patch.is_test
+
+    if patch.is_fixed is not None:
+        set_clauses.append("is_fixed = :is_fixed")
+        params["is_fixed"] = patch.is_fixed
+        # Auto-set fixed_by and fixed_ts when marking as fixed
+        if patch.is_fixed:
+            set_clauses.append("fixed_by = :fixed_by")
+            set_clauses.append("fixed_ts = now()")
+            params["fixed_by"] = admin
+        else:
+            # Clear fixed_by and fixed_ts when unmarking
+            set_clauses.append("fixed_by = NULL")
+            set_clauses.append("fixed_ts = NULL")
+
+    if patch.fix_comment is not None:
+        set_clauses.append("fix_comment = :fix_comment")
+        params["fix_comment"] = patch.fix_comment
+
+    set_clause = ", ".join(set_clauses)
+
+    update_sql = text(
+        f"""
+        UPDATE request
+        SET {set_clause}
+        WHERE request_id = :request_id
+        RETURNING *;
+    """
+    )
+
+    res = await db.execute(update_sql, params=params)
+    row = res.mappings().fetchone()
+    await db.commit()
+
+    if not row:
+        return None
+
+    try:
+        return GetRequestModel.model_validate(row)
+    except ValidationError as e:
+        logging.error(f"Can't validate Request object from DB error: {e}")
+        raise HTTPException(status_code=500, detail=str("Internal error"))
