@@ -12,6 +12,12 @@ const GET = async (req: NextRequest) => {
     const search = req.nextUrl.searchParams.get("search") || undefined;
     const hasFeedback =
       req.nextUrl.searchParams.get("has_feedback") === "true" || undefined;
+    const isTestParam = req.nextUrl.searchParams.get("is_test");
+    const isFixedParam = req.nextUrl.searchParams.get("is_fixed");
+    const isTest =
+      isTestParam === "true" ? true : isTestParam === "false" ? false : null;
+    const isFixed =
+      isFixedParam === "true" ? true : isFixedParam === "false" ? false : null;
     const token = await getAccessToken({ scopes: ["admin:requests"] });
 
     if (!token) {
@@ -19,7 +25,15 @@ const GET = async (req: NextRequest) => {
     }
     const res = await client.GET("/api/v1/admin/requests", {
       params: {
-        query: { limit, offset, status, search, has_feedback: hasFeedback },
+        query: {
+          limit,
+          offset,
+          status,
+          search,
+          has_feedback: hasFeedback,
+          is_test: isTest,
+          is_fixed: isFixed,
+        },
       },
       headers: { Authorization: `Bearer ${token.accessToken}` },
     });
