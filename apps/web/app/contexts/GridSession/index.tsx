@@ -883,6 +883,12 @@ export const GridSessionProvider = ({
         .then((r) => r.json())
         .then((status: TResponseResult) => {
           setSects(withDoneMessage(status));
+          // Auto-update requestId to the new request when Done
+          if (latestUpdate?.status === "Done" && status.request_id) {
+            setRequestId(status.request_id);
+            // eslint-disable-next-line no-restricted-globals
+            history.pushState(null, "", `#${status.request_id}`);
+          }
         })
         .then((_) => increaseTrialCount())
         .then(() => setPrompt(""))
