@@ -9,11 +9,13 @@ import {
 } from "@mui/material";
 import { saveAs } from "file-saver";
 import Link from "next/link";
+import { useContext } from "react";
 
 import { DashboardChartItem } from "@/app/components/DashboardChartItem";
 import { DashboardItemMenu } from "@/app/components/DashboardItemMenu";
 import { DashboardTableItem } from "@/app/components/DashboardTableItem";
 import { useData } from "@/app/contexts/DataContext";
+import { ThemeContext } from "@/app/contexts/Theme";
 import { useQueryObject } from "@/app/hooks/useQueryObject";
 
 const exportRowsAsCSV = (rows: any[]) => {
@@ -52,6 +54,7 @@ const DashboardCard = ({
 }) => {
   const { data: query } = useQueryObject(queryUid!);
   const { fetchQuery, getQueryState } = useData();
+  const { isLarge } = useContext(ThemeContext);
   const minHeight = maxItemsPerRow ? 400 * (3 / maxItemsPerRow) : 400;
 
   // Get data from DataContext
@@ -106,10 +109,10 @@ const DashboardCard = ({
       <CardActionArea
         component={href ? Link : "div"}
         href={href}
-        sx={{ p: 2 }}
+        sx={{ p: isLarge ? 2 : 0.5 }}
         disableRipple
       >
-        <CardContent>
+        <CardContent sx={isLarge ? {} : { p: 1, "&:last-child": { pb: 1 } }}>
           <Stack spacing={1} justifyContent="center">
             {type !== "create" && (
               <Stack

@@ -682,7 +682,6 @@ export const InteractiveDashboard = ({
       ref={containerRef}
       sx={{
         height: "calc(100vh)", // let height expand naturally
-        paddingTop: "50px", // padding to avoid overlap with app bar
         width: "100%",
         overflow: "hidden",
       }}
