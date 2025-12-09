@@ -312,7 +312,7 @@ const RequestDetailDrawer = ({
               sx={{
                 color: "error.main",
                 whiteSpace: "pre-wrap",
-                backgroundColor: "error.light",
+                backgroundColor: "action.hover",
                 p: 2,
                 borderRadius: 1,
               }}
