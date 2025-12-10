@@ -288,6 +288,17 @@ const RequestDetailDrawer = ({
             >
               <HighlightedSQL code={request.sql} />
             </Box>
+            <Button
+              variant="outlined"
+              size="small"
+              sx={{ mt: 1 }}
+              disabled={!request.query?.query_id}
+              onClick={() =>
+                window.open(`/q/${request.query?.query_id}`, "_blank")
+              }
+            >
+              Run Query
+            </Button>
           </Box>
         )}
 
