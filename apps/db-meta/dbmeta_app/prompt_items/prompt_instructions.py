@@ -21,10 +21,23 @@ def get_prompt_instructions_item(profile: str) -> PromptItem:
         f"- {instruction}" for instruction in instructions
     )
 
+    # Compute hash and metadata for lineage tracking
+    from dbmeta_app.prompt_items.utils import compute_content_hash
+
+    content_hash = compute_content_hash(llm_prompt)
+    metadata = {
+        "profile": profile,
+        "client": client,
+        "env": env,
+        "instructions_count": len(instructions),
+    }
+
     return PromptItem(
         text=llm_prompt,
         prompt_item_type=PromptItemType.instruction,
         score=100_000,
+        content_hash=content_hash,
+        metadata=metadata,
     )
 
 

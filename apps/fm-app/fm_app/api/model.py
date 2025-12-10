@@ -279,6 +279,10 @@ class UpdateQueryModel(BaseModel):
 
 class GetQueryModel(CreateQueryModel):
     query_id: UUID
+    request_id: Optional[UUID] = None
+    created_at: Optional[datetime] = None
+    # data fetches for this query (populated in admin endpoints)
+    data_fetches: Optional[list["GetDataFetchModel"]] = None
 
 
 ### Request Models
@@ -312,6 +316,8 @@ class GetRequestModel(BaseModel):
     linked_session_id: Optional[UUID] = None
     query: Optional[GetQueryModel] = None
     view: Optional[View] = None
+    # data fetches for this request's query (populated in admin endpoints)
+    data_fetches: Optional[list["GetDataFetchModel"]] = None
     # admin fields
     is_test: Optional[bool] = None
     is_fixed: Optional[bool] = None
@@ -443,3 +449,229 @@ class PatchAdminRequestModel(BaseModel):
     is_test: Optional[bool] = None
     is_fixed: Optional[bool] = None
     fix_comment: Optional[str] = None
+
+
+class AdminQueriesResponse(BaseModel):
+    """Paginated response for admin queries endpoint."""
+
+    queries: list[GetQueryModel]
+    total: int
+    limit: int
+    offset: int
+
+
+### Data Fetch Models
+
+
+class DataFetchStatus(str, Enum):
+    pending = "pending"
+    running = "running"
+    success = "success"
+    error = "error"
+    cancelled = "cancelled"
+    timed_out = "timed_out"
+
+
+class DataFetchQueryParams(BaseModel):
+    """Query parameters for a data fetch operation."""
+
+    limit: int = 100
+    offset: int = 0
+    sort_by: Optional[str] = None
+    sort_order: str = "asc"
+    force: bool = False
+
+
+class CreateDataFetchModel(BaseModel):
+    """Model for creating a new data fetch record."""
+
+    query_id: UUID
+    request_id: Optional[UUID] = None
+    task_id: Optional[str] = None
+    requestor: str = "user"  # 'user' or 'system'
+    query_params: Optional[DataFetchQueryParams] = None
+
+
+class UpdateDataFetchModel(BaseModel):
+    """Model for updating a data fetch record."""
+
+    status: Optional[DataFetchStatus] = None
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    duration_ms: Optional[int] = None
+    row_count: Optional[int] = None
+    error: Optional[str] = None
+    cache_hit: Optional[bool] = None
+
+
+class GetDataFetchModel(BaseModel):
+    """Model for reading a data fetch record."""
+
+    id: UUID
+    query_id: UUID
+    request_id: Optional[UUID] = None
+    task_id: Optional[str] = None
+    requestor: str
+    status: DataFetchStatus
+    created_at: datetime
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    duration_ms: Optional[int] = None
+    query_params: Optional[dict[str, Any]] = None
+    row_count: Optional[int] = None
+    error: Optional[str] = None
+    cache_hit: bool = False
+
+
+class AdminDataFetchesResponse(BaseModel):
+    """Paginated response for admin data fetches endpoint."""
+
+    data_fetches: list[GetDataFetchModel]
+    total: int
+    limit: int
+    offset: int
+
+
+### Prompt Version Models (for LLM observability)
+
+
+class TraceStepType(str, Enum):
+    request_context = "request_context"
+    prompt_assembly = "prompt_assembly"
+    mcp_call = "mcp_call"
+    llm_call = "llm_call"
+    validation = "validation"
+    repair = "repair"
+    sql_execution = "sql_execution"
+    error = "error"
+
+
+class CreatePromptVersionModel(BaseModel):
+    """Model for creating/registering a prompt version."""
+
+    content_hash: str
+    source: str = "db_meta"
+    source_version: Optional[str] = None
+    prompt_item_type: PromptItemType
+    content: str
+    metadata: Optional[dict[str, Any]] = None
+
+
+class GetPromptVersionModel(BaseModel):
+    """Model for reading a prompt version record."""
+
+    id: UUID
+    content_hash: str
+    source: str
+    source_version: Optional[str] = None
+    prompt_item_type: PromptItemType
+    content: str
+    metadata: Optional[dict[str, Any]] = None
+    created_at: datetime
+
+
+### Request Trace Models (for LLM observability)
+
+
+class CreateTraceStepModel(BaseModel):
+    """Model for creating a trace step record."""
+
+    request_id: UUID
+    step_number: int
+    step_type: TraceStepType
+
+    # For LLM calls
+    model: Optional[str] = None
+    tokens_in: Optional[int] = None
+    tokens_out: Optional[int] = None
+    input_hash: Optional[str] = None
+    output_raw: Optional[str] = None
+    output_parsed: Optional[dict[str, Any]] = None
+
+    # For MCP calls
+    tool_name: Optional[str] = None
+    tool_input: Optional[dict[str, Any]] = None
+    prompt_version_ids: Optional[list[UUID]] = None
+
+    # For validation
+    validation_type: Optional[str] = None
+    validation_success: Optional[bool] = None
+    validation_errors: Optional[list[dict[str, Any]]] = None
+
+    # Common fields
+    duration_ms: Optional[int] = None
+    error: Optional[str] = None
+    metadata: Optional[dict[str, Any]] = None
+
+
+class GetTraceStepModel(BaseModel):
+    """Model for reading a trace step record."""
+
+    id: UUID
+    request_id: UUID
+    step_number: int
+    step_type: TraceStepType
+
+    # For LLM calls
+    model: Optional[str] = None
+    tokens_in: Optional[int] = None
+    tokens_out: Optional[int] = None
+    input_hash: Optional[str] = None
+    output_raw: Optional[str] = None
+    output_parsed: Optional[dict[str, Any]] = None
+
+    # For MCP calls
+    tool_name: Optional[str] = None
+    tool_input: Optional[dict[str, Any]] = None
+    prompt_version_ids: Optional[list[UUID]] = None
+
+    # For validation
+    validation_type: Optional[str] = None
+    validation_success: Optional[bool] = None
+    validation_errors: Optional[list[dict[str, Any]]] = None
+
+    # Common fields
+    duration_ms: Optional[int] = None
+    error: Optional[str] = None
+    metadata: Optional[dict[str, Any]] = None
+    created_at: datetime
+
+
+class TraceSummary(BaseModel):
+    """Summary of trace execution for quick stats on request table."""
+
+    total_steps: int
+    llm_calls: int
+    mcp_calls: int
+    validations: int
+    repairs: int
+    total_tokens_in: int
+    total_tokens_out: int
+    total_duration_ms: int
+    has_errors: bool
+
+
+class GetRequestTraceModel(BaseModel):
+    """Full trace for a request including all steps."""
+
+    request_id: UUID
+    steps: list[GetTraceStepModel]
+    summary: TraceSummary
+
+
+class AdminTracesResponse(BaseModel):
+    """Paginated response for admin traces endpoint."""
+
+    traces: list[GetRequestTraceModel]
+    total: int
+    limit: int
+    offset: int
+
+
+class AdminPromptVersionsResponse(BaseModel):
+    """Paginated response for admin prompt versions endpoint."""
+
+    prompt_versions: list[GetPromptVersionModel]
+    total: int
+    limit: int
+    offset: int

@@ -4,7 +4,13 @@ from typing import Annotated, Any
 from fastapi import Header
 from fastmcp import FastMCP
 
-from dbmeta_app.api.model import GetPromptModel, PromptsSetModel, TestSqlModel
+from dbmeta_app.api.model import (
+    GetPromptItemsRequestV2,
+    GetPromptModel,
+    PromptItemType,
+    PromptsSetModel,
+    TestSqlModel,
+)
 from dbmeta_app.config import get_settings
 from dbmeta_app.prompt_items.db_struct import (
     DbSchema,
@@ -73,6 +79,73 @@ async def prompt_items(
     logging.info(f"prompt_items: {db_meta}")
 
     return db_meta
+
+
+@mcp.tool()
+async def prompt_items_v2(
+    req: GetPromptItemsRequestV2, request_id: Annotated[str | None, Header()] = None
+) -> PromptsSetModel:
+    """
+    Get prompt items with structured response and lineage metadata.
+
+    Returns individual PromptItems with content_hash and metadata for tracking.
+    Allows parameterized selection of which items to include via the items array.
+
+    Args:
+        req: Request with user_request, db profile, items to include, and top_k params
+
+    Returns:
+        PromptsSetModel with list of PromptItems including hash and metadata
+    """
+    logging.info(
+        "prompt_items_v2 request",
+        extra={"request_id": request_id, "request": req.model_dump()},
+    )
+
+    db = req.db if req.db else settings.database_wh_db
+    prompt_items_list = []
+
+    # Generate requested items
+    for item_type in req.items:
+        if item_type == PromptItemType.db_struct:
+            item = get_schema_prompt_item(
+                user_request=req.user_request,
+                top_k=req.schema_top_k,
+            )
+            prompt_items_list.append(item)
+
+        elif item_type == PromptItemType.query_example:
+            if req.user_request:
+                item = get_query_example_prompt_item(
+                    query=req.user_request,
+                    db=db,
+                )
+                prompt_items_list.append(item)
+
+        elif item_type == PromptItemType.instruction:
+            item = get_prompt_instructions_item(profile=db)
+            prompt_items_list.append(item)
+
+        elif item_type == PromptItemType.sql_dialect:
+            item = get_sql_dialect_item(profile=db)
+            prompt_items_list.append(item)
+
+    response = PromptsSetModel(
+        prompt_items=prompt_items_list,
+        source="db_meta",
+        version="2.0.0",
+    )
+
+    logging.info(
+        "prompt_items_v2 response",
+        extra={
+            "request_id": request_id,
+            "items_count": len(prompt_items_list),
+            "item_types": [item.prompt_item_type for item in prompt_items_list],
+        },
+    )
+
+    return response
 
 
 # @app.get("/schema/{db_name}")

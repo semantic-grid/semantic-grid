@@ -13,7 +13,6 @@ import logging
 from typing import Any, Optional
 
 import redis
-from pydantic import BaseModel
 
 from dbmeta_app.config import get_settings
 

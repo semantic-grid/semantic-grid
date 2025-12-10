@@ -1,4 +1,6 @@
 import json
+from dataclasses import dataclass
+from typing import Any, Optional
 
 from fastmcp import Client
 
@@ -6,8 +8,29 @@ from fm_app.api.model import (
     DBType,
     FlowType,
     McpServerRequest,
+    PromptItemType,
     WorkerRequest,
 )
+
+
+@dataclass
+class PromptItemResult:
+    """Structured result from prompt_items_v2 call."""
+
+    text: str
+    prompt_item_type: PromptItemType
+    content_hash: str
+    metadata: Optional[dict[str, Any]] = None
+
+
+@dataclass
+class PromptItemsV2Result:
+    """Result from prompt_items_v2 MCP call with lineage info."""
+
+    items: list[PromptItemResult]
+    source: str
+    version: str
+    combined_text: str  # All items concatenated for backward compat
 
 
 def get_db_name(req: WorkerRequest):
@@ -62,6 +85,96 @@ async def get_db_meta_mcp_prompt_items(
             raise e
 
     return prompts[0].text
+
+
+async def get_db_meta_mcp_prompt_items_v2(
+    req: McpServerRequest,
+    flow_step_num: int,
+    settings,
+    logger,
+    items: Optional[list[str]] = None,
+    schema_top_k: int = 10,
+    examples_top_k: int = 5,
+) -> PromptItemsV2Result:
+    """Get prompt items with structured response and lineage metadata.
+
+    Args:
+        req: MCP server request context
+        flow_step_num: Current flow step number for logging
+        settings: Application settings
+        logger: Logger instance
+        items: List of item types to include (defaults to all)
+        schema_top_k: Number of tables for schema filtering
+        examples_top_k: Number of query examples
+
+    Returns:
+        PromptItemsV2Result with individual items and combined text
+    """
+    db = get_db_name(req)
+
+    # Default items if not specified
+    if items is None:
+        items = ["DBStruct", "QueryExample", "Instruction", "SQLDialect"]
+
+    client = Client(f"""{settings.dbmeta}sse""")
+    async with client:
+        try:
+            result = await client.call_tool(
+                "prompt_items_v2",
+                {
+                    "req": {
+                        "user_request": req.request,
+                        "db": db,
+                        "items": items,
+                        "schema_top_k": schema_top_k,
+                        "examples_top_k": examples_top_k,
+                    }
+                },
+            )
+
+            # Parse the structured response
+            response_data = json.loads(result[0].text)
+
+            prompt_items = []
+            texts = []
+
+            for item_data in response_data.get("prompt_items", []):
+                item = PromptItemResult(
+                    text=item_data.get("text", ""),
+                    prompt_item_type=PromptItemType(item_data.get("prompt_item_type")),
+                    content_hash=item_data.get("content_hash", ""),
+                    metadata=item_data.get("metadata"),
+                )
+                prompt_items.append(item)
+                if item.text:
+                    texts.append(item.text)
+
+            combined_text = "\n\n".join(texts)
+
+            logger.info(
+                "Got prompt items v2",
+                flow_stage="mcp_prompt_items_v2",
+                flow_step_num=flow_step_num,
+                db=db,
+                items_count=len(prompt_items),
+                item_types=[str(i.prompt_item_type.value) for i in prompt_items],
+            )
+
+            return PromptItemsV2Result(
+                items=prompt_items,
+                source=response_data.get("source", "db_meta"),
+                version=response_data.get("version", "2.0.0"),
+                combined_text=combined_text,
+            )
+
+        except Exception as e:
+            logger.error(
+                "Error calling prompt_items_v2",
+                flow_stage="error",
+                flow_step_num=flow_step_num,
+                error=str(e),
+            )
+            raise e
 
 
 async def db_meta_mcp_analyze_query(
