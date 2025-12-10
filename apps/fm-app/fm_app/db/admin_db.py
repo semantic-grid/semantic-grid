@@ -6,6 +6,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fm_app.api.model import (
+    GetQueryModel,
     GetRequestModel,
     GetSessionModel,
     PatchAdminRequestModel,
@@ -141,12 +142,17 @@ async def get_all_requests_admin_v2(
     count_res = await db.execute(count_sql, params=params)
     total = count_res.scalar() or 0
 
-    # Data query with user_owner from session
+    # Data query with user_owner from session and query details
     get_all_requests_sql = text(
         f"""
-        SELECT r.*, s.user_owner
+        SELECT r.*, s.user_owner,
+               q.query_id as q_query_id, q.request as q_request, q.intent as q_intent,
+               q.summary as q_summary, q.description as q_description, q.sql as q_sql,
+               q.row_count as q_row_count, q.columns as q_columns, q.chart as q_chart,
+               q.ai_generated as q_ai_generated, q.created_at as q_created_at
         FROM request r
         LEFT JOIN session s ON r.session_id = s.session_id
+        LEFT JOIN query q ON r.query_id = q.query_id
         WHERE {where_clause}
         ORDER BY r.created_at DESC
         LIMIT :limit OFFSET :offset;
@@ -158,11 +164,27 @@ async def get_all_requests_admin_v2(
     result = []
     for row in data:
         try:
-            # Extract user_owner before validation
+            # Extract user_owner and query fields before validation
             row_dict = dict(row)
             user_owner = row_dict.pop("user_owner", None)
 
+            # Extract query fields (prefixed with q_)
+            query_data = {}
+            query_keys = [k for k in list(row_dict.keys()) if k.startswith("q_")]
+            for k in query_keys:
+                # Remove q_ prefix for the query model
+                query_data[k[2:]] = row_dict.pop(k)
+
             request_model = GetRequestModel.model_validate(row_dict)
+
+            # Build query object if query_id exists
+            if query_data.get("query_id"):
+                try:
+                    request_model.query = GetQueryModel.model_validate(query_data)
+                except ValidationError:
+                    # If query validation fails, just leave query as None
+                    pass
+
             # Store user_owner in a way the frontend can access
             # We'll add it as session.user if session doesn't exist
             if request_model.session is None and user_owner:
