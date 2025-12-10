@@ -55,11 +55,14 @@ DATABASE_URL = f"postgresql+asyncpg://{settings.database_user}:{settings.databas
 
 engine = create_async_engine(
     DATABASE_URL,
-    pool_size=20,  # Increased from 5 to handle more concurrent requests
-    max_overflow=30,  # Increased from 10 to handle traffic spikes
+    pool_size=10,  # Base pool size per pod
+    max_overflow=15,  # Allow burst to 25 total connections per pod
     pool_pre_ping=True,  # Verify connections before use
-    pool_recycle=3600,  # Recycle connections after 1 hour (was 360s/6min)
+    pool_recycle=300,  # Recycle idle connections after 5 minutes
     pool_timeout=30,  # Fail fast if no connections available after 30s
+    connect_args={
+        "server_settings": {"application_name": "fm_app_api"},
+    },
 )
 
 SESSION = sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
@@ -89,7 +92,7 @@ if normalized_driver == "trino":
             "auth": BasicAuthentication(
                 settings.database_wh_user, settings.database_wh_pass
             ),
-            "application_name": "semantic_grid",
+            "application_name": "fm_app_api_wh",
         },
     )
 else:
@@ -100,7 +103,7 @@ else:
         max_overflow=20,
         pool_pre_ping=True,
         pool_recycle=360,
-        connect_args={"application_name": "semantic_grid"},
+        connect_args={"application_name": "fm_app_api_wh"},
     )
 
 wh_session = sessionmaker(bind=wh_engine, expire_on_commit=False)

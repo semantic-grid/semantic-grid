@@ -250,6 +250,7 @@ interface FetchState {
     | "error"
     | "cancelled";
   subscribers: Map<string, SubscriptionCallbacks>;
+  queryId: string; // Track which queryId this fetch belongs to
 }
 
 export const DataProvider = ({ children }: { children: ReactNode }) => {
@@ -567,6 +568,33 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     [updateQueryState],
   );
 
+  // Cancel all active fetches for a queryId (except the one with the given cacheKey)
+  const cancelActiveFetchesForQuery = useCallback(
+    (queryId: string, exceptCacheKey?: string) => {
+      fetchStatesRef.current.forEach((state, key) => {
+        if (state.queryId === queryId && key !== exceptCacheKey) {
+          console.log(
+            "[DataContext] Cancelling previous fetch for queryId:",
+            queryId,
+            "cacheKey:",
+            key,
+          );
+          state.eventSource?.close();
+          state.abortController?.abort();
+          fetchStatesRef.current.delete(key);
+
+          // Clear any cleanup timer for this fetch
+          const timer = cleanupTimersRef.current.get(key);
+          if (timer) {
+            clearTimeout(timer);
+            cleanupTimersRef.current.delete(key);
+          }
+        }
+      });
+    },
+    [],
+  );
+
   // Subscribe to data fetch (supports both SSE and regular fetch)
   const subscribe = useCallback(
     (
@@ -585,14 +613,18 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         force: options.force,
       });
 
-      // Cancel any pending cleanup
+      // Cancel any pending cleanup for this specific cache key
       const cleanupTimer = cleanupTimersRef.current.get(cacheKey);
       if (cleanupTimer) {
         clearTimeout(cleanupTimer);
         cleanupTimersRef.current.delete(cacheKey);
       }
 
-      // If force=true, clear any existing fetch state to ensure a fresh request
+      // Cancel any other active fetches for this queryId (different sort/offset)
+      // This prevents connection piling when user rapidly changes sort/filter
+      cancelActiveFetchesForQuery(queryId, cacheKey);
+
+      // If force=true, also clear the current cache key's fetch state
       if (options.force) {
         const existingState = fetchStatesRef.current.get(cacheKey);
         if (existingState) {
@@ -612,6 +644,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
           abortController: null,
           status: "connecting",
           subscribers: new Map(),
+          queryId, // Track which queryId this fetch belongs to
         };
         fetchStatesRef.current.set(cacheKey, fetchState);
 
@@ -668,6 +701,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       };
     },
     [
+      cancelActiveFetchesForQuery,
       createEventSource,
       doRegularFetch,
       hasCachedData,

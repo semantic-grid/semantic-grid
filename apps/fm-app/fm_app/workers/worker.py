@@ -142,6 +142,7 @@ def create_wh_engine(driver: str, url: str):
                 "auth": BasicAuthentication(
                     settings.database_wh_user, settings.database_wh_pass
                 ),
+                "application_name": "fm_app_celery_wh",
             },
         )
     else:
@@ -152,6 +153,7 @@ def create_wh_engine(driver: str, url: str):
             max_overflow=20,
             pool_pre_ping=True,
             pool_recycle=360,
+            connect_args={"application_name": "fm_app_celery_wh"},
         )
     return wh_engine
 

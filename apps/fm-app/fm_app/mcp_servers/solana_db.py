@@ -95,6 +95,7 @@ async def fetch_data(
                 max_overflow=60,
                 pool_pre_ping=True,
                 pool_recycle=360,
+                connect_args={"application_name": "fm_app_mcp_wh"},
             )
             session = sessionmaker(bind=engine, expire_on_commit=False)
             database = session()
@@ -107,6 +108,7 @@ async def fetch_data(
                 max_overflow=60,
                 pool_pre_ping=True,
                 pool_recycle=360,
+                connect_args={"application_name": "fm_app_mcp_wh"},
             )
             session_new_wh = sessionmaker(bind=engine_new_wh, expire_on_commit=False)
             database = session_new_wh()
@@ -119,6 +121,7 @@ async def fetch_data(
                 max_overflow=60,
                 pool_pre_ping=True,
                 pool_recycle=360,
+                connect_args={"application_name": "fm_app_mcp_wh"},
             )
             session_v2 = sessionmaker(bind=engine_v2, expire_on_commit=False)
             database = session_v2()
@@ -169,6 +172,7 @@ async def execute_sql(
                 max_overflow=60,
                 pool_pre_ping=True,
                 pool_recycle=360,
+                connect_args={"application_name": "fm_app_mcp_wh"},
             )
             session = sessionmaker(bind=engine, expire_on_commit=False)
             database = session()
@@ -181,6 +185,7 @@ async def execute_sql(
                 max_overflow=60,
                 pool_pre_ping=True,
                 pool_recycle=360,
+                connect_args={"application_name": "fm_app_mcp_wh"},
             )
             session_new_wh = sessionmaker(bind=engine_new_wh, expire_on_commit=False)
             database = session_new_wh()
@@ -193,6 +198,7 @@ async def execute_sql(
                 max_overflow=60,
                 pool_pre_ping=True,
                 pool_recycle=360,
+                connect_args={"application_name": "fm_app_mcp_wh"},
             )
             session_v2 = sessionmaker(bind=engine_v2, expire_on_commit=False)
             database = session_v2()
