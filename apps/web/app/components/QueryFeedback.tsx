@@ -2,10 +2,9 @@
 
 import CheckIcon from "@mui/icons-material/Check";
 import SendIcon from "@mui/icons-material/Send";
-import ThumbDownIcon from "@mui/icons-material/ThumbDown";
-import ThumbUpIcon from "@mui/icons-material/ThumbUp";
 import {
   Box,
+  Button,
   Collapse,
   IconButton,
   TextField,
@@ -39,11 +38,12 @@ export const QueryFeedback = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showCheck, setShowCheck] = useState(false);
 
-  const handleThumbUp = useCallback(async () => {
+  const hasFeedback = rating !== null;
+
+  const handleYes = useCallback(async () => {
     if (isSubmitting) return;
 
-    const newRating = rating === 10 ? null : 10;
-    setRating(newRating);
+    setRating(10);
     setShowReviewInput(false);
 
     try {
@@ -51,9 +51,9 @@ export const QueryFeedback = ({
       await updateRequest({
         sessionId,
         requestId,
-        data: { rating: newRating ?? 0, review: "" },
+        data: { rating: 10, review: "" },
       });
-      onRatingChange?.(newRating ?? 0);
+      onRatingChange?.(10);
     } catch (error) {
       console.error("Failed to update rating:", error);
       setRating(rating);
@@ -62,18 +62,8 @@ export const QueryFeedback = ({
     }
   }, [sessionId, requestId, rating, isSubmitting, onRatingChange]);
 
-  const handleThumbDown = useCallback(async () => {
+  const handleNo = useCallback(async () => {
     if (isSubmitting || showCheck) return;
-
-    if (rating === 1 && !showReviewInput) {
-      setShowReviewInput(true);
-      return;
-    }
-
-    if (rating === 1 && showReviewInput) {
-      setShowReviewInput(false);
-      return;
-    }
 
     setRating(1);
     setShowReviewInput(true);
@@ -92,15 +82,7 @@ export const QueryFeedback = ({
     } finally {
       setIsSubmitting(false);
     }
-  }, [
-    sessionId,
-    requestId,
-    rating,
-    isSubmitting,
-    showReviewInput,
-    showCheck,
-    onRatingChange,
-  ]);
+  }, [sessionId, requestId, rating, isSubmitting, showCheck, onRatingChange]);
 
   const handleReviewSubmit = useCallback(async () => {
     if (isSubmitting) return;
@@ -148,42 +130,60 @@ export const QueryFeedback = ({
           justifyContent: "space-between",
         }}
       >
-        <Box sx={{ display: "flex", alignItems: "center" }}>
-          <Tooltip title="Good response">
-            <IconButton
-              size="small"
-              onClick={handleThumbUp}
-              disabled={isSubmitting}
-            >
-              <Box
-                component={ThumbUpIcon}
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          {!hasFeedback && (
+            <>
+              <Typography
+                variant="body2"
+                sx={{ color: "text.secondary", fontSize: "0.8rem" }}
+              >
+                Help us improve: Was this answer accurate?
+              </Typography>
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={handleYes}
+                disabled={isSubmitting}
                 sx={{
-                  width: 16,
-                  height: 16,
-                  color: rating === 10 ? "text.primary" : "text.secondary",
+                  minWidth: "auto",
+                  px: 1,
+                  py: 0.25,
+                  fontSize: "0.75rem",
+                  textTransform: "none",
                 }}
-              />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Poor response">
-            <IconButton
-              size="small"
-              onClick={handleThumbDown}
-              disabled={isSubmitting}
-            >
-              <Box
-                component={showCheck ? CheckIcon : ThumbDownIcon}
+              >
+                Yes
+              </Button>
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={handleNo}
+                disabled={isSubmitting}
                 sx={{
-                  width: 16,
-                  height: 16,
-                  color:
-                    rating === 1 || showCheck
-                      ? "text.primary"
-                      : "text.secondary",
+                  minWidth: "auto",
+                  px: 1,
+                  py: 0.25,
+                  fontSize: "0.75rem",
+                  textTransform: "none",
                 }}
+              >
+                No
+              </Button>
+            </>
+          )}
+          {hasFeedback && showCheck && (
+            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+              <CheckIcon
+                sx={{ width: 16, height: 16, color: "text.primary" }}
               />
-            </IconButton>
-          </Tooltip>
+              <Typography
+                variant="body2"
+                sx={{ color: "text.secondary", fontSize: "0.8rem" }}
+              >
+                Thanks for your feedback
+              </Typography>
+            </Box>
+          )}
         </Box>
         {children}
       </Box>
