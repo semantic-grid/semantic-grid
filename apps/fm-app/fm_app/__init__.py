@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from fm_app.api.db_session import engine
+from fm_app.api.middleware import DatabaseHealthMiddleware
 from fm_app.api.routes import api_router
 from fm_app.logs import LOGGING_CONFIG
 
@@ -17,6 +18,9 @@ app = FastAPI(
 )
 
 app.include_router(api_router, prefix="/api/v1")
+
+# Add database health check middleware (before CORS)
+app.add_middleware(DatabaseHealthMiddleware, engine=engine)
 
 # Add the CORS middleware
 app.add_middleware(

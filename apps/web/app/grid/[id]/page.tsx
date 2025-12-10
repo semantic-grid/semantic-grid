@@ -143,7 +143,6 @@ const InteractiveQueryPage = async ({
             key={id}
             id={id}
             metadata={metadata}
-            pendingRequest={pending}
             ancestors={ancestors}
             welcomeMessage={welcomeMessage}
             suggestedPrompts={suggestedPrompts}

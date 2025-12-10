@@ -54,7 +54,12 @@ settings = get_settings()
 DATABASE_URL = f"postgresql+asyncpg://{settings.database_user}:{settings.database_pass}@{settings.database_server}:{settings.database_port}/{settings.database_db}"
 
 engine = create_async_engine(
-    DATABASE_URL, pool_size=5, max_overflow=10, pool_pre_ping=True, pool_recycle=360
+    DATABASE_URL,
+    pool_size=20,  # Increased from 5 to handle more concurrent requests
+    max_overflow=30,  # Increased from 10 to handle traffic spikes
+    pool_pre_ping=True,  # Verify connections before use
+    pool_recycle=3600,  # Recycle connections after 1 hour (was 360s/6min)
+    pool_timeout=30,  # Fail fast if no connections available after 30s
 )
 
 SESSION = sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
@@ -79,10 +84,12 @@ if normalized_driver == "trino":
         pool_recycle=360,
         connect_args={
             "http_scheme": "https",
-            "verify": False,  # use a CA file path instead in prod, e.g. "/path/to/ca.crt"
+            # Use a CA file path instead in prod, e.g. "/path/to/ca.crt"
+            "verify": False,
             "auth": BasicAuthentication(
                 settings.database_wh_user, settings.database_wh_pass
             ),
+            "application_name": "semantic_grid",
         },
     )
 else:
@@ -93,6 +100,7 @@ else:
         max_overflow=20,
         pool_pre_ping=True,
         pool_recycle=360,
+        connect_args={"application_name": "semantic_grid"},
     )
 
 wh_session = sessionmaker(bind=wh_engine, expire_on_commit=False)

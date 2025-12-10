@@ -1,22 +1,28 @@
 "use client";
 
+import MenuIcon from "@mui/icons-material/Menu";
 import {
   alpha,
   AppBar,
   Box,
   Button,
   Container,
+  Drawer,
+  IconButton,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemText,
   Toolbar,
-  Typography,
 } from "@mui/material";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import type { CSSProperties } from "react";
-import React, { useContext, useEffect } from "react";
+import React, { useContext, useEffect, useState } from "react";
 
 import { SemanticGridMenu } from "@/app/components/SemanticGridMenu";
 import { UserProfileMenu } from "@/app/components/UserProfileMenu";
 import { AppContext } from "@/app/contexts/App";
+import { ThemeContext } from "@/app/contexts/Theme";
 
 type Dashboard = {
   id: string;
@@ -24,27 +30,12 @@ type Dashboard = {
   slug: string;
 };
 
-interface ToggleSliderHandleProps extends CSSProperties {
-  size: number | string;
-}
-
-const ToggleSliderHandle = (props: ToggleSliderHandleProps) => (
-  <div style={{ width: props.size, height: props.size, ...props }}>
-    <Typography>Handle</Typography>
-  </div>
-);
-
-const ToggleSliderBar = (props: CSSProperties) => (
-  <div style={props}>
-    <Typography>Bar</Typography>
-  </div>
-);
-
 const TopNavClient = ({ dashboards }: { dashboards: Dashboard[] }) => {
   const router = useRouter();
   const pathname = usePathname();
-  // const items = dashboards.filter((d) => d.slug !== "/");
+  const { isLarge } = useContext(ThemeContext);
   const { editMode, setEditMode } = useContext(AppContext);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const handleToggle = () => {
     if (!editMode) {
@@ -60,57 +51,86 @@ const TopNavClient = ({ dashboards }: { dashboards: Dashboard[] }) => {
   }, [pathname, editMode]);
 
   return (
-    <AppBar
-      position="relative"
-      elevation={0}
-      enableColorOnDark
-      sx={{
-        bgcolor: (theme) => alpha(theme.palette.divider, 0.05),
-        color: (theme) => theme.palette.text.primary,
-      }}
-    >
-      <Container maxWidth={false}>
-        <Toolbar disableGutters sx={{ gap: 2 }}>
-          {/* <Button
-            component={Link}
-            href="/"
-            variant="text"
-            color={pathname === "/" ? "primary" : "inherit"}
-            sx={{ textTransform: "none" }}
-          >
-            {d}
-          </Button> */}
+    <>
+      {/* Mobile navigation drawer */}
+      <Drawer
+        anchor="left"
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+      >
+        <Box sx={{ width: 250, pt: 2 }}>
+          <List>
+            {dashboards.map((d) => (
+              <ListItem key={d.id} disablePadding>
+                <ListItemButton
+                  component={Link}
+                  href={d.slug}
+                  selected={pathname === d.slug}
+                  onClick={() => setDrawerOpen(false)}
+                >
+                  <ListItemText primary={d.name} />
+                </ListItemButton>
+              </ListItem>
+            ))}
+          </List>
+        </Box>
+      </Drawer>
 
-          {dashboards.map((d) => (
-            <Button
-              key={d.id}
-              component={Link}
-              href={d.slug}
-              variant="text"
-              color={pathname === d.slug ? "primary" : "inherit"}
-              sx={{
-                textTransform: "none",
-                "&.MuiButtonBase-root.MuiButton-root": {
-                  fontSize: "1.1rem",
-                  fontWeight: 900,
-                },
-              }}
-            >
-              {d.name}
-            </Button>
-          ))}
+      {/* App bar */}
+      <AppBar
+        position="relative"
+        elevation={0}
+        enableColorOnDark
+        sx={{
+          bgcolor: (theme) => alpha(theme.palette.divider, 0.05),
+          color: (theme) => theme.palette.text.primary,
+        }}
+      >
+        <Container maxWidth={false}>
+          <Toolbar disableGutters sx={{ gap: 2 }}>
+            {/* Mobile menu button */}
+            {!isLarge && (
+              <IconButton
+                edge="start"
+                color="inherit"
+                aria-label="menu"
+                onClick={() => setDrawerOpen(true)}
+              >
+                <MenuIcon />
+              </IconButton>
+            )}
 
-          {/* Spacer between primary nav and right-side controls */}
-          <Box sx={{ flexGrow: 1 }} />
+            {/* Desktop dashboard navigation */}
+            {isLarge &&
+              dashboards.map((d) => (
+                <Button
+                  key={d.id}
+                  component={Link}
+                  href={d.slug}
+                  variant="text"
+                  color={pathname === d.slug ? "primary" : "inherit"}
+                  sx={{
+                    textTransform: "none",
+                    "&.MuiButtonBase-root.MuiButton-root": {
+                      fontSize: "1.1rem",
+                      fontWeight: 900,
+                    },
+                  }}
+                >
+                  {d.name}
+                </Button>
+              ))}
 
-          {/* <LabeledSwitch checked={Boolean(editMode)} onClick={handleToggle} /> */}
+            {/* Spacer between primary nav and right-side controls */}
+            <Box sx={{ flexGrow: 1 }} />
 
-          <SemanticGridMenu mode="explore" onActionClick={handleToggle} />
+            <SemanticGridMenu mode="explore" onActionClick={handleToggle} />
 
-          <UserProfileMenu />
-        </Toolbar>
-      </Container>
-    </AppBar>
+            <UserProfileMenu />
+          </Toolbar>
+        </Container>
+      </AppBar>
+    </>
   );
 };
 

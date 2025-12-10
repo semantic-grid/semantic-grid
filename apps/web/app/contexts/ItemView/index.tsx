@@ -3,6 +3,7 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import React, {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -21,6 +22,9 @@ type Ctx = {
   chartType: ChartType;
   setChartType: (next: ChartType) => void;
   itemId: string;
+  // Available chart types based on data shape (set by parent component)
+  availableChartTypes: ChartType[];
+  setAvailableChartTypes: (types: ChartType[]) => void;
 };
 
 function useBaseUrl() {
@@ -73,8 +77,13 @@ export const ItemViewProvider = ({
   const [view, setViewState] = useState<ViewKey>(initial);
 
   // Chart type state (localStorage > default)
-  const initialChartType = (readChartTypeLocal() ?? defaultChartType) as ChartType;
+  const initialChartType = (readChartTypeLocal() ??
+    defaultChartType) as ChartType;
   const [chartType, setChartTypeState] = useState<ChartType>(initialChartType);
+
+  // Available chart types (defaults to all, can be filtered by parent based on data)
+  const [availableChartTypes, setAvailableChartTypes] =
+    useState<ChartType[]>(CHART_TYPES);
 
   // Ensure URL reflects the resolved initial view on mount
   useEffect(() => {
@@ -109,28 +118,42 @@ export const ItemViewProvider = ({
     return () => window.removeEventListener("storage", onStorage);
   }, [itemId, baseUrl, router, view]);
 
-  const setView = (next: ViewKey) => {
-    if (!VIEW_KEYS.includes(next)) return;
-    setViewState(next);
-    // Update URL fragment (no RSC refetch), also persist per item
-    router.replace(`${baseUrl}#${next}`, { scroll: false });
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(`itemView:${itemId}`, next);
-    }
-  };
+  const setView = useCallback(
+    (next: ViewKey) => {
+      if (!VIEW_KEYS.includes(next)) return;
+      setViewState(next);
+      // Update URL fragment (no RSC refetch), also persist per item
+      router.replace(`${baseUrl}#${next}`, { scroll: false });
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(`itemView:${itemId}`, next);
+      }
+    },
+    [baseUrl, itemId, router],
+  );
 
-  const setChartType = (next: ChartType) => {
-    if (!CHART_TYPES.includes(next)) return;
-    setChartTypeState(next);
-    // Persist chart type per item
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(`chartType:${itemId}`, next);
-    }
-  };
+  const setChartType = useCallback(
+    (next: ChartType) => {
+      if (!CHART_TYPES.includes(next)) return;
+      setChartTypeState(next);
+      // Persist chart type per item
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(`chartType:${itemId}`, next);
+      }
+    },
+    [itemId],
+  );
 
   const value = useMemo(
-    () => ({ view, setView, chartType, setChartType, itemId }),
-    [view, chartType, itemId]
+    () => ({
+      view,
+      setView,
+      chartType,
+      setChartType,
+      itemId,
+      availableChartTypes,
+      setAvailableChartTypes,
+    }),
+    [view, setView, chartType, setChartType, itemId, availableChartTypes],
   );
 
   return <Index.Provider value={value}>{children}</Index.Provider>;

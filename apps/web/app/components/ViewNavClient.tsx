@@ -1,9 +1,23 @@
 "use client";
 
-import { alpha, AppBar, Box, Button, Container, Toolbar } from "@mui/material";
+import MenuIcon from "@mui/icons-material/Menu";
+import {
+  alpha,
+  AppBar,
+  Box,
+  Button,
+  Container,
+  Drawer,
+  IconButton,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemText,
+  Toolbar,
+} from "@mui/material";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import React, { useContext } from "react";
+import React, { useContext, useState } from "react";
 
 import { ItemViewSwitcher } from "@/app/components/ItemViewSwitcher";
 import { SemanticGridMenu } from "@/app/components/SemanticGridMenu";
@@ -26,11 +40,9 @@ const ViewNavClient = ({
 }) => {
   const router = useRouter();
   const pathname = usePathname();
-  // const items = dashboards.filter((d) => d.slug !== "/");
-  const { mode, setMode } = useContext(ThemeContext);
-  // console.log("nav items", item, items);
-
+  const { isLarge } = useContext(ThemeContext);
   const { editMode, setEditMode } = useContext(AppContext);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const handleToggle = () => {
     if (!editMode) {
@@ -41,69 +53,90 @@ const ViewNavClient = ({
     }
   };
 
-  const toggleTheme = () => {
-    const next = mode === "dark" ? "light" : "dark";
-    setMode(next);
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem("theme", next);
-    }
-  };
-
   return (
-    <AppBar
-      position="relative"
-      elevation={0}
-      enableColorOnDark
-      sx={{
-        bgcolor: (theme) => alpha(theme.palette.divider, 0.05),
-        color: (theme) => theme.palette.text.primary,
-      }}
-    >
-      <Container maxWidth={false}>
-        <Toolbar disableGutters sx={{ gap: 2 }}>
-          {/* <Button
-            component={Link}
-            href="/"
-            variant="text"
-            color={pathname === "/" ? "primary" : "inherit"}
-            sx={{ textTransform: "none" }}
-          >
-            Home
-          </Button> */}
+    <>
+      {/* Mobile navigation drawer */}
+      <Drawer
+        anchor="left"
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+      >
+        <Box sx={{ width: 250, pt: 2 }}>
+          <List>
+            {dashboards.map((d) => (
+              <ListItem key={d.id} disablePadding>
+                <ListItemButton
+                  component={Link}
+                  href={d.slug}
+                  selected={pathname === d.slug}
+                  onClick={() => setDrawerOpen(false)}
+                >
+                  <ListItemText primary={d.name} />
+                </ListItemButton>
+              </ListItem>
+            ))}
+          </List>
+        </Box>
+      </Drawer>
 
-          {dashboards.map((d) => (
-            <Button
-              key={d.id}
-              component={Link}
-              href={d.slug}
-              variant="text"
-              color={pathname === d.slug ? "primary" : "inherit"}
-              sx={{
-                textTransform: "none",
-                "&.MuiButtonBase-root.MuiButton-root": {
-                  fontSize: "1.1rem",
-                  fontWeight: 900,
-                },
-              }}
-            >
-              {d.name}
-            </Button>
-          ))}
+      {/* App bar */}
+      <AppBar
+        position="relative"
+        elevation={0}
+        enableColorOnDark
+        sx={{
+          bgcolor: (theme) => alpha(theme.palette.divider, 0.05),
+          color: (theme) => theme.palette.text.primary,
+        }}
+      >
+        <Container maxWidth={false}>
+          <Toolbar disableGutters sx={{ gap: 2 }}>
+            {/* Mobile menu button */}
+            {!isLarge && (
+              <IconButton
+                edge="start"
+                color="inherit"
+                aria-label="menu"
+                onClick={() => setDrawerOpen(true)}
+              >
+                <MenuIcon />
+              </IconButton>
+            )}
 
-          {/* Spacer between primary nav and right-side controls */}
-          <Box sx={{ flexGrow: 1 }} />
+            {/* Desktop dashboard navigation */}
+            {isLarge &&
+              dashboards.map((d) => (
+                <Button
+                  key={d.id}
+                  component={Link}
+                  href={d.slug}
+                  variant="text"
+                  color={pathname === d.slug ? "primary" : "inherit"}
+                  sx={{
+                    textTransform: "none",
+                    "&.MuiButtonBase-root.MuiButton-root": {
+                      fontSize: "1.1rem",
+                      fontWeight: 900,
+                    },
+                  }}
+                >
+                  {d.name}
+                </Button>
+              ))}
 
-          {/* Second-level switcher: only shows on /item/[id] */}
-          <ItemViewSwitcher />
+            {/* Spacer between primary nav and right-side controls */}
+            <Box sx={{ flexGrow: 1 }} />
 
-          {/* <LabeledSwitch checked={Boolean(editMode)} onClick={handleToggle} /> */}
+            {/* Hide view switcher on mobile */}
+            {isLarge && <ItemViewSwitcher />}
 
-          <SemanticGridMenu mode="edit" onActionClick={handleToggle} />
+            <SemanticGridMenu mode="edit" onActionClick={handleToggle} />
 
-          <UserProfileMenu />
-        </Toolbar>
-      </Container>
-    </AppBar>
+            <UserProfileMenu />
+          </Toolbar>
+        </Container>
+      </AppBar>
+    </>
   );
 };
 

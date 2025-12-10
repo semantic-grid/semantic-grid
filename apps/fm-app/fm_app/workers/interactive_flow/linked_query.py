@@ -15,7 +15,6 @@ from fm_app.db.db import (
     update_request_status,
     update_session_name,
 )
-from fm_app.stopwatch import stopwatch
 from fm_app.workers.interactive_flow.setup import FlowContext
 
 

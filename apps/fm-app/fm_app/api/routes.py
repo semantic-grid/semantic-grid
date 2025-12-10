@@ -18,16 +18,18 @@ import plotly.graph_objects as go
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Security
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.security import HTTPBearer
+from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette import EventSourceResponse
 from starlette import status
 
 from fm_app.api.auth0 import VerifyGuestToken, VerifyToken
-from fm_app.api.db_session import get_db, wh_engine
+from fm_app.api.db_session import engine, get_db, wh_engine
 from fm_app.api.model import (
     AddLinkedRequestModel,
     AddRequestModel,
+    AdminRequestsResponse,
     ChartRequest,
     ChartStructuredRequest,
     ChartType,
@@ -41,6 +43,7 @@ from fm_app.api.model import (
     GetSessionModel,
     InteractiveRequestType,
     ModelType,
+    PatchAdminRequestModel,
     PatchSessionModel,
     RequestStatus,
     UpdateRequestStatusModel,
@@ -48,7 +51,11 @@ from fm_app.api.model import (
     View,
     WorkerRequest,
 )
-from fm_app.db.admin_db import get_all_requests_admin, get_all_sessions_admin
+from fm_app.db.admin_db import (
+    get_all_requests_admin_v2,
+    get_all_sessions_admin,
+    update_request_admin,
+)
 from fm_app.db.db import (
     add_new_session,
     add_request,
@@ -66,6 +73,8 @@ from fm_app.db.db import (
 )
 from fm_app.stopwatch import stopwatch
 from fm_app.workers.worker import wrk_add_request
+
+logger = logging.getLogger(__name__)
 
 token_auth_scheme = HTTPBearer()
 auth = VerifyToken()
@@ -1048,13 +1057,20 @@ async def update_single_request(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="No user name"
         )
+    logger.info(
+        f"update_single_request: request_id={request_id}, rating={user_request.rating}, review={user_request.review}, status={user_request.status}"
+    )
     if user_request.rating is not None and user_request.review is not None:
+        logger.info(f"Updating review for request_id={request_id}")
         response = await update_review(
             rating=user_request.rating,
             review=user_request.review,
             db=db,
             request_id=request_id,
             user_owner=user_owner,
+        )
+        logger.info(
+            f"Review updated, response rating={response.rating if response else 'None'}"
         )
     elif user_request.status is not None:
         response = await update_request_status(
@@ -1103,17 +1119,69 @@ async def admin_get_all_requests(
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
     status_param: RequestStatus = Query(RequestStatus.done, alias="status"),
+    search: Optional[str] = Query(None, description="Search in request, SQL, or user"),
+    has_feedback: Optional[bool] = Query(
+        None, description="Filter to requests with rating or review"
+    ),
+    is_test: Optional[bool] = Query(None, description="Filter by is_test flag"),
+    is_fixed: Optional[bool] = Query(None, description="Filter by is_fixed flag"),
     auth_result: dict = Security(auth.verify, scopes=["admin:requests"]),
-) -> list[GetRequestModel]:
+) -> AdminRequestsResponse:
+    """
+    Get all requests for admin with pagination metadata, user info, and search.
+    Returns total count for proper pagination.
+    """
     if auth_result is None or auth_result.get("sub") is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Not an admin"
         )
     admin = auth_result.get("sub")
-    response = await get_all_requests_admin(
-        limit=limit, offset=offset, status=status_param, admin=admin, db=db
+    result = await get_all_requests_admin_v2(
+        limit=limit,
+        offset=offset,
+        status=status_param,
+        search=search,
+        has_feedback=has_feedback,
+        is_test=is_test,
+        is_fixed=is_fixed,
+        admin=admin,
+        db=db,
     )
-    return response
+    return AdminRequestsResponse(
+        requests=result.requests,
+        total=result.total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@api_router.patch("/admin/requests/{request_id}")
+async def admin_update_request(
+    request_id: UUID,
+    patch: PatchAdminRequestModel,
+    db: AsyncSession = Depends(get_db),
+    auth_result: dict = Security(auth.verify, scopes=["admin:requests"]),
+) -> GetRequestModel:
+    """
+    Update admin-specific fields on a request (is_test, is_fixed, fix_comment).
+    When is_fixed is set to True, fixed_by and fixed_ts are automatically populated.
+    """
+    if auth_result is None or auth_result.get("sub") is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Not an admin"
+        )
+    admin = auth_result.get("sub")
+    result = await update_request_admin(
+        request_id=str(request_id),
+        admin=admin,
+        patch=patch,
+        db=db,
+    )
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Request not found"
+        )
+    return result
 
 
 @api_router.post("/chart")
@@ -1413,7 +1481,7 @@ async def get_query_data(
                     "offset": offset,
                 },
             )
-            # Manual dict conversion (avoid .mappings() which can fail on connection drops)
+            # Manual dict conversion (avoid .mappings() which can fail on drops)
             columns = result.keys()
             rows = [dict(zip(columns, row)) for row in result.fetchall()]
 
@@ -1519,6 +1587,9 @@ async def stream_data_fetch(
     offset: int = 0,
     sort_by: Optional[str] = None,
     sort_order: str = Query("asc", regex="^(asc|desc)$"),
+    notify_on_complete: bool = Query(False),
+    user_email: Optional[str] = Query(None),
+    force: bool = Query(False),
     db: AsyncSession = Depends(get_db),
     auth_result: dict = Depends(verify_any_token),
 ):
@@ -1537,15 +1608,30 @@ async def stream_data_fetch(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="No user name"
         )
 
+    logger.info(
+        f"SSE data fetch request for query {query_id}",
+        extra={
+            "query_id": str(query_id),
+            "notify_on_complete": notify_on_complete,
+            "has_email": bool(user_email),
+            "user_email_provided": user_email is not None,
+        },
+    )
+
     # TODO: temp return empty response !!!
-    raise HTTPException(status_code=204, detail="No content")
+    # raise HTTPException(status_code=204, detail="No content")
 
     # Get SQL from query metadata
+    # Note: query_id parameter can be query_id, request_id, or session_id
+    # for backward compatibility. We extract the actual query_id to use throughout
     sql = ""
+    actual_query_id = None
+
     query_response = await get_query_by_id(query_id=query_id, db=db)
     if query_response:
         sql = query_response.sql if query_response.sql else ""
         sql = sql.strip().rstrip(";")
+        actual_query_id = query_response.query_id
 
         # Validate sort_by
         if sort_by:
@@ -1561,6 +1647,7 @@ async def stream_data_fetch(
         if request_response and request_response.query:
             sql = request_response.query.sql if request_response.query.sql else ""
             sql = sql.strip().rstrip(";")
+            actual_query_id = request_response.query.query_id
             if sort_by:
                 is_valid, result = validate_sort_column(
                     sort_by, request_response.query.columns
@@ -1579,44 +1666,106 @@ async def stream_data_fetch(
                     if not is_valid:
                         raise HTTPException(status_code=400, detail=result)
                     sort_by = result
+                # Session doesn't have a query_id
+                # (shouldn't be used for notifications)
+                actual_query_id = None
             else:
                 raise HTTPException(status_code=404, detail="Query not found")
 
     if not sql:
         raise HTTPException(status_code=400, detail="Query has no SQL attached")
 
-    # Launch Celery task
+    # Use actual_query_id for tracking and notifications
+    # (fallback to input for backward compat)
+    tracking_id = str(actual_query_id) if actual_query_id else str(query_id)
+
+    # Check if there's already a running task for this query
+    from fm_app.cache.task_tracker import (
+        add_task_subscriber,
+        get_running_task,
+        set_running_task,
+    )
     from fm_app.workers.worker import wrk_fetch_data
 
-    task_args = {
-        "query_id": str(query_id),
-        "sql": sql,
-        "limit": limit,
-        "offset": offset,
-        "sort_by": sort_by,
-        "sort_order": sort_order,
-    }
+    running_task_info = await get_running_task(tracking_id)
 
-    task = wrk_fetch_data.apply_async(args=[task_args])
-    task_id = task.id
+    if running_task_info:
+        # Task already running - reconnect to it and add this user as subscriber
+        task_id = running_task_info["task_id"]
+        task = wrk_fetch_data.AsyncResult(task_id)
+        is_reconnecting = True
+
+        # Add this user as a subscriber
+        await add_task_subscriber(tracking_id, user_email, notify_on_complete)
+
+        logger.info(f"Reconnecting to existing task {task_id} for query {tracking_id}")
+    else:
+        is_reconnecting = False
+        # Launch new Celery task
+        task_args = {
+            "query_id": tracking_id,
+            "sql": sql,
+            "limit": limit,
+            "offset": offset,
+            "sort_by": sort_by,
+            "sort_order": sort_order,
+            "notify_on_complete": notify_on_complete,
+            "user_email": user_email,
+            "force": force,
+        }
+
+        task = wrk_fetch_data.apply_async(args=[task_args])
+        task_id = task.id
+
+        # Store task info in Redis with initial subscriber
+        await set_running_task(tracking_id, task_id, notify_on_complete, user_email)
+        logger.info(
+            f"Started new task {task_id} for query {tracking_id}",
+            extra={
+                "task_id": task_id,
+                "query_id": tracking_id,
+                "notify_on_complete": notify_on_complete,
+                "has_email": bool(user_email),
+            },
+        )
 
     async def event_generator():
         """Stream task progress via SSE."""
         import time
 
         try:
-            yield {
-                "event": "started",
-                "data": json.dumps(
-                    {"task_id": task_id, "query_id": str(query_id), "status": "started"}
-                ),
-            }
+            if is_reconnecting:
+                yield {
+                    "event": "reconnected",
+                    "data": json.dumps(
+                        {
+                            "task_id": task_id,
+                            "query_id": str(query_id),
+                            "status": "reconnected",
+                            "message": "Reconnected to running query",
+                        }
+                    ),
+                }
+            else:
+                yield {
+                    "event": "started",
+                    "data": json.dumps(
+                        {
+                            "task_id": task_id,
+                            "query_id": str(query_id),
+                            "status": "started",
+                        }
+                    ),
+                }
 
             # Poll task status
             max_wait = 300  # 5 minutes max
             start_time = time.time()
             poll_interval = 0.5  # Poll every 500ms
             count_sent = False  # Track if count event was sent
+            busy_warning_sent = False  # Track if busy warning was sent
+            progress_sent = False  # Track if progress event was sent
+            busy_warning_threshold = 5  # Warn if task pending for 5 seconds
 
             while time.time() - start_time < max_wait:
                 # Check if client disconnected
@@ -1627,6 +1776,41 @@ async def stream_data_fetch(
 
                 # Check task status
                 result = task
+
+                # Check if task is stuck in PENDING (workers busy)
+                if (
+                    result.state == "PENDING"
+                    and not busy_warning_sent
+                    and time.time() - start_time > busy_warning_threshold
+                ):
+                    yield {
+                        "event": "workers_busy",
+                        "data": json.dumps(
+                            {
+                                "status": "workers_busy",
+                                "message": (
+                                    "All workers are currently busy. "
+                                    "Your query is queued and will start shortly."
+                                ),
+                            }
+                        ),
+                    }
+                    busy_warning_sent = True
+
+                # Check for PROGRESS state (query is executing)
+                if result.state == "PROGRESS" and not progress_sent:
+                    meta = result.info or {}
+                    yield {
+                        "event": "progress",
+                        "data": json.dumps(
+                            {
+                                "status": "running",
+                                "query_id": meta.get("query_id"),
+                                "stage": meta.get("stage", "executing"),
+                            }
+                        ),
+                    }
+                    progress_sent = True
 
                 # Check for counting complete state (only send once)
                 if result.state == "COUNTING_COMPLETE" and not count_sent:
@@ -1705,6 +1889,308 @@ async def stream_data_fetch(
             }
 
     return EventSourceResponse(event_generator())
+
+
+@api_router.get("/telemetry/sse")
+async def telemetry_sse(request: Request):
+    """
+    SSE endpoint for system telemetry (worker stats, DB pool stats).
+    Sends updates every 5 seconds.
+    """
+    from fm_app.workers.worker import app as celery_app
+
+    async def get_worker_stats():
+        """Get Celery worker statistics."""
+        try:
+            # Run inspection in thread pool (it's synchronous)
+            loop = asyncio.get_event_loop()
+            inspect = celery_app.control.inspect()
+
+            # These are blocking calls, run in executor
+            active = await loop.run_in_executor(None, inspect.active)
+            stats = await loop.run_in_executor(None, inspect.stats)
+
+            active = active or {}
+            stats = stats or {}
+
+            workers = []
+            for worker_name, worker_stats in stats.items():
+                active_tasks = active.get(worker_name, [])
+                workers.append(
+                    {
+                        "id": worker_name.split("@")[-1],  # Short name
+                        "active_tasks": len(active_tasks),
+                        "pool_size": worker_stats.get("pool", {}).get(
+                            "max-concurrency", 0
+                        ),
+                    }
+                )
+
+            return {
+                "workers": workers,
+                "total": len(workers),
+                "busy": sum(1 for w in workers if w["active_tasks"] > 0),
+                "idle": sum(1 for w in workers if w["active_tasks"] == 0),
+            }
+        except Exception as e:
+            logging.warning(f"Failed to get worker stats: {e}")
+            return {"workers": [], "total": 0, "busy": 0, "idle": 0, "error": str(e)}
+
+    async def get_db_pool_stats():
+        """Get operational database connection pool statistics."""
+        try:
+            # Use operational DB (engine) not warehouse DB (wh_engine)
+            # since wh queries run in Celery workers with separate pools
+            # For async engine, access pool via sync_engine
+            pool = engine.sync_engine.pool
+            return {
+                "size": pool.size(),
+                "checked_in": pool.checkedin(),
+                "checked_out": pool.checkedout(),
+                "overflow": pool.overflow(),
+            }
+        except Exception as e:
+            logging.warning(f"Failed to get DB pool stats: {e}")
+            return {"error": str(e)}
+
+    async def event_generator():
+        try:
+            yield {
+                "event": "connected",
+                "data": json.dumps({"status": "connected"}),
+            }
+
+            while True:
+                if await request.is_disconnected():
+                    break
+
+                # Gather stats
+                worker_stats = await get_worker_stats()
+                db_stats = await get_db_pool_stats()
+
+                yield {
+                    "event": "telemetry",
+                    "data": json.dumps(
+                        {
+                            "timestamp": datetime.utcnow().isoformat(),
+                            "workers": worker_stats,
+                            "db_pool": db_stats,
+                        }
+                    ),
+                }
+
+                await asyncio.sleep(5)
+
+        except asyncio.CancelledError:
+            logging.info("Telemetry SSE cancelled")
+        except Exception as e:
+            logging.error(f"Telemetry SSE error: {e}")
+            yield {
+                "event": "error",
+                "data": json.dumps({"error": str(e)}),
+            }
+
+    return EventSourceResponse(event_generator())
+
+
+@api_router.delete("/data/{query_id}")
+async def cancel_data_fetch(
+    query_id: UUID,
+    auth_result: dict = Depends(verify_any_token),
+):
+    """
+    Cancel or unsubscribe from a running data fetch.
+
+    Behavior:
+    - If user is the only subscriber → cancel the Celery task entirely
+    - If other users are subscribed → just unsubscribe this user (task continues)
+
+    Returns:
+        - status: "cancelled" if task was terminated
+        - status: "unsubscribed" if user was removed but task continues
+        - status: "not_found" if no running task exists
+    """
+    user_owner = auth_result.get("sub")
+    if user_owner is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="No user name"
+        )
+
+    # Get user email from auth result (for subscriber tracking)
+    user_email = auth_result.get("email") or auth_result.get(
+        "https://semantic-grid.com/email"
+    )
+
+    from fm_app.cache.task_tracker import (
+        clear_running_task,
+        get_running_task,
+        remove_task_subscriber,
+    )
+    from fm_app.workers.worker import wrk_fetch_data
+
+    tracking_id = str(query_id)
+    running_task_info = await get_running_task(tracking_id)
+
+    if not running_task_info:
+        logger.info(f"No running task found for query {tracking_id}")
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "status": "not_found",
+                "message": "No running task found for this query",
+                "query_id": tracking_id,
+            },
+        )
+
+    task_id = running_task_info["task_id"]
+    subscribers = running_task_info.get("subscribers", [])
+
+    # Check if this user is the only subscriber
+    user_is_only_subscriber = len(subscribers) <= 1 and (
+        not subscribers or subscribers[0].get("user_email") == user_email
+    )
+
+    if user_is_only_subscriber or not user_email:
+        # Cancel the entire task
+        task = wrk_fetch_data.AsyncResult(task_id)
+        task.revoke(terminate=True)
+        await clear_running_task(tracking_id)
+
+        logger.info(
+            f"Cancelled task {task_id} for query {tracking_id}",
+            extra={
+                "task_id": task_id,
+                "query_id": tracking_id,
+                "user": user_owner,
+            },
+        )
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "status": "cancelled",
+                "message": "Fetch cancelled",
+                "query_id": tracking_id,
+            },
+        )
+    else:
+        # Just unsubscribe this user
+        removed, remaining = await remove_task_subscriber(tracking_id, user_email)
+
+        logger.info(
+            f"Unsubscribed user from query {tracking_id}",
+            extra={
+                "query_id": tracking_id,
+                "user_email": user_email,
+                "remaining_subscribers": remaining,
+            },
+        )
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "status": "unsubscribed",
+                "message": "Unsubscribed from shared fetch",
+                "query_id": tracking_id,
+                "remaining_subscribers": remaining,
+            },
+        )
+
+
+class UpdateNotificationRequest(BaseModel):
+    """Request body for updating notification settings."""
+
+    notify: bool
+    user_email: Optional[str] = None
+
+
+@api_router.patch("/data/{query_id}")
+async def update_data_fetch_notification(
+    query_id: UUID,
+    update_request: UpdateNotificationRequest,
+    auth_result: dict = Depends(verify_any_token),
+):
+    """
+    Update notification settings for a running data fetch.
+
+    Allows users to add or remove email notification for when the fetch completes.
+
+    Request body:
+        - notify: bool - Whether to send notification on complete
+        - user_email: str (optional) - Email for notification
+          (uses auth email if not provided)
+
+    Returns:
+        - status: "updated" if notification setting was updated
+        - status: "not_found" if no running task exists
+    """
+    user_owner = auth_result.get("sub")
+    if user_owner is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="No user name"
+        )
+
+    # Get user email from request or auth result
+    user_email = (
+        update_request.user_email
+        or auth_result.get("email")
+        or auth_result.get("https://semantic-grid.com/email")
+    )
+
+    if not user_email and update_request.notify:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email required for notifications",
+        )
+
+    from fm_app.cache.task_tracker import (
+        get_running_task,
+        update_subscriber_notification,
+    )
+
+    tracking_id = str(query_id)
+    running_task_info = await get_running_task(tracking_id)
+
+    if not running_task_info:
+        logger.info(f"No running task found for query {tracking_id}")
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "status": "not_found",
+                "message": "No running task found for this query",
+                "query_id": tracking_id,
+            },
+        )
+
+    # Update notification preference
+    success = await update_subscriber_notification(
+        tracking_id, user_email, update_request.notify
+    )
+
+    if success:
+        logger.info(
+            f"Updated notification for query {tracking_id}",
+            extra={
+                "query_id": tracking_id,
+                "user_email": user_email,
+                "notify": update_request.notify,
+            },
+        )
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "status": "updated",
+                "notify": update_request.notify,
+                "user_email": user_email,
+                "query_id": tracking_id,
+            },
+        )
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update notification settings",
+        )
 
 
 @api_router.get("/query/{query_id}")

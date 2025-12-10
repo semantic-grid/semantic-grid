@@ -135,6 +135,10 @@ class QueryMetadata(BaseModel):
     refs: Optional[Refs] = None
     view: Optional[View] = None
     description: Optional[str] = None
+    # Performance metrics for query execution estimation
+    performance_warning: Optional[bool] = None
+    estimated_rows: Optional[int] = None
+    estimated_size_gb: Optional[float] = None
 
 
 class StructuredResponse(BaseModel):
@@ -308,12 +312,18 @@ class GetRequestModel(BaseModel):
     linked_session_id: Optional[UUID] = None
     query: Optional[GetQueryModel] = None
     view: Optional[View] = None
+    # admin fields
+    is_test: Optional[bool] = None
+    is_fixed: Optional[bool] = None
+    fixed_by: Optional[str] = None
+    fixed_ts: Optional[datetime] = None
+    fix_comment: Optional[str] = None
 
 
 class UpdateRequestStatusModel(BaseModel):
-    review: Optional[str]
-    rating: Optional[int]
-    status: Optional[RequestStatus]
+    review: Optional[str] = None
+    rating: Optional[int] = None
+    status: Optional[RequestStatus] = None
 
 
 class AddRequestModel(BaseModel):
@@ -413,3 +423,23 @@ class McpServerRequest(BaseModel):
     flow: FlowType = FlowType.mcp
     model: ModelType = ModelType.openai_default
     db: DBType = DBType.legacy
+
+
+### Admin Models
+
+
+class AdminRequestsResponse(BaseModel):
+    """Paginated response for admin requests endpoint."""
+
+    requests: list[GetRequestModel]
+    total: int
+    limit: int
+    offset: int
+
+
+class PatchAdminRequestModel(BaseModel):
+    """Model for updating admin-specific fields on a request."""
+
+    is_test: Optional[bool] = None
+    is_fixed: Optional[bool] = None
+    fix_comment: Optional[str] = None

@@ -113,10 +113,10 @@ even if there's previous query history.
 Important: if asked about DB schema, but not data itself, don't generate SQL query
 without any valid statement. Never generate SQL query which consists of only comments!.
 
-Important: if asked about wallets, transactions, instructions, slots, tokens, etc.
+Important: if asked about entities that have unique IDs,
 always use DISTINCT keyword to avoid duplicates.
 
-Important: when asked to remove a colum, make sure to only remove a specific one!!!
+Important: when asked to remove a column, make sure to only remove a specific one!!!
 
 Important: first column will be used by the frontend as a unique identifier of the row,
 therefore do make sure the values in the first column are always unique.
@@ -148,5 +148,3 @@ Please take into account now is {{ current_datetime }}.
 {{ db_meta_prompt_items }}
 
 {{ db_ref_prompt_items }}
-
-

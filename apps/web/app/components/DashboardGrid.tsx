@@ -24,14 +24,12 @@ const byPositionAsc = (
 
 const DashboardGrid = ({
   title,
-  description,
   items,
   slugPath,
   maxItemsPerRow = 3,
   layout = [],
 }: {
   title?: string;
-  description?: string;
   items: (DashboardItem & DashboardItemMeta)[];
   slugPath: string;
   maxItemsPerRow?: number;
@@ -50,7 +48,6 @@ const DashboardGrid = ({
   return (
     <Container maxWidth={false}>
       <Paper elevation={0}>
-        {description && <Typography variant="h6">{description}</Typography>}
         <Box>
           <ResponsiveGridLayout
             // style={{ minHeight: "calc(100vh - 64px)" }}

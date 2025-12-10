@@ -21,7 +21,17 @@ const GET = async (req: NextRequest, res: NextResponse) => {
     const res = await client.GET("/api/v1/session", {
       headers: { Authorization: `Bearer ${token.accessToken}` },
     });
-    return NextResponse.json(res.data);
+    // Handle undefined/null response
+    if (!res.data) {
+      return NextResponse.json([]);
+    }
+    // Serialize to handle BigInt and other non-JSON types
+    const serialized = JSON.parse(
+      JSON.stringify(res.data, (_, v) =>
+        typeof v === "bigint" ? v.toString() : v,
+      ),
+    );
+    return NextResponse.json(serialized);
   } catch (error: any) {
     console.log(error);
     if (error.code === "ERR_EXPIRED_ACCESS_TOKEN") {

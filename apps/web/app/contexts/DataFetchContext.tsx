@@ -2,11 +2,13 @@
 
 import React, {
   createContext,
+  type ReactNode,
+  useCallback,
   useContext,
   useRef,
-  useCallback,
-  type ReactNode,
 } from "react";
+
+import { executeWithCircuitBreaker } from "@/app/lib/circuitBreaker";
 
 type FetchParams = {
   id: string;
@@ -14,6 +16,8 @@ type FetchParams = {
   offset: number;
   sortBy?: string;
   sortOrder?: "asc" | "desc";
+  notifyOnComplete?: boolean;
+  userEmail?: string;
 };
 
 type SubscriptionCallbacks = {
@@ -29,7 +33,13 @@ type Subscription = {
 
 type FetchState = {
   eventSource: EventSource;
-  status: "connecting" | "counting" | "fetching" | "complete" | "error";
+  status:
+    | "connecting"
+    | "counting"
+    | "fetching"
+    | "complete"
+    | "error"
+    | "workers_busy";
   totalRows?: number;
   data?: { rows: any[]; total_rows: number };
   error?: string;
@@ -41,6 +51,8 @@ interface DataFetchContextValue {
     params: FetchParams,
     callbacks: SubscriptionCallbacks,
   ) => () => void;
+  hasCache: (params: FetchParams) => boolean;
+  getCacheStatus: (params: FetchParams) => "none" | "complete" | "error";
 }
 
 const DataFetchContext = createContext<DataFetchContextValue | undefined>(
@@ -67,12 +79,27 @@ export const DataFetchProvider = ({ children }: { children: ReactNode }) => {
     queryParams.append("offset", String(params.offset));
     if (params.sortBy) queryParams.append("sort_by", params.sortBy);
     if (params.sortOrder) queryParams.append("sort_order", params.sortOrder);
+    if (params.notifyOnComplete)
+      queryParams.append("notify_on_complete", "true");
+    if (params.userEmail) queryParams.append("user_email", params.userEmail);
     return `/api/apegpt/data/sse/${params.id}?${queryParams.toString()}`;
   }, []);
 
   const createEventSource = useCallback(
     (url: string, fetchState: FetchState) => {
       const eventSource = new EventSource(url);
+
+      eventSource.addEventListener("reconnected", (e) => {
+        const data = JSON.parse(e.data);
+        fetchState.status = "fetching";
+        console.log("Reconnected to running query:", data.message);
+      });
+
+      eventSource.addEventListener("workers_busy", (e) => {
+        const data = JSON.parse(e.data);
+        fetchState.status = "workers_busy";
+        console.log("Workers busy:", data.message);
+      });
 
       eventSource.addEventListener("count", (e) => {
         const data = JSON.parse(e.data);
@@ -103,7 +130,9 @@ export const DataFetchProvider = ({ children }: { children: ReactNode }) => {
       });
 
       eventSource.addEventListener("error", (e: any) => {
-        const errorData = e.data ? JSON.parse(e.data) : { error: "Unknown error" };
+        const errorData = e.data
+          ? JSON.parse(e.data)
+          : { error: "Unknown error" };
         fetchState.status = "error";
         fetchState.error = errorData.error || "Failed to fetch data";
 
@@ -115,7 +144,7 @@ export const DataFetchProvider = ({ children }: { children: ReactNode }) => {
         eventSource.close();
       });
 
-      eventSource.onerror = () => {
+      eventSource.onerror = (event) => {
         if (eventSource.readyState === EventSource.CLOSED) {
           fetchState.status = "error";
           fetchState.error = "Connection closed";
@@ -124,6 +153,10 @@ export const DataFetchProvider = ({ children }: { children: ReactNode }) => {
           fetchState.subscriptions.forEach((sub) => {
             sub.callbacks.onError("Connection closed");
           });
+
+          // Report error to circuit breaker for 5xx errors
+          // This helps detect when backend is overloaded
+          console.error("[DataFetchContext] SSE connection error", event);
         }
       };
 
@@ -132,10 +165,42 @@ export const DataFetchProvider = ({ children }: { children: ReactNode }) => {
     [],
   );
 
+  const hasCache = useCallback(
+    (params: FetchParams): boolean => {
+      const url = buildUrl(params);
+      const fetchState = fetchMapRef.current.get(url);
+      return (
+        !!fetchState &&
+        (fetchState.status === "complete" || fetchState.status === "error")
+      );
+    },
+    [buildUrl],
+  );
+
+  const getCacheStatus = useCallback(
+    (params: FetchParams): "none" | "complete" | "error" => {
+      const url = buildUrl(params);
+      const fetchState = fetchMapRef.current.get(url);
+      if (!fetchState) return "none";
+      if (fetchState.status === "complete") return "complete";
+      if (fetchState.status === "error") return "error";
+      return "none";
+    },
+    [buildUrl],
+  );
+
   const subscribe = useCallback(
     (params: FetchParams, callbacks: SubscriptionCallbacks): (() => void) => {
       const url = buildUrl(params);
       const subscriptionId = `${url}-${Date.now()}-${Math.random()}`;
+
+      console.log("[DataFetchContext] subscribe called", {
+        id: params.id,
+        offset: params.offset,
+        limit: params.limit,
+        notifyOnComplete: params.notifyOnComplete,
+        userEmail: params.userEmail,
+      });
 
       // Cancel any pending cleanup for this URL
       const cleanupTimer = cleanupTimersRef.current.get(url);
@@ -155,8 +220,19 @@ export const DataFetchProvider = ({ children }: { children: ReactNode }) => {
         };
         fetchMapRef.current.set(url, fetchState);
 
-        // Create EventSource
-        fetchState.eventSource = createEventSource(url, fetchState);
+        // Create EventSource with circuit breaker protection
+        try {
+          fetchState.eventSource = createEventSource(url, fetchState);
+        } catch (error) {
+          // Circuit breaker is open or other error
+          fetchState.status = "error";
+          fetchState.error =
+            error instanceof Error ? error.message : "Failed to connect";
+          console.error(
+            "[DataFetchContext] Failed to create EventSource",
+            error,
+          );
+        }
       }
 
       // Add subscription
@@ -202,7 +278,7 @@ export const DataFetchProvider = ({ children }: { children: ReactNode }) => {
   );
 
   return (
-    <DataFetchContext.Provider value={{ subscribe }}>
+    <DataFetchContext.Provider value={{ subscribe, hasCache, getCacheStatus }}>
       {children}
     </DataFetchContext.Provider>
   );

@@ -1,17 +1,21 @@
 "use client";
 
 import { Box, Container } from "@mui/material";
-import React, { useContext, useEffect, useRef } from "react";
+import type { GridColDef } from "@mui/x-data-grid-pro";
+import React, { useContext, useMemo, useState } from "react";
 
+import { QueryDataGrid } from "@/app/components/QueryDataGrid";
 import { ScrollLockWrapper } from "@/app/components/ScrollLockWrapper";
 import HighlightedSQL from "@/app/components/SqlView";
 import { AppContext } from "@/app/contexts/App";
-import { useQueryData } from "@/app/contexts/QueryData";
-import { DataTable } from "@/app/q/[id]/table";
+import { buildGridColumns } from "@/app/helpers/chart";
+import { useAppUser } from "@/app/hooks/useAppUser";
+import type { TQuery } from "@/app/lib/types";
 
 export interface IQueryContainerProps {
-  query?: any; // TODO: define type
+  query?: TQuery;
   id?: string;
+  autoDownload?: boolean;
 }
 
 interface TabPanelProps {
@@ -36,66 +40,72 @@ const CustomTabPanel = (props: TabPanelProps) => {
   );
 };
 
-export const QueryContainer = ({ id, query }: IQueryContainerProps) => {
+export const QueryContainer = ({
+  id,
+  query,
+  autoDownload = false,
+}: IQueryContainerProps) => {
   const { tab } = useContext(AppContext);
+  const { user: appUser } = useAppUser();
 
-  const gridRef = useRef<HTMLDivElement | null>(null);
+  // Build grid columns from query metadata
+  const gridColumns = useMemo(() => {
+    if (!query) return [];
+    return buildGridColumns(query);
+  }, [query]);
 
-  const { rows, isLoading, isReachingEnd, isValidating, setSize } =
-    useQueryData();
+  // Selection state (managed here, passed to QueryDataGrid)
+  const [activeColumn, setActiveColumn] = useState<GridColDef | null>(null);
+  const [activeRows, setActiveRows] = useState<any[] | undefined>(undefined);
+  const [selectionModel, setSelectionModel] = useState<number[]>([]);
 
-  useEffect(() => {
-    const handleInfiniteScroll = (event: React.UIEvent<HTMLDivElement>) => {
-      const grid = gridRef.current;
-      if (!grid) return;
-      const scrollable = grid.querySelector(
-        ".MuiDataGrid-virtualScroller",
-      ) as HTMLDivElement;
-      if (
-        scrollable &&
-        scrollable.scrollTop + scrollable.clientHeight >=
-          scrollable.scrollHeight - window.innerHeight * 1.5
-      ) {
-        if (!isReachingEnd && !isLoading && !isValidating) {
-          console.log("Nearing the bottom, loading more data...");
-          setSize((s) => s + 1);
-        }
-      }
-    };
+  if (!query || !id) {
+    return null;
+  }
 
-    if (!rows || isLoading) {
-      return; // No data to attach scroll listener
-    }
-
-    const grid = gridRef.current;
-    const scrollable = grid?.querySelector(".MuiDataGrid-virtualScroller");
-    scrollable?.addEventListener("scroll", handleInfiniteScroll as any);
-    // eslint-disable-next-line consistent-return
-    return () =>
-      scrollable?.removeEventListener("scroll", handleInfiniteScroll as any);
-  }, [gridRef, rows, isLoading]);
+  // Performance warning is nested in explanation for TQuery type
+  const performanceWarning = query.explanation?.performance_warning;
+  const estimatedRows = query.explanation?.estimated_rows;
+  const estimatedSizeGb = query.explanation?.estimated_size_gb;
 
   return (
     <Box
       sx={{
         marginTop: "50px", // padding to avoid overlap with app bar
         height: "calc(100vh - 50px)",
-        // overflow: "hidden",
       }}
     >
-      <Box sx={{ overflow: "hidden" }}>
+      <Box sx={{ overflow: "hidden", height: "100%" }}>
         <Container
           sx={{
             position: "relative",
             width: "100%",
+            height: "100%",
           }}
           maxWidth={false}
         >
-          <Box>
+          <Box sx={{ height: "100%" }}>
             <CustomTabPanel value={tab} index={0}>
-              <Box ref={gridRef}>
+              <Box sx={{ height: "calc(100vh - 120px)" }}>
                 <ScrollLockWrapper>
-                  <DataTable />
+                  <QueryDataGrid
+                    queryId={query.query_id}
+                    columns={gridColumns}
+                    queryMetadata={query}
+                    paginate={true}
+                    pageSize={100}
+                    performanceWarning={performanceWarning}
+                    estimatedRows={estimatedRows}
+                    estimatedSizeGb={estimatedSizeGb}
+                    activeColumn={activeColumn}
+                    onActiveColumnChange={setActiveColumn}
+                    activeRows={activeRows}
+                    onActiveRowsChange={setActiveRows}
+                    selectionModel={selectionModel}
+                    onSelectionModelChange={setSelectionModel}
+                    userEmail={appUser?.email}
+                    autoDownload={autoDownload}
+                  />
                 </ScrollLockWrapper>
               </Box>
             </CustomTabPanel>

@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import warnings
 from datetime import date, datetime
 from decimal import Decimal
 from logging.config import dictConfig
@@ -35,20 +34,16 @@ def serialize_value(value):
 from fm_app.ai_models.llm import AnthropicModel, DeepSeekModel, GeminiModel, OpenAIModel
 from fm_app.api.db_session import normalize_database_driver
 from fm_app.api.model import (
-    AddRequestModel,
     DBType,
     FlowType,
-    InteractiveRequestType,
     ModelType,
     RequestStatus,
     UpdateRequestModel,
     WorkerRequest,
 )
 from fm_app.config import get_settings
-from fm_app.db.db import add_request, update_request, update_request_failure
-from fm_app.stopwatch import stopwatch
+from fm_app.db.db import update_request, update_request_failure
 from fm_app.workers.db_session import get_db
-from fm_app.workers.experimental.agent import close_agent, init_agent
 from fm_app.workers.experimental.flex_flow import flex_flow
 from fm_app.workers.experimental.langgraph_flow import langgraph_flow
 from fm_app.workers.experimental.mcp_flow import mcp_flow
@@ -209,6 +204,10 @@ SESSION_WH_V2 = sessionmaker(bind=ENGINE_WH_V2, expire_on_commit=False)
 
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
+
+# Import notification tasks to register them with Celery
+# Must happen after 'app' is created above
+from fm_app.workers.tasks import notify  # noqa: F401
 
 
 def add_fields_to_log(logger, log_method, event_dict):
@@ -499,10 +498,15 @@ async def _wrk_add_request(args):
     #    return request
 
 
-@app.task(name="wrk_fetch_data", bind=True, soft_time_limit=300, time_limit=600)
+@app.task(
+    name="wrk_fetch_data",
+    bind=True,
+    soft_time_limit=settings.query_soft_timeout,
+    time_limit=settings.query_hard_timeout,
+)
 def wrk_fetch_data(self, args):
     """
-    Background task for fetching data from warehouse.
+    Background task for fetching data from warehouse with Redis caching.
     Args:
         args: dict with keys:
             - query_id: str (UUID)
@@ -511,6 +515,8 @@ def wrk_fetch_data(self, args):
             - offset: int
             - sort_by: Optional[str]
             - sort_order: str
+            - notify_on_complete: bool (optional)
+            - user_email: str (optional, for notifications)
     Returns:
         dict with keys:
             - status: "success" | "error"
@@ -518,7 +524,10 @@ def wrk_fetch_data(self, args):
             - total_rows: int (if success)
             - error: str (if error)
     """
+
     from sqlalchemy import text
+
+    from fm_app.cache.query_cache import get_cached_query, set_cached_query
 
     query_id = args.get("query_id")
     sql = args.get("sql")
@@ -526,14 +535,74 @@ def wrk_fetch_data(self, args):
     offset = args.get("offset", 0)
     sort_by = args.get("sort_by")
     sort_order = args.get("sort_order", "asc")
+    notify_on_complete = args.get("notify_on_complete", False)
+    user_email = args.get("user_email")
+    force = args.get("force", False)
 
-    logger.debug(
-        "Fetching data",
-        query_id=query_id,
-        limit=limit,
-        offset=offset,
-        sort_by=sort_by,
+    # Report task has started (prevents false "workers_busy" warnings)
+    self.update_state(
+        state="STARTED",
+        meta={
+            "query_id": query_id,
+            "stage": "started",
+        },
     )
+
+    logger.info(
+        f"Starting data fetch for query {query_id}",
+        extra={
+            "query_id": query_id,
+            "limit": limit,
+            "offset": offset,
+            "sort_by": sort_by,
+            "sort_order": sort_order,
+            "notify_requested": notify_on_complete,
+            "has_email": bool(user_email),
+            "force": force,
+        },
+    )
+
+    # Check cache first (skip if force=True)
+    try:
+        from fm_app.cache.query_cache import invalidate_query_cache, run_async
+
+        cached_result = None
+        if not force:
+            cached_result = run_async(
+                get_cached_query(query_id, limit, offset, sort_by, sort_order)
+            )
+        else:
+            # Invalidate all cache entries for this query before fetching fresh data
+            invalidated_count = run_async(invalidate_query_cache(query_id))
+            logger.info(
+                f"Force refresh requested, invalidated {invalidated_count} cache entries for query {query_id}"
+            )
+
+        if cached_result:
+            logger.info(f"Returning cached data for query {query_id}")
+            result = {
+                "status": "success",
+                "query_id": query_id,
+                "rows": cached_result["rows"],
+                "total_rows": cached_result["total_rows"],
+                "limit": limit,
+                "offset": offset,
+                "from_cache": True,
+            }
+
+            # Clear running task tracker
+            from fm_app.cache.query_cache import run_async
+            from fm_app.cache.task_tracker import clear_running_task
+
+            run_async(clear_running_task(query_id))
+
+            # Do NOT send notification for cached results - only for fresh queries
+            # Cache hits return immediately, so notifications aren't needed
+            logger.debug(f"Cache hit - notification not sent for query {query_id}")
+
+            return result
+    except Exception as e:
+        logger.warning(f"Cache check failed, continuing with DB query: {e}")
 
     try:
         # Fetch actual data
@@ -545,6 +614,15 @@ def wrk_fetch_data(self, args):
             sort_by=sort_by,
             sort_order=sort_order,
             include_total_count=settings,  # We already have it
+        )
+
+        # Report we're about to execute the query (this is the slow part)
+        self.update_state(
+            state="PROGRESS",
+            meta={
+                "query_id": query_id,
+                "stage": "executing_query",
+            },
         )
 
         # Execute using the warehouse engine
@@ -579,34 +657,126 @@ def wrk_fetch_data(self, args):
                 total_count=total_count,
             )
 
-            return {
+            serialized_rows = [
+                {
+                    k: serialize_value(v)
+                    for k, v in row.items()
+                    if k.lower() != "total_count"
+                }
+                for row in rows
+            ]
+
+            # Cache the results
+            try:
+                run_async(
+                    set_cached_query(
+                        query_id,
+                        limit,
+                        offset,
+                        serialized_rows,
+                        total_count,
+                        sort_by,
+                        sort_order,
+                    )
+                )
+            except Exception as cache_err:
+                logger.warning(f"Failed to cache query results: {cache_err}")
+
+            result = {
                 "status": "success",
                 "query_id": query_id,
-                "rows": [
-                    {
-                        k: serialize_value(v)
-                        for k, v in row.items()
-                        if k.lower() != "total_count"
-                    }
-                    for row in rows
-                ],
+                "rows": serialized_rows,
                 "total_rows": total_count,
                 "limit": limit,
                 "offset": offset,
+                "from_cache": False,
             }
+
+            # Send notifications to all subscribers who requested them
+            subscribers = []
+            if settings.notifications_enabled:
+                from fm_app.cache.task_tracker import get_task_subscribers
+                from fm_app.workers.tasks.notify import send_query_notification
+
+                subscribers = run_async(get_task_subscribers(query_id))
+                if subscribers:
+                    logger.info(
+                        f"Sending notifications to {len(subscribers)} "
+                        f"subscriber(s) for query {query_id}"
+                    )
+                    for subscriber in subscribers:
+                        send_query_notification.delay(
+                            query_id,
+                            subscriber["user_email"],
+                            row_count=total_count,
+                        )
+
+            # Clear running task tracker
+            from fm_app.cache.task_tracker import clear_running_task
+
+            run_async(clear_running_task(query_id))
+
+            logger.info(
+                f"Data fetch completed successfully for query {query_id}",
+                extra={
+                    "query_id": query_id,
+                    "rows_returned": len(serialized_rows),
+                    "total_rows": total_count,
+                    "from_cache": False,
+                    "notifications_sent": len(subscribers),
+                },
+            )
+
+            return result
 
     except Exception as e:
         from celery.exceptions import SoftTimeLimitExceeded
 
         if isinstance(e, SoftTimeLimitExceeded):
+            timeout_minutes = (
+                settings.query_soft_timeout // 60 if settings.query_soft_timeout else 0
+            )
             logger.warning(
-                f"Query timeout (5 minute soft limit): {query_id}",
+                f"Query timeout ({timeout_minutes} minute soft limit): {query_id}",
                 query_id=query_id,
             )
+
+            # Send timeout notifications to all subscribers (only once per query)
+            if settings.notifications_enabled:
+                from fm_app.cache.task_tracker import (
+                    get_task_subscribers,
+                    set_timeout_notified,
+                )
+
+                # Check if we've already sent timeout notifications for this query
+                should_notify = run_async(set_timeout_notified(query_id))
+                if should_notify:
+                    from fm_app.workers.tasks.notify import (
+                        send_query_timeout_notification,
+                    )
+
+                    subscribers = run_async(get_task_subscribers(query_id))
+                    if subscribers:
+                        logger.info(
+                            f"Sending timeout notifications to {len(subscribers)} "
+                            f"subscriber(s) for query {query_id}"
+                        )
+                        for subscriber in subscribers:
+                            send_query_timeout_notification.delay(
+                                query_id, subscriber["user_email"], timeout_minutes
+                            )
+                else:
+                    logger.debug(
+                        f"Timeout notification already sent for query {query_id}"
+                    )
+
             return {
                 "status": "error",
                 "query_id": query_id,
-                "error": "Query execution timed out (5 minute limit). Please simplify your query or add more filters.",
+                "error": (
+                    f"Query execution timed out ({timeout_minutes} minute limit). "
+                    "Please simplify your query or add more filters."
+                ),
             }
 
         logger.error(

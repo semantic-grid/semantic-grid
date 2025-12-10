@@ -1,16 +1,11 @@
 "use client";
 
-import { alpha, Box, CircularProgress } from "@mui/material";
-import { BarChart, ChartsTooltip, LineChart, PieChart } from "@mui/x-charts";
-import { type GridColDef } from "@mui/x-data-grid";
-import React, { useMemo } from "react";
+import { Box, CircularProgress } from "@mui/material";
+import React, { useEffect } from "react";
 
-import {
-  buildGridColumns,
-  buildPieChartSeries,
-  normalizeDataSet,
-} from "@/app/helpers/chart";
-import { useQuery } from "@/app/hooks/useQuery";
+import { QueryChart } from "@/app/components/QueryChart";
+import type { ChartType } from "@/app/components/QueryChart/types";
+import { useData } from "@/app/contexts/DataContext";
 import { useQueryObject } from "@/app/hooks/useQueryObject";
 
 export const DashboardChartItem = ({
@@ -22,70 +17,18 @@ export const DashboardChartItem = ({
   chartType: string;
   minHeight?: number;
 }) => {
-  const { data: query, isLoading: queryObjectIsLoading } =
-    useQueryObject(queryUid);
+  const { data: query, isLoading: isLoadingQuery } = useQueryObject(queryUid);
+  const { fetchQuery, hasCachedData } = useData();
 
-  const {
-    data,
-    error: dataError,
-    isLoading,
-    isRefreshing,
-  } = useQuery({
-    id: query?.query_id,
-    sql: query?.sql,
-    limit: 20,
-    offset: 0,
-  });
+  // Auto-fetch data for dashboard items (limited to 100 rows for charts)
+  useEffect(() => {
+    if (queryUid && !hasCachedData(queryUid)) {
+      fetchQuery(queryUid, { pageSize: 100, paginate: false });
+    }
+  }, [queryUid, hasCachedData, fetchQuery]);
 
-  const gridColumns: GridColDef[] = useMemo(() => {
-    if (!query) return [];
-
-    const userColumns = buildGridColumns(query);
-
-    return [...userColumns];
-  }, [query]);
-
-  const pieSeries = useMemo(
-    () => buildPieChartSeries(data?.rows || [], gridColumns),
-    [data, gridColumns],
-  );
-
-  const lineChartSeries = useMemo(
-    () =>
-      (gridColumns || []).slice(1).map((col) => ({
-        id: col.field?.replace("col_", ""),
-        label: col.headerName,
-        dataKey: col.field?.replace("col_", ""), // EXACTLY matches dataset key
-        showMark: false,
-      })),
-    [gridColumns],
-  );
-
-  const dataset = useMemo(
-    () => normalizeDataSet(data?.rows || [], gridColumns),
-    [data, gridColumns],
-  );
-
-  const xAxis = useMemo(
-    () => [
-      {
-        dataKey: gridColumns[0]?.field?.replace("col_", ""),
-        scaleType: chartType === "bar" ? "band" : "time",
-        valueFormatter: (value: Date) => value.toLocaleDateString(),
-        // valueFormatter: (value: number) => new Date(value).toString(),
-      },
-    ],
-    [gridColumns, chartType],
-  );
-
-  // Show loading state if data isn't ready
-  if (
-    !query ||
-    !data ||
-    gridColumns.length === 0 ||
-    !dataset ||
-    dataset.length === 0
-  ) {
+  // Show loading while query metadata is loading
+  if (isLoadingQuery || !query) {
     return (
       <Box
         sx={{
@@ -101,91 +44,18 @@ export const DashboardChartItem = ({
     );
   }
 
-  if (chartType === "pie") {
-    return (
-      <Box sx={{ width: "100%", height: minHeight, position: "relative" }}>
-        <PieChart
-          series={pieSeries || []}
-          height={minHeight}
-          sx={{ width: "100%" }}
-        />
-        {(isLoading || isRefreshing) && (
-          <Box
-            position="absolute"
-            top={0}
-            left={0}
-            right={0}
-            bottom={0}
-            display="flex"
-            justifyContent="center"
-            alignItems="center"
-            bgcolor={(theme) => alpha(theme.palette.background.default, 0.6)}
-          >
-            <CircularProgress />
-          </Box>
-        )}
-      </Box>
-    );
-  }
-  if (chartType === "line") {
-    return (
-      <Box sx={{ width: "100%", height: minHeight, position: "relative" }}>
-        <LineChart
-          xAxis={xAxis as any} // e.g. 'col_0'
-          series={lineChartSeries || []}
-          dataset={dataset}
-          height={minHeight}
-          sx={{ width: "100%" }}
-        >
-          <ChartsTooltip /> {/* enables tooltips for all series at hovered X */}
-        </LineChart>
-        {(isLoading || isRefreshing) && (
-          <Box
-            position="absolute"
-            top={0}
-            left={0}
-            right={0}
-            bottom={0}
-            display="flex"
-            justifyContent="center"
-            alignItems="center"
-            bgcolor={(theme) => alpha(theme.palette.background.default, 0.6)}
-          >
-            <CircularProgress />
-          </Box>
-        )}
-      </Box>
-    );
-  }
-  if (chartType === "bar") {
-    return (
-      <Box sx={{ width: "100%", height: minHeight, position: "relative" }}>
-        <BarChart
-          xAxis={xAxis as any}
-          series={lineChartSeries || []}
-          dataset={dataset}
-          height={minHeight}
-          sx={{ width: "100%" }}
-        >
-          <ChartsTooltip />
-        </BarChart>
-        {(isLoading || isRefreshing) && (
-          <Box
-            position="absolute"
-            top={0}
-            left={0}
-            right={0}
-            bottom={0}
-            display="flex"
-            justifyContent="center"
-            alignItems="center"
-            bgcolor={(theme) => alpha(theme.palette.background.default, 0.6)}
-          >
-            <CircularProgress />
-          </Box>
-        )}
-      </Box>
-    );
-  }
-  return <div>Unsupported chart type: {chartType}</div>;
+  // Validate chart type
+  const validChartType: ChartType =
+    chartType === "line" || chartType === "bar" || chartType === "pie"
+      ? chartType
+      : "line";
+
+  return (
+    <QueryChart
+      queryId={queryUid}
+      chartType={validChartType}
+      queryMetadata={query}
+      height={minHeight}
+    />
+  );
 };

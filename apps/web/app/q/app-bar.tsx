@@ -1,6 +1,6 @@
 "use client";
 
-import { Code, TableRows } from "@mui/icons-material";
+import { Code, Menu as MenuIcon, TableRows } from "@mui/icons-material";
 import PlaylistAddIcon from "@mui/icons-material/PlaylistAdd";
 import type { AppBarProps } from "@mui/material";
 import {
@@ -8,7 +8,13 @@ import {
   AppBar,
   Box,
   Divider,
+  Drawer,
   IconButton,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
   Menu,
   MenuItem,
   Stack,
@@ -77,6 +83,7 @@ const ApplicationBar = ({ id }: any) => {
   const [anchorEl, setAnchorEl] = useState(null);
   const openMenu = Boolean(anchorEl);
   const creatingSessionRef = useRef(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const toggleTheme = () => {
     setMode(mode === "dark" ? "light" : "dark");
@@ -177,85 +184,70 @@ const ApplicationBar = ({ id }: any) => {
           sx={{ flexGrow: 1, alignItems: "center" }}
           spacing={2}
         >
-          {/* <Box
-            component={Link}
-            href="/query"
-            sx={{ display: "flex", justifyContent: "center" }}
-          >
-            <img src={imgSrc()} alt="Logo" style={{ height: "40px" }} />
-          </Box> */}
-          <Tooltip title="Start new chat">
-            <span>
-              <IconButton
-                // disableRipple
-                // disableTouchRipple
-                // disableFocusRipple
-                disabled={!user}
-                aria-label="new chat"
-                edge="start"
-                onClick={onNewChat}
-              >
-                <Box component={NewChatIcon} sx={{ color: "text.secondary" }} />
-              </IconButton>
-            </span>
-          </Tooltip>
-          <Tooltip title="Add to User Dashboard">
-            <span>
-              <IconButton
-                // disableRipple
-                // disableTouchRipple
-                // disableFocusRipple
-                // disabled={!user}
-                aria-label="add to user dashboard"
-                edge="start"
-                onClick={onAddToUserDashboard}
-              >
-                <Box
-                  component={PlaylistAddIcon}
-                  sx={{ color: "text.secondary" }}
-                />
-              </IconButton>
-            </span>
-          </Tooltip>
-          {/* <Tooltip title="Open chat selector">
-            <span>
-              <IconButton
-                // disableRipple
-                // disableTouchRipple
-                // disableFocusRipple
-                disabled={!user}
-                aria-label="open drawer"
-                onClick={handleDrawerOpen}
-                edge="start"
-              >
-                <Box
-                  component={ChatSelectorIcon}
-                  sx={{ color: "text.secondary" }}
-                />
-              </IconButton>
-            </span>
-          </Tooltip> */}
+          {/* Mobile: hamburger menu */}
+          {!isLarge && (
+            <IconButton
+              aria-label="open menu"
+              edge="start"
+              onClick={() => setDrawerOpen(true)}
+            >
+              <MenuIcon />
+            </IconButton>
+          )}
+          {/* Desktop: show action buttons inline */}
+          {isLarge && (
+            <>
+              <Tooltip title="Start new chat">
+                <span>
+                  <IconButton
+                    disabled={!user}
+                    aria-label="new chat"
+                    edge="start"
+                    onClick={onNewChat}
+                  >
+                    <Box
+                      component={NewChatIcon}
+                      sx={{ color: "text.secondary" }}
+                    />
+                  </IconButton>
+                </span>
+              </Tooltip>
+              <Tooltip title="Add to User Dashboard">
+                <span>
+                  <IconButton
+                    aria-label="add to user dashboard"
+                    edge="start"
+                    onClick={onAddToUserDashboard}
+                  >
+                    <Box
+                      component={PlaylistAddIcon}
+                      sx={{ color: "text.secondary" }}
+                    />
+                  </IconButton>
+                </span>
+              </Tooltip>
+            </>
+          )}
         </Stack>
         <Stack direction="row" sx={{ alignItems: "center" }} spacing={1}>
-          {typeof navigator !== "undefined" && Boolean(navigator.share) && (
-            <Tooltip title="Share this query">
-              <IconButton
-                // disableRipple
-                // disableTouchRipple
-                // disableFocusRipple
-                onClick={onShareClick}
-                color="inherit"
-                sx={{ color: "text.secondary" }}
-              >
-                <Box component={ShareQuery} sx={{ color: "text.secondary" }} />
-              </IconButton>
-            </Tooltip>
-          )}
+          {isLarge &&
+            typeof navigator !== "undefined" &&
+            Boolean(navigator.share) && (
+              <Tooltip title="Share this query">
+                <IconButton
+                  onClick={onShareClick}
+                  color="inherit"
+                  sx={{ color: "text.secondary" }}
+                >
+                  <Box
+                    component={ShareQuery}
+                    sx={{ color: "text.secondary" }}
+                  />
+                </IconButton>
+              </Tooltip>
+            )}
           <Tooltip title="Toggle table/SQL view">
             <IconButton
-              // disableRipple
-              // disableTouchRipple
-              // disableFocusRipple
               onClick={toggleTab}
               color="inherit"
               sx={{ color: "text.secondary" }}
@@ -264,28 +256,10 @@ const ApplicationBar = ({ id }: any) => {
             </IconButton>
           </Tooltip>
           <Tooltip title="Toggle light/dark mode">
-            <IconButton
-              // disableRipple
-              // disableTouchRipple
-              // disableFocusRipple
-              onClick={toggleTheme}
-              color="inherit"
-            >
+            <IconButton onClick={toggleTheme} color="inherit">
               <Box component={ToggleMode} sx={{ color: "text.secondary" }} />
             </IconButton>
           </Tooltip>
-          {/* <IconButton
-            disableRipple
-            disableTouchRipple
-            disableFocusRipple
-            onClick={handleClick}
-          >
-            {user ? (
-              <Avatar sx={{ width: 26, height: 26 }} src={user.picture || ""} />
-            ) : (
-              <AccountCircle />
-            )}
-          </IconButton> */}
           <Menu
             anchorEl={anchorEl}
             elevation={1}
@@ -320,6 +294,65 @@ const ApplicationBar = ({ id }: any) => {
           </Menu>
         </Stack>
       </Toolbar>
+      {/* Mobile drawer */}
+      <Drawer
+        anchor="left"
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+      >
+        <Box sx={{ width: 250, pt: 2 }}>
+          <List>
+            <ListItem disablePadding>
+              <ListItemButton
+                disabled={!user}
+                onClick={() => {
+                  setDrawerOpen(false);
+                  onNewChat();
+                }}
+              >
+                <ListItemIcon>
+                  <Box
+                    component={NewChatIcon}
+                    sx={{ color: "text.secondary" }}
+                  />
+                </ListItemIcon>
+                <ListItemText primary="Start New Chat" />
+              </ListItemButton>
+            </ListItem>
+            <ListItem disablePadding>
+              <ListItemButton
+                onClick={() => {
+                  setDrawerOpen(false);
+                  onAddToUserDashboard();
+                }}
+              >
+                <ListItemIcon>
+                  <PlaylistAddIcon sx={{ color: "text.secondary" }} />
+                </ListItemIcon>
+                <ListItemText primary="Add to Dashboard" />
+              </ListItemButton>
+            </ListItem>
+            {typeof navigator !== "undefined" && Boolean(navigator.share) && (
+              <ListItem disablePadding>
+                <ListItemButton
+                  onClick={() => {
+                    setDrawerOpen(false);
+                    onShareClick();
+                  }}
+                >
+                  <ListItemIcon>
+                    <Box
+                      component={ShareQuery}
+                      sx={{ color: "text.secondary" }}
+                    />
+                  </ListItemIcon>
+                  <ListItemText primary="Share Query" />
+                </ListItemButton>
+              </ListItem>
+            )}
+          </List>
+        </Box>
+      </Drawer>
     </AppBar>
   );
 };

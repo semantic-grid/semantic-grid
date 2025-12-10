@@ -79,7 +79,6 @@ const Page = async ({ params }: { params: { section?: string[] } }) => {
     <DashboardGrid
       slugPath={slugPath}
       title={dMeta?.name}
-      description={dMeta?.description || undefined}
       items={items}
       layout={d.layout || undefined}
       maxItemsPerRow={dMeta?.maxItemsPerRow || 3}

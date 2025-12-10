@@ -9,15 +9,31 @@ const GET = async (req: NextRequest) => {
     const limit = Number(req.nextUrl.searchParams.get("limit") || "100");
     const offset = Number(req.nextUrl.searchParams.get("offset") || "0");
     const status: any = req.nextUrl.searchParams.get("status") || "Done";
+    const search = req.nextUrl.searchParams.get("search") || undefined;
+    const hasFeedback =
+      req.nextUrl.searchParams.get("has_feedback") === "true" || undefined;
+    const isTestParam = req.nextUrl.searchParams.get("is_test");
+    const isFixedParam = req.nextUrl.searchParams.get("is_fixed");
+    const isTest =
+      isTestParam === "true" ? true : isTestParam === "false" ? false : null;
+    const isFixed =
+      isFixedParam === "true" ? true : isFixedParam === "false" ? false : null;
     const token = await getAccessToken({ scopes: ["admin:requests"] });
-    // console.log("token", token, limit, offset);
 
     if (!token) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
     const res = await client.GET("/api/v1/admin/requests", {
       params: {
-        query: { limit, offset, status },
+        query: {
+          limit,
+          offset,
+          status,
+          search,
+          has_feedback: hasFeedback,
+          is_test: isTest,
+          is_fixed: isFixed,
+        },
       },
       headers: { Authorization: `Bearer ${token.accessToken}` },
     });

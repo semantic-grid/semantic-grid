@@ -313,7 +313,7 @@ class AnthropicModel(AIModel):
                     try:
                         delta = clean(event)
                         content += delta
-                    except Exception as e:
+                    except Exception:
                         pass
 
             content = fix_multiline_strings(content)
@@ -322,7 +322,7 @@ class AnthropicModel(AIModel):
             data = json.loads(content, object_hook=fix_nulls_and_convert_rows)
             return InvestigationStep(**data)
 
-        except Exception as e:
+        except Exception:
             return InvestigationStep()
 
     @staticmethod

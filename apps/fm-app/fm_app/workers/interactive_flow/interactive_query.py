@@ -49,7 +49,6 @@ from fm_app.db.db import (
     update_session_name,
 )
 from fm_app.mcp_servers.db_meta import db_meta_mcp_analyze_query
-from fm_app.stopwatch import stopwatch
 from fm_app.validators import MetadataValidator
 from fm_app.workers.interactive_flow.setup import FlowContext, build_prompt_variables
 
@@ -126,6 +125,11 @@ async def handle_interactive_query(ctx: FlowContext, intent: IntentAnalysis) -> 
 
     # Do at most 3 attempts to generate valid SQL
     attempt = 1
+    # Preserve original result from first LLM response through retries
+    # This prevents the result field from being overwritten with "fix" descriptions
+    original_result = None
+    # Capture all errors encountered during retries for better error reporting
+    retry_errors: list[dict] = []
     while attempt <= 3:
         await update_request_status(RequestStatus.sql, None, db, req.request_id)
         logger.info(
@@ -167,6 +171,10 @@ async def handle_interactive_query(ctx: FlowContext, intent: IntentAnalysis) -> 
             ai_response=llm_response,
         )
 
+        # Capture original result from first attempt to preserve user-facing description
+        if attempt == 1 and llm_response.result:
+            original_result = llm_response.result
+
         # Validate QueryMetadata consistency
         validation_result = MetadataValidator.validate_metadata(
             llm_response, dialect=warehouse_dialect
@@ -182,10 +190,15 @@ async def handle_interactive_query(ctx: FlowContext, intent: IntentAnalysis) -> 
                 metadata_columns=validation_result["metadata_columns"],
             )
             # Add validation errors to the repair loop
+            errors_list = "\n".join(f"  - {err}" for err in validation_result["errors"])
+            retry_errors.append(
+                {
+                    "attempt": attempt,
+                    "type": "metadata_validation",
+                    "error": errors_list,
+                }
+            )
             if attempt < 3:
-                errors_list = "\n".join(
-                    f"  - {err}" for err in validation_result["errors"]
-                )
                 validation_error_msg = (
                     "QueryMetadata validation errors detected:\n"
                     f"{errors_list}\n\n"
@@ -196,7 +209,11 @@ async def handle_interactive_query(ctx: FlowContext, intent: IntentAnalysis) -> 
                     "Remember: column_name must be the alias "
                     "(the name after AS), not the expression.\n"
                     "For example: 'DATE(block_time) AS trade_date' -> "
-                    "column_name should be 'trade_date'"
+                    "column_name should be 'trade_date'\n\n"
+                    "IMPORTANT: Keep the 'result' field exactly as you wrote it "
+                    "originally. The result should describe what the query "
+                    "accomplishes for the user, NOT what you fixed. "
+                    "Do NOT mention any fixes or repairs in the result field."
                 )
 
                 messages.append(
@@ -262,14 +279,34 @@ async def handle_interactive_query(ctx: FlowContext, intent: IntentAnalysis) -> 
                             flow_step_num=next(flow_step),
                             unqualified_tables=actual_unqualified,
                         )
+                        retry_errors.append(
+                            {
+                                "attempt": attempt,
+                                "type": "unqualified_tables",
+                                "error": f"Unqualified: {', '.join(actual_unqualified)}",
+                            }
+                        )
 
                         if attempt < 3:
                             validation_error_msg = (
-                                f"SQL validation error: Trino requires fully-qualified table names.\n\n"
-                                f"Found unqualified table(s): {', '.join(actual_unqualified)}\n\n"
-                                f"Please use format: catalog.schema.table_name\n"
-                                f"Example: dwh.public.subs (NOT just 'subs')\n\n"
-                                f"Rewrite the SQL query with fully-qualified table names."
+                                f"SQL validation error: Invalid or unqualified table names.\n\n"
+                                f"Found invalid table(s): {', '.join(actual_unqualified)}\n\n"
+                                f"These tables either:\n"
+                                f"1. Do not exist in the database schema, OR\n"
+                                f"2. Are missing the required catalog.schema prefix\n\n"
+                                f"IMPORTANT: You must ONLY use tables that were "
+                                f"provided in the database schema above. Do NOT "
+                                f"invent or assume table names.\n\n"
+                                f"Review the schema and use the correct fully-qualified "
+                                f"table names (e.g., dwh.public.wifi_hotspots, "
+                                f"dwh.public.bf_inventory).\n\n"
+                                f"Rewrite the SQL query using ONLY tables from "
+                                f"the provided schema.\n\n"
+                                f"IMPORTANT: Keep the 'result' field exactly as "
+                                f"you wrote it originally. The result should "
+                                f"describe what the query accomplishes for the "
+                                f"user, NOT what you fixed. Do NOT mention any "
+                                f"fixes or repairs in the result field."
                             )
 
                             messages.append(
@@ -294,12 +331,23 @@ async def handle_interactive_query(ctx: FlowContext, intent: IntentAnalysis) -> 
             )
 
             if analyzed.get("explanation"):
-                explanation = analyzed.get("explanation")[0]
-                new_metadata.update({"explanation": explanation})
+                explain_output = analyzed.get("explanation")[0]
 
                 # Check for large result set estimates (Trino only)
                 estimated_rows = analyzed.get("estimated_rows")
                 estimated_size_gb = analyzed.get("estimated_output_size_gb")
+
+                # Build explanation object with EXPLAIN output and performance metrics
+                explanation = {
+                    "explain": explain_output,
+                }
+
+                if estimated_rows is not None:
+                    explanation["estimated_rows"] = estimated_rows
+                if estimated_size_gb is not None:
+                    explanation["estimated_size_gb"] = estimated_size_gb
+
+                new_metadata.update({"explanation": explanation})
 
                 if estimated_rows is not None:
                     logger.info(
@@ -361,7 +409,11 @@ async def handle_interactive_query(ctx: FlowContext, intent: IntentAnalysis) -> 
                             }
                         )
 
-                        # Store estimate in metadata
+                        # Store performance warning in explanation and metadata
+                        explanation["performance_warning"] = True
+                        new_metadata.update({"explanation": explanation})
+
+                        # Also store in metadata for backwards compatibility
                         new_metadata.update(
                             {
                                 "estimated_rows": estimated_rows,
@@ -382,10 +434,17 @@ async def handle_interactive_query(ctx: FlowContext, intent: IntentAnalysis) -> 
                 )
                 req.status = RequestStatus.retry
                 # Instead of returning, increment attempt and keep going
-                attempt += 1
                 error_pattern = r"(DB::Exception.*?)Stack trace"
                 error_match = re.search(error_pattern, str(err), re.DOTALL)
                 error_message = error_match.group(1) if error_match else str(err)
+                retry_errors.append(
+                    {
+                        "attempt": attempt,
+                        "type": "db_exception",
+                        "error": error_message.strip()[:200],  # Truncate long errors
+                    }
+                )
+                attempt += 1
 
                 messages.append(
                     {
@@ -394,6 +453,11 @@ async def handle_interactive_query(ctx: FlowContext, intent: IntentAnalysis) -> 
                             We have got DB exception: {error_message}\n.
                             Please regenerate SQL to fix the issue.
                             Remember instructions from original prompt!.
+
+                            IMPORTANT: Keep the 'result' field exactly as you
+                            wrote it originally. The result should describe what
+                            the query accomplishes for the user, NOT what you
+                            fixed. Do NOT mention fixes or repairs in result.
                         """,
                     }
                 )
@@ -558,6 +622,17 @@ async def handle_interactive_query(ctx: FlowContext, intent: IntentAnalysis) -> 
 
         await update_request_status(RequestStatus.done, None, db, req.request_id)
 
+        # Restore original result if we retried (prevents "fix" descriptions
+        # from overwriting user-facing result)
+        if original_result and attempt > 1:
+            llm_response.result = original_result
+            logger.info(
+                "Restored original result after SQL repair",
+                flow_stage="restore_result",
+                flow_step_num=next(flow_step),
+                original_result=original_result,
+            )
+
         req.response = llm_response.result
         req.structured_response = StructuredResponse(
             intent=llm_response.summary,
@@ -571,9 +646,18 @@ async def handle_interactive_query(ctx: FlowContext, intent: IntentAnalysis) -> 
         return
 
     # If we reach here, exhausted all attempts
+    # Build detailed error message with all retry errors
+    if retry_errors:
+        errors_summary = "\n".join(
+            f"Attempt {e['attempt']}: [{e['type']}] {e['error']}" for e in retry_errors
+        )
+        detailed_error = f"Failed after 3 attempts:\n{errors_summary}"
+    else:
+        detailed_error = "Failed to generate valid SQL after 3 attempts"
+
     await update_request_status(
         RequestStatus.error,
-        "Failed to generate valid SQL after 3 attempts",
+        detailed_error,
         db,
         req.request_id,
     )
@@ -581,6 +665,7 @@ async def handle_interactive_query(ctx: FlowContext, intent: IntentAnalysis) -> 
         "Failed to generate valid SQL after 3 attempts",
         flow_stage="failed_sql_generation",
         flow_step_num=next(flow_step),
+        retry_errors=retry_errors,
     )
     req.status = RequestStatus.error
-    req.err = "Failed to generate valid SQL after 3 attempts"
+    req.err = detailed_error

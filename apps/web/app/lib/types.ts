@@ -61,6 +61,10 @@ export type TQueryMetadata = {
   columns?: TColumn[];
   parents?: string[]; // Array of parent query IDs
   result?: string;
+  // Performance metrics for query execution estimation
+  performance_warning?: boolean;
+  estimated_rows?: number;
+  estimated_size_gb?: number;
 };
 
 export type TUserSession = {
@@ -102,7 +106,12 @@ export type TQuery = {
   data_source?: string; // Data source for the query
   db_dialect?: string; // Database dialect (e.g., SQL, NoSQL)
   err?: string; // Error message, if any
-  explanation?: any;
+  explanation?: {
+    explain?: string; // EXPLAIN output from database
+    performance_warning?: boolean; // Whether query has performance warning
+    estimated_rows?: number; // Estimated rows to process
+    estimated_size_gb?: number; // Estimated output size in GB
+  };
   intent?: string; // User's intent for the query
   summary?: string; // Summary of the query
   sql?: string; // SQL query string

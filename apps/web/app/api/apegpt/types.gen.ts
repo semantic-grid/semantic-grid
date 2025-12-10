@@ -208,7 +208,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Admin Get All Requests */
+        /**
+         * Admin Get All Requests
+         * @description Get all requests for admin with pagination metadata, user info, and search.
+         *     Returns total count for proper pagination.
+         */
         get: operations["admin_get_all_requests_api_v1_admin_requests_get"];
         put?: never;
         post?: never;
@@ -216,6 +220,27 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/requests/{request_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Admin Update Request
+         * @description Update admin-specific fields on a request (is_test, is_fixed, fix_comment).
+         *     When is_fixed is set to True, fixed_by and fixed_ts are automatically populated.
+         */
+        patch: operations["admin_update_request_api_v1_admin_requests__request_id__patch"];
         trace?: never;
     };
     "/api/v1/chart": {
@@ -314,10 +339,38 @@ export interface paths {
         get: operations["get_query_data_api_v1_data__query_id__get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Cancel Data Fetch
+         * @description Cancel or unsubscribe from a running data fetch.
+         *
+         *     Behavior:
+         *     - If user is the only subscriber → cancel the Celery task entirely
+         *     - If other users are subscribed → just unsubscribe this user (task continues)
+         *
+         *     Returns:
+         *         - status: "cancelled" if task was terminated
+         *         - status: "unsubscribed" if user was removed but task continues
+         *         - status: "not_found" if no running task exists
+         */
+        delete: operations["cancel_data_fetch_api_v1_data__query_id__delete"];
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Update Data Fetch Notification
+         * @description Update notification settings for a running data fetch.
+         *
+         *     Allows users to add or remove email notification for when the fetch completes.
+         *
+         *     Request body:
+         *         - notify: bool - Whether to send notification on complete
+         *         - user_email: str (optional) - Email for notification
+         *           (uses auth email if not provided)
+         *
+         *     Returns:
+         *         - status: "updated" if notification setting was updated
+         *         - status: "not_found" if no running task exists
+         */
+        patch: operations["update_data_fetch_notification_api_v1_data__query_id__patch"];
         trace?: never;
     };
     "/api/v1/data/sse/{query_id}": {
@@ -338,6 +391,27 @@ export interface paths {
          *     4. Returns final data when ready
          */
         get: operations["stream_data_fetch_api_v1_data_sse__query_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/telemetry/sse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Telemetry Sse
+         * @description SSE endpoint for system telemetry (worker stats, DB pool stats).
+         *     Sends updates every 5 seconds.
+         */
+        get: operations["telemetry_sse_api_v1_telemetry_sse_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -436,6 +510,20 @@ export interface components {
             refs?: components["schemas"]["Refs"] | null;
             /** Query Id */
             query_id?: string | null;
+        };
+        /**
+         * AdminRequestsResponse
+         * @description Paginated response for admin requests endpoint.
+         */
+        AdminRequestsResponse: {
+            /** Requests */
+            requests: components["schemas"]["GetRequestModel"][];
+            /** Total */
+            total: number;
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
         };
         /**
          * ChartMetadata
@@ -630,6 +718,16 @@ export interface components {
             linked_session_id?: string | null;
             query?: components["schemas"]["GetQueryModel"] | null;
             view?: components["schemas"]["View"] | null;
+            /** Is Test */
+            is_test?: boolean | null;
+            /** Is Fixed */
+            is_fixed?: boolean | null;
+            /** Fixed By */
+            fixed_by?: string | null;
+            /** Fixed Ts */
+            fixed_ts?: string | null;
+            /** Fix Comment */
+            fix_comment?: string | null;
         };
         /** GetSessionModel */
         GetSessionModel: {
@@ -674,6 +772,18 @@ export interface components {
          * @enum {string}
          */
         ModelType: "OpenAI" | "Gemini" | "Deepseek" | "Anthropic";
+        /**
+         * PatchAdminRequestModel
+         * @description Model for updating admin-specific fields on a request.
+         */
+        PatchAdminRequestModel: {
+            /** Is Test */
+            is_test?: boolean | null;
+            /** Is Fixed */
+            is_fixed?: boolean | null;
+            /** Fix Comment */
+            fix_comment?: string | null;
+        };
         /** PatchSessionModel */
         PatchSessionModel: {
             /** Name */
@@ -697,13 +807,23 @@ export interface components {
          * @enum {string}
          */
         RequestStatus: "New" | "Intent" | "SQL" | "DataFetch" | "Retry" | "Finalizing" | "InProgress" | "Scheduled" | "Error" | "Done" | "Cancelled";
+        /**
+         * UpdateNotificationRequest
+         * @description Request body for updating notification settings.
+         */
+        UpdateNotificationRequest: {
+            /** Notify */
+            notify: boolean;
+            /** User Email */
+            user_email?: string | null;
+        };
         /** UpdateRequestStatusModel */
         UpdateRequestStatusModel: {
             /** Review */
-            review: string | null;
+            review?: string | null;
             /** Rating */
-            rating: number | null;
-            status: components["schemas"]["RequestStatus"] | null;
+            rating?: number | null;
+            status?: components["schemas"]["RequestStatus"] | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -1198,6 +1318,14 @@ export interface operations {
                 limit?: number;
                 offset?: number;
                 status?: components["schemas"]["RequestStatus"];
+                /** @description Search in request, SQL, or user */
+                search?: string | null;
+                /** @description Filter to requests with rating or review */
+                has_feedback?: boolean | null;
+                /** @description Filter by is_test flag */
+                is_test?: boolean | null;
+                /** @description Filter by is_fixed flag */
+                is_fixed?: boolean | null;
             };
             header?: never;
             path?: never;
@@ -1211,7 +1339,42 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["GetRequestModel"][];
+                    "application/json": components["schemas"]["AdminRequestsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    admin_update_request_api_v1_admin_requests__request_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchAdminRequestModel"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GetRequestModel"];
                 };
             };
             /** @description Validation Error */
@@ -1445,6 +1608,72 @@ export interface operations {
             };
         };
     };
+    cancel_data_fetch_api_v1_data__query_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                query_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_data_fetch_notification_api_v1_data__query_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                query_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateNotificationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     stream_data_fetch_api_v1_data_sse__query_id__get: {
         parameters: {
             query?: {
@@ -1452,6 +1681,9 @@ export interface operations {
                 offset?: number;
                 sort_by?: string | null;
                 sort_order?: string;
+                notify_on_complete?: boolean;
+                user_email?: string | null;
+                force?: boolean;
             };
             header?: never;
             path: {
@@ -1477,6 +1709,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    telemetry_sse_api_v1_telemetry_sse_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };

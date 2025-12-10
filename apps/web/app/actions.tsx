@@ -150,8 +150,12 @@ export const createRequestFromQuery = async ({
 export const updateRequest = async ({ sessionId, requestId, data }: any) => {
   await updateUserRequest({ requestId, data });
   // revalidatePath("/", "layout");
-  console.log("revalidatePath", `/query/${sessionId}`);
-  revalidatePath(`/query/${sessionId}`, "page");
+  if (sessionId) {
+    console.log("revalidatePath", `/grid/${sessionId}`);
+    // console.log("revalidatePath", `/query/${sessionId}`, `/grid/${sessionId}`);
+    // revalidatePath(`/query/${sessionId}`, "page");
+    revalidatePath(`/grid/${sessionId}`, "page");
+  }
 };
 
 export const getSingleRequest = async ({ sessionId, seqNum }: any) => {
@@ -233,16 +237,18 @@ export const addQueryToDashboard = async ({
 export const addQueryToUserDashboard = async ({
   queryUid,
   itemType = "table",
+  name,
 }: {
   queryUid: string;
   itemType?: "table" | "chart";
+  name?: string;
 }) => {
   const { uid, userId } = await ensureSession();
-  console.log("addQueryToUserDashboard", { uid, queryUid, userId });
+  console.log("addQueryToUserDashboard", { uid, queryUid, userId, name });
   if (!uid) throw new Error("No user");
   if (!queryUid) throw new Error("No queryId");
 
-  await attachQueryToUserDashboard({ userId: uid, queryUid, itemType });
+  await attachQueryToUserDashboard({ userId: uid, queryUid, itemType, name });
 
   revalidatePath(`/user/${userId}`, "page");
   return `/user/${userId}`;

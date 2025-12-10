@@ -5,6 +5,7 @@ import {
   Download,
   Fullscreen,
   MoreVert,
+  Notifications,
 } from "@mui/icons-material";
 import {
   Box,
@@ -39,19 +40,23 @@ export const DashboardItemMenu = ({
   query,
   slugPath,
   refresh,
+  refreshWithNotify,
   fetchedAt,
   onDownloadCsvVisible,
   onDownloadCsvFull,
   onCopyUrl,
+  performanceWarning = false,
 }: {
   id: string;
   query: TQuery;
   slugPath: string;
   refresh: () => void;
+  refreshWithNotify?: () => void;
   fetchedAt?: number;
   onDownloadCsvVisible: () => Promise<void> | void;
   onDownloadCsvFull: () => Promise<void> | void;
   onCopyUrl: () => Promise<void> | void;
+  performanceWarning?: boolean;
 }) => {
   const router = useRouter();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
@@ -117,6 +122,9 @@ export const DashboardItemMenu = ({
       case "refresh":
         refresh();
         break;
+      case "refresh-notify":
+        refreshWithNotify?.();
+        break;
       case "url":
         await onCopyUrl?.();
         break;
@@ -129,16 +137,29 @@ export const DashboardItemMenu = ({
     handleClose();
   };
 
-  const ItemMenu = (user: boolean): TItemMenu[] =>
-    user
+  const ItemMenu = (user: boolean): TItemMenu[] => {
+    const refreshItems: TItemMenu[] = [
+      { label: "Refresh", key: "refresh", icon: <Cached /> },
+      ...(performanceWarning
+        ? [
+            {
+              label: "Refresh & Notify",
+              key: "refresh-notify",
+              icon: <Notifications />,
+            },
+          ]
+        : []),
+      { label: "Refreshed", key: "refreshed", disabled: true },
+    ];
+
+    return user
       ? [
           { label: "Show as Table", key: "view-table" },
           { label: "Show as Pie Chart", key: "view-chart-pie" },
           { label: "Show as Line Chart", key: "view-chart-line" },
           { label: "Show as Bar Chart", key: "view-chart-bar" },
           { label: "sep1", isSeparator: true },
-          { label: "Refresh", key: "refresh", icon: <Cached /> },
-          { label: "Refreshed", key: "refreshed", disabled: true },
+          ...refreshItems,
           { label: "Edit Query", key: "edit", icon: <AutoAwesome /> },
           { label: "Enter Full Screen", key: "item", icon: <Fullscreen /> },
           { label: "Copy URL", key: "url", icon: <ContentCopy /> },
@@ -147,13 +168,13 @@ export const DashboardItemMenu = ({
           { label: "Delete", key: "delete", destructive: true },
         ]
       : [
-          { label: "Refresh", key: "refresh", icon: <Cached /> },
-          { label: "Refreshed", key: "refreshed", disabled: true },
+          ...refreshItems,
           { label: "Edit Query", key: "copy", icon: <AutoAwesome /> },
           { label: "Enter Full Screen", key: "item", icon: <Fullscreen /> },
           { label: "Copy URL", key: "url", icon: <ContentCopy /> },
           { label: "Download CSV", key: "csv", icon: <Download /> },
         ];
+  };
 
   return (
     <Box

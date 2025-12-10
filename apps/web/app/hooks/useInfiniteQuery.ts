@@ -13,10 +13,22 @@ const createFetcher =
   (
     dataFetchContext: ReturnType<typeof useDataFetch>,
     abortController: AbortController,
+    notifyOnComplete?: boolean,
+    userEmail?: string,
   ) =>
   async (key: ReturnType<typeof getKey>): Promise<ApiResponse> => {
     // @ts-ignore
     const [url, id, offset, limit, sortBy, sortOrder] = key;
+
+    console.log("[useInfiniteQuery] Fetcher called - User requested fetch!", {
+      id,
+      offset,
+      limit,
+      sortBy,
+      sortOrder,
+      notifyOnComplete,
+      userEmail,
+    });
 
     return new Promise<ApiResponse>((resolve, reject) => {
       const unsubscribe = dataFetchContext.subscribe(
@@ -26,6 +38,8 @@ const createFetcher =
           offset: offset ?? 0,
           sortBy,
           sortOrder,
+          notifyOnComplete,
+          userEmail,
         },
         {
           onData: (data) => {
@@ -55,21 +69,29 @@ const getKey = (
   sortBy?: string,
   sortOrder?: "asc" | "desc",
   sql?: string,
-):
-  | [string, string, number, number, string?, ("asc" | "desc")?, string?]
-  | null => {
-  // console.log("getKey", pageIndex, limit);
-  if (!id || !sql) return null;
-  if (previousPageData && previousPageData.rows.length === 0) return null; // no more pages
+): [string, string, number, number, string?, ("asc" | "desc")?] | null => {
+  // Only return null if we don't have the minimum required data
+  if (!id || !sql) {
+    return null;
+  }
+
+  // Stop pagination if previous page was empty
+  if (previousPageData && previousPageData.rows.length === 0) {
+    console.log("no more pages");
+    return null; // no more pages
+  }
+
   const offset = pageIndex * limit;
-  return [
+  const key: [string, string, number, number, string?, ("asc" | "desc")?] = [
     `/api/apegpt/data/sse`,
     id,
     offset,
     limit,
     sortBy,
-    sortOrder /* btoa(sql) */,
+    sortOrder,
   ];
+
+  return key;
 };
 
 export const useInfiniteQuery = ({
@@ -78,14 +100,17 @@ export const useInfiniteQuery = ({
   limit = 100,
   sortBy,
   sortOrder,
+  notifyOnComplete = false,
+  userEmail,
 }: {
   id?: string;
   sql?: string;
   limit?: number;
   sortBy?: string;
   sortOrder?: "asc" | "desc";
+  notifyOnComplete?: boolean;
+  userEmail?: string;
 }) => {
-  // console.log("useInfiniteQuery req", id, sortBy, sortOrder);
   const dataFetchContext = useDataFetch();
   const abortController = new AbortController();
 
@@ -93,14 +118,20 @@ export const useInfiniteQuery = ({
     useSWRInfinite<ApiResponse>(
       (pageIndex, prevData) =>
         getKey(pageIndex, prevData, id!, limit, sortBy, sortOrder, sql),
-      createFetcher(dataFetchContext, abortController),
+      createFetcher(
+        dataFetchContext,
+        abortController,
+        notifyOnComplete,
+        userEmail,
+      ),
       {
         revalidateIfStale: false,
         refreshInterval: 0,
         revalidateOnFocus: false,
-        // revalidateOnMount: false,
+        revalidateOnMount: false,
         revalidateOnReconnect: false,
         shouldRetryOnError: false,
+        keepPreviousData: true, // Keep showing old data while fetching new data
       },
     );
 

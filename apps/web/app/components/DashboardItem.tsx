@@ -9,11 +9,13 @@ import {
 } from "@mui/material";
 import { saveAs } from "file-saver";
 import Link from "next/link";
+import { useContext } from "react";
 
 import { DashboardChartItem } from "@/app/components/DashboardChartItem";
 import { DashboardItemMenu } from "@/app/components/DashboardItemMenu";
 import { DashboardTableItem } from "@/app/components/DashboardTableItem";
-import { useQuery } from "@/app/hooks/useQuery";
+import { useData } from "@/app/contexts/DataContext";
+import { ThemeContext } from "@/app/contexts/Theme";
 import { useQueryObject } from "@/app/hooks/useQueryObject";
 
 const exportRowsAsCSV = (rows: any[]) => {
@@ -50,16 +52,37 @@ const DashboardCard = ({
   slugPath: string;
   maxItemsPerRow: number;
 }) => {
-  // console.log("card", { id, title, href, type, subtype, queryUid });
   const { data: query } = useQueryObject(queryUid!);
-  // console.log("card query data", data);
+  const { fetchQuery, getQueryState } = useData();
+  const { isLarge } = useContext(ThemeContext);
   const minHeight = maxItemsPerRow ? 400 * (3 / maxItemsPerRow) : 400;
-  const { refresh, fetchedAt, data } = useQuery({
-    id: queryUid,
-    sql: query?.sql,
-    limit: 20,
-    offset: 0,
-  });
+
+  // Get data from DataContext
+  const queryState = queryUid ? getQueryState(queryUid) : null;
+  const data = queryState ? { rows: queryState.rows } : null;
+  const fetchedAt = queryState?.cachedAt;
+
+  // Refresh using DataContext with force flag
+  const refresh = () => {
+    if (queryUid) {
+      fetchQuery(queryUid, { force: true, pageSize: 100, paginate: false });
+    }
+  };
+
+  // Refresh with email notification
+  const refreshWithNotify = () => {
+    if (queryUid) {
+      fetchQuery(queryUid, {
+        force: true,
+        pageSize: 100,
+        paginate: false,
+        notify: true,
+      });
+    }
+  };
+
+  // Check if query has performance warning
+  const performanceWarning = query?.explanation?.performance_warning ?? false;
 
   const onCopyUrl = async () => {
     if (!queryUid) return;
@@ -86,10 +109,10 @@ const DashboardCard = ({
       <CardActionArea
         component={href ? Link : "div"}
         href={href}
-        sx={{ p: 2 }}
+        sx={{ p: isLarge ? 2 : 0.5 }}
         disableRipple
       >
-        <CardContent>
+        <CardContent sx={isLarge ? {} : { p: 1, "&:last-child": { pb: 1 } }}>
           <Stack spacing={1} justifyContent="center">
             {type !== "create" && (
               <Stack
@@ -106,10 +129,12 @@ const DashboardCard = ({
                     query={query}
                     slugPath={slugPath}
                     refresh={refresh}
+                    refreshWithNotify={refreshWithNotify}
                     fetchedAt={fetchedAt || undefined}
                     onDownloadCsvFull={async () => {}}
                     onDownloadCsvVisible={onDownloadCsvVisible}
                     onCopyUrl={onCopyUrl}
+                    performanceWarning={performanceWarning}
                   />
                 )}
               </Stack>
