@@ -2,7 +2,7 @@
 
 import json
 import logging
-from typing import Optional
+from typing import Any, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -20,6 +20,21 @@ from fm_app.api.model import (
     TraceStepType,
     TraceSummary,
 )
+
+
+class UUIDEncoder(json.JSONEncoder):
+    """JSON encoder that handles UUID objects."""
+
+    def default(self, obj: Any) -> Any:
+        if isinstance(obj, UUID):
+            return str(obj)
+        return super().default(obj)
+
+
+def json_dumps_safe(obj: Any) -> str:
+    """JSON dumps with UUID support."""
+    return json.dumps(obj, cls=UUIDEncoder)
+
 
 # ============================================================================
 # Prompt Version Functions
@@ -67,7 +82,7 @@ async def get_or_create_prompt_version(
             return GetPromptVersionModel.model_validate(row)
 
         # Create new version
-        metadata_json = json.dumps(data.metadata) if data.metadata else None
+        metadata_json = json_dumps_safe(data.metadata) if data.metadata else None
 
         insert_sql = text(
             """
@@ -231,20 +246,22 @@ async def create_trace_step(
                 "tokens_out": data.tokens_out,
                 "input_hash": data.input_hash,
                 "output_raw": data.output_raw,
-                "output_parsed": json.dumps(data.output_parsed)
+                "output_parsed": json_dumps_safe(data.output_parsed)
                 if data.output_parsed
                 else None,
                 "tool_name": data.tool_name,
-                "tool_input": json.dumps(data.tool_input) if data.tool_input else None,
+                "tool_input": json_dumps_safe(data.tool_input)
+                if data.tool_input
+                else None,
                 "prompt_version_ids": data.prompt_version_ids,
                 "validation_type": data.validation_type,
                 "validation_success": data.validation_success,
-                "validation_errors": json.dumps(data.validation_errors)
+                "validation_errors": json_dumps_safe(data.validation_errors)
                 if data.validation_errors
                 else None,
                 "duration_ms": data.duration_ms,
                 "error": data.error,
-                "metadata": json.dumps(data.metadata) if data.metadata else None,
+                "metadata": json_dumps_safe(data.metadata) if data.metadata else None,
             },
         )
         row = result.mappings().fetchone()
@@ -373,7 +390,7 @@ async def update_request_trace_summary(
             update_sql,
             params={
                 "request_id": request_id,
-                "trace_summary": json.dumps(trace.summary.model_dump()),
+                "trace_summary": json_dumps_safe(trace.summary.model_dump()),
             },
         )
         await db.commit()
