@@ -96,7 +96,7 @@ async def handle_interactive_query(ctx: FlowContext, intent: IntentAnalysis) -> 
         linked_query_info = None
         if req.query is not None:
             linked_query_info = {
-                "query_id": req.query.query_id,
+                "query_id": str(req.query.query_id),
                 "summary": req.query.summary,
                 "sql": req.query.sql,
             }
@@ -107,14 +107,16 @@ async def handle_interactive_query(ctx: FlowContext, intent: IntentAnalysis) -> 
             refs_dict = {
                 "cols": req.refs.cols,
                 "rows": req.refs.rows,
-                "parent": req.refs.parent,
+                "parent": str(req.refs.parent) if req.refs.parent else None,
             }
 
         await tracer.trace_request_context(
             user_request=req.request,
-            session_id=req.session_id,
+            session_id=str(req.session_id),
             linked_query=linked_query_info,
-            parent_query_id=req.refs.parent if req.refs else None,
+            parent_query_id=str(req.refs.parent)
+            if req.refs and req.refs.parent
+            else None,
             refs=refs_dict,
             history_length=len(history),
             intent=intent.intent if intent else None,
