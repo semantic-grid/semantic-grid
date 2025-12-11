@@ -113,10 +113,10 @@ even if there's previous query history.
 Important: if asked about DB schema, but not data itself, don't generate SQL query
 without any valid statement. Never generate SQL query which consists of only comments!.
 
-Important: if asked about wallets, transactions, instructions, slots, tokens, etc.
+Important: if asked about entities that have unique IDs,
 always use DISTINCT keyword to avoid duplicates.
 
-Important: when asked to remove a colum, make sure to only remove a specific one!!!
+Important: when asked to remove a column, make sure to only remove a specific one!!!
 
 Important: first column will be used by the frontend as a unique identifier of the row,
 therefore do make sure the values in the first column are always unique.
@@ -131,6 +131,44 @@ Never use LIMIT or OFFSET in the SQL query if not explicitly requested by user
 
 Please take into account now is {{ current_datetime }}.
 
+{% if query_plan %}
+---
+
+## Approved Query Plan
+
+The user has reviewed and approved the following query plan. Generate SQL that implements this plan.
+
+**Plan Summary**: {{ plan_summary }}
+
+**Full Plan Details**:
+```json
+{{ query_plan }}
+```
+
+**Instructions for implementing the plan:**
+- Use the tables specified in the plan
+- Implement the joins as described
+- Apply all filters mentioned
+- Include the aggregations and grouping as specified
+- Follow the ordering and limits
+- Honor the assumptions and default parameters documented in the plan
+
+If something in the plan is ambiguous, use your best judgment while staying true to the plan's intent.
+Do NOT deviate significantly from the approved plan without good reason.
+
+## Relevant Database Schema
+
+The following schema subset contains the tables identified in the approved plan:
+
+{{ relevant_schema }}
+
+{% else %}
+{# No plan - use full schema context #}
+{{ db_meta_prompt_items }}
+
+{{ db_ref_prompt_items }}
+{% endif %}
+
 --- 
 
 {{ intent_hint }}
@@ -144,9 +182,3 @@ Please take into account now is {{ current_datetime }}.
 {{ selected_row_data }}
 
 {{ selected_column_data }}
-
-{{ db_meta_prompt_items }}
-
-{{ db_ref_prompt_items }}
-
-

@@ -27,12 +27,14 @@ refine queries and build on previous results.
 """
 
 import re
+from typing import Optional
 
 from fm_app.api.model import (
     CreateQueryModel,
     IntentAnalysis,
     McpServerRequest,
     QueryMetadata,
+    QueryPlan,
     RequestStatus,
     StructuredResponse,
     UpdateRequestModel,
@@ -54,8 +56,19 @@ from fm_app.validators import MetadataValidator
 from fm_app.workers.interactive_flow.setup import FlowContext, build_prompt_variables
 
 
-async def handle_interactive_query(ctx: FlowContext, intent: IntentAnalysis) -> None:
-    """Handle interactive query flow with SQL generation and repair loop."""
+async def handle_interactive_query(
+    ctx: FlowContext,
+    intent: IntentAnalysis,
+    query_plan: Optional[QueryPlan] = None,
+) -> None:
+    """
+    Handle interactive query flow with SQL generation and repair loop.
+
+    Args:
+        ctx: Flow context with shared state
+        intent: Intent analysis result
+        query_plan: Optional approved query plan (if multistep flow)
+    """
     req = ctx.req
     logger = ctx.logger
     settings = ctx.settings
@@ -126,6 +139,22 @@ async def handle_interactive_query(ctx: FlowContext, intent: IntentAnalysis) -> 
         )
 
     interactive_query_vars = await build_prompt_variables(ctx)
+
+    # Add query plan context if provided (from multistep flow)
+    if query_plan is not None:
+        interactive_query_vars["query_plan"] = query_plan.model_dump_json(indent=2)
+        interactive_query_vars["plan_summary"] = query_plan.plan_summary
+        # Use relevant_schema from plan instead of full MCP context
+        if query_plan.relevant_schema:
+            interactive_query_vars["relevant_schema"] = query_plan.relevant_schema
+        logger.info(
+            "Using approved query plan",
+            flow_stage="query_plan_context",
+            flow_step_num=next(flow_step),
+            plan_summary=query_plan.plan_summary,
+            tables=query_plan.tables,
+            has_relevant_schema=bool(query_plan.relevant_schema),
+        )
 
     db_meta_caps = {}
     mcp_ctx = {

@@ -6,9 +6,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.session import Session
 
 from fm_app.ai_models.model import AIModel
-from fm_app.api.model import InteractiveRequestType, RequestStatus, WorkerRequest
+from fm_app.api.model import (
+    InteractiveRequestType,
+    RequestStatus,
+    StructuredResponse,
+    WorkerRequest,
+)
 from fm_app.db.db import update_request_status
-from fm_app.stopwatch import stopwatch
 from fm_app.workers.interactive_flow.data_analysis import handle_data_analysis
 from fm_app.workers.interactive_flow.discovery import handle_discovery
 from fm_app.workers.interactive_flow.general_response import handle_general_response
@@ -16,6 +20,7 @@ from fm_app.workers.interactive_flow.intent_analyzer import analyze_intent
 from fm_app.workers.interactive_flow.interactive_query import handle_interactive_query
 from fm_app.workers.interactive_flow.linked_query import handle_linked_query
 from fm_app.workers.interactive_flow.manual_query import handle_manual_query
+from fm_app.workers.interactive_flow.query_planner import generate_query_plan
 from fm_app.workers.interactive_flow.setup import initialize_flow
 
 
@@ -62,7 +67,36 @@ async def interactive_flow(
             InteractiveRequestType.linked_session,
             InteractiveRequestType.interactive_query,
         ):
+            # Check if query requires planning step
+            if intent.requires_plan_approval:
+                try:
+                    query_plan = await generate_query_plan(ctx, intent.intent)
+                except Exception:
+                    # Error already logged and status updated in generate_query_plan
+                    return req
+
+                # Store plan in structured response and return for user approval
+                if req.structured_response is None:
+                    req.structured_response = StructuredResponse()
+                req.structured_response.query_plan = query_plan
+                req.structured_response.intent = intent.intent
+                req.status = RequestStatus.feedback_requested
+                await update_request_status(
+                    RequestStatus.feedback_requested, None, db, req.request_id
+                )
+                return req
+
+            # Simple query - proceed directly to SQL generation
             await handle_interactive_query(ctx, intent)
+            return req
+
+        elif intent.request_type == InteractiveRequestType.plan_approval:
+            # User approved a plan - proceed with SQL generation using the plan
+            # Get the approved plan from structured_response
+            query_plan = None
+            if req.structured_response and req.structured_response.query_plan:
+                query_plan = req.structured_response.query_plan
+            await handle_interactive_query(ctx, intent, query_plan=query_plan)
             return req
 
         elif intent.request_type == InteractiveRequestType.data_analysis:

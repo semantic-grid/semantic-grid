@@ -18,6 +18,10 @@ class Refs(BaseModel):
 class RequestStatus(str, Enum):
     new = "New"
     intent = "Intent"
+    planning = "Planning"  # Transient: query plan is being generated
+    feedback_requested = (
+        "FeedbackRequested"  # Terminal: awaiting user approval/feedback
+    )
     sql = "SQL"
     data = "DataFetch"
     retry = "Retry"
@@ -39,6 +43,7 @@ class InteractiveRequestType(str, Enum):
     linked_query = "linked_query"
     manual_query = "manual_query"
     discovery = "discovery"
+    plan_approval = "plan_approval"  # User responding to a query plan
     # chart_request = "chart_request"
 
 
@@ -156,6 +161,8 @@ class StructuredResponse(BaseModel):
     refs: Optional[Refs] = None
     linked_session_id: Optional[UUID] = None
     description: Optional[str] = None
+    # Query plan for multistep flow (populated when status=Planning)
+    query_plan: Optional["QueryPlan"] = None
 
 
 class IntentAnalysis(BaseModel):
@@ -163,6 +170,79 @@ class IntentAnalysis(BaseModel):
     intent: Optional[str] = None
     summary: Optional[str] = None
     response: Optional[str] = None
+    # If True, query planner step will generate a plan for user approval
+    requires_plan_approval: bool = False
+
+
+### Query Plan Models (for multistep flow)
+
+
+class QueryPlanJoin(BaseModel):
+    """Describes a join between two tables in the query plan."""
+
+    left_table: str
+    right_table: str
+    join_type: str  # "inner", "left", "right", "full", "cross"
+    join_condition: str  # human-readable, e.g., "on user_id"
+
+
+class QueryPlanFilter(BaseModel):
+    """Describes a filter/WHERE condition in the query plan."""
+
+    column: str
+    operator: str  # "=", ">", "<", ">=", "<=", "!=", "like", "in", "between"
+    value: str  # human-readable value representation
+    source: str = "inferred"  # "user_specified", "default", "inferred"
+
+
+class QueryPlanAggregation(BaseModel):
+    """Describes an aggregation in the query plan."""
+
+    function: str  # "count", "sum", "avg", "min", "max", "count_distinct"
+    column: str  # column being aggregated, or "*" for count(*)
+    alias: str  # result column name
+
+
+class QueryPlan(BaseModel):
+    """
+    Human-readable query plan for user approval before SQL generation.
+
+    This captures the LLM's understanding of what the query will do,
+    allowing users to verify intent before SQL is generated.
+    """
+
+    # Tables involved
+    tables: list[str]
+    primary_table: str
+
+    # Relationships
+    joins: list[QueryPlanJoin] = []
+
+    # Data selection
+    columns_selected: list[str]  # columns to return (human-readable descriptions)
+    filters: list[QueryPlanFilter] = []
+
+    # Aggregations and grouping
+    aggregations: list[QueryPlanAggregation] = []
+    group_by: list[str] = []
+
+    # Ordering and limits
+    order_by: list[str] = []  # e.g., ["volume descending", "date ascending"]
+    limit: Optional[int] = None
+
+    # Assumptions and defaults applied
+    assumptions: list[str] = []  # e.g., "Assuming 'recent' means last 7 days"
+    default_params: list[str] = []  # e.g., "Using default limit of 1000 rows"
+
+    # Human-readable summary
+    plan_summary: str  # 2-3 sentence explanation of what the query will do
+
+    # Complexity indicators (for transparency)
+    estimated_complexity: str = "moderate"  # "simple", "moderate", "complex"
+    reason_for_approval: Optional[str] = None  # why this query needs approval
+
+    # Schema context for SQL generation (extracted during planning)
+    relevant_schema: Optional[str] = None  # Schema subset for tables in this plan
 
 
 class PromptItemType(str, Enum):
