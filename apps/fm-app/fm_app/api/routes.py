@@ -45,6 +45,7 @@ from fm_app.api.model import (
     DBType,
     FlowType,
     GetDataResponse,
+    GetPromptVersionModel,
     GetQueryModel,
     GetRequestModel,
     GetRequestTraceModel,
@@ -1357,6 +1358,32 @@ async def admin_get_all_prompt_versions(
         limit=limit,
         offset=offset,
     )
+
+
+@api_router.get("/admin/prompt-versions/{version_id}")
+async def admin_get_prompt_version(
+    version_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    auth_result: dict = Security(auth.verify, scopes=["admin:requests"]),
+) -> GetPromptVersionModel:
+    """
+    Get a specific prompt version by ID.
+    Returns full prompt content and metadata.
+    """
+    if auth_result is None or auth_result.get("sub") is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Not an admin"
+        )
+
+    from fm_app.db.trace_db import get_prompt_version_by_id
+
+    version = await get_prompt_version_by_id(db=db, version_id=version_id)
+    if version is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Prompt version not found",
+        )
+    return version
 
 
 @api_router.post("/chart")
