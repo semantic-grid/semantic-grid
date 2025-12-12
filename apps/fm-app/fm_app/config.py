@@ -69,6 +69,9 @@ class Settings(BaseSettings):
     system_version: str = "v1.0.0"
     packs_resources_dir: str = "/app/packages"
 
+    # Interactive flow planning mode: never, intent_based, always
+    planning_mode: str = "intent_based"
+
     # Redis configuration
     redis_host: str = "localhost"
     redis_port: int = 6379

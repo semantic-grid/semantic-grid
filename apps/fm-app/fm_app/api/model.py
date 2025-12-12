@@ -95,6 +95,19 @@ class Version(int, Enum):
     interactive = 2
 
 
+class PlanningMode(str, Enum):
+    """Controls when the planner step is used in interactive flow.
+
+    - never: Skip planning, go directly to SQL generation (original behavior)
+    - intent_based: LLM decides based on query complexity (default)
+    - always: Always run planning step before SQL generation
+    """
+
+    never = "never"
+    intent_based = "intent_based"
+    always = "always"
+
+
 class Column(BaseModel):
     id: str = None
     summary: Optional[str] = None

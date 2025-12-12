@@ -8,10 +8,12 @@ from sqlalchemy.orm.session import Session
 from fm_app.ai_models.model import AIModel
 from fm_app.api.model import (
     InteractiveRequestType,
+    PlanningMode,
     RequestStatus,
     StructuredResponse,
     WorkerRequest,
 )
+from fm_app.config import get_settings
 from fm_app.db.db import update_request_status
 from fm_app.workers.interactive_flow.data_analysis import handle_data_analysis
 from fm_app.workers.interactive_flow.discovery import handle_discovery
@@ -67,8 +69,18 @@ async def interactive_flow(
             InteractiveRequestType.linked_session,
             InteractiveRequestType.interactive_query,
         ):
-            # Check if query requires planning step
-            if intent.requires_plan_approval:
+            # Determine if planning step should run based on planning_mode setting
+            settings = get_settings()
+            planning_mode = PlanningMode(settings.planning_mode)
+
+            should_run_planning = False
+            if planning_mode == PlanningMode.always:
+                should_run_planning = True
+            elif planning_mode == PlanningMode.intent_based:
+                should_run_planning = intent.requires_plan_approval
+            # planning_mode == PlanningMode.never: should_run_planning stays False
+
+            if should_run_planning:
                 try:
                     query_plan = await generate_query_plan(ctx, intent.intent)
                 except Exception:
