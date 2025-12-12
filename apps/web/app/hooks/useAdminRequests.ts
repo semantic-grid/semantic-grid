@@ -4,6 +4,12 @@ import type { components } from "@/app/api/apegpt/types.gen";
 
 type AdminRequestsResponse = components["schemas"]["AdminRequestsResponse"];
 type PatchAdminRequestModel = components["schemas"]["PatchAdminRequestModel"];
+export type TraceSummary = components["schemas"]["TraceSummary"];
+export type GetTraceStepModel = components["schemas"]["GetTraceStepModel"];
+export type GetRequestTraceModel =
+  components["schemas"]["GetRequestTraceModel"];
+export type GetPromptVersionModel =
+  components["schemas"]["GetPromptVersionModel"];
 
 export const UnauthorizedError = new Error("Unauthorized");
 
@@ -104,4 +110,34 @@ export const updateAdminRequest = async (
   if (!res.ok) {
     throw new Error("Failed to update request");
   }
+};
+
+export const useRequestTrace = (requestId: string | null) => {
+  const fetcher = (url: string) =>
+    fetch(url).then((res) => {
+      if (res.ok) return res.json();
+      if (res.status === 404) return null;
+      throw new Error("Failed to fetch trace");
+    });
+
+  const { data, error, isLoading } = useSWR<GetRequestTraceModel | null>(
+    requestId ? `/api/apegpt/admin/traces/${requestId}` : null,
+    fetcher,
+    {
+      shouldRetryOnError: false,
+      revalidateOnFocus: false,
+    },
+  );
+
+  return { trace: data, error, isLoading };
+};
+
+export const fetchPromptVersion = async (
+  versionId: string,
+): Promise<GetPromptVersionModel> => {
+  const res = await fetch(`/api/apegpt/admin/prompt-versions/${versionId}`);
+  if (!res.ok) {
+    throw new Error("Failed to fetch prompt version");
+  }
+  return res.json();
 };
