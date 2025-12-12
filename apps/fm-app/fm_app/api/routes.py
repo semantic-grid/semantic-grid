@@ -1890,7 +1890,7 @@ async def stream_data_fetch(
         # request_id is only passed from grid session context
         data_fetch_record = await create_data_fetch(
             db=db,
-            data_fetch=CreateDataFetchModel(
+            data=CreateDataFetchModel(
                 query_id=UUID(tracking_id) if actual_query_id else query_id,
                 request_id=request_id,  # Linked when fetching from grid session
                 requestor="user",
