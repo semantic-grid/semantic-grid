@@ -20,6 +20,8 @@ const PulsingText = styled(Typography)(({ theme }) => ({
 const Status: Record<string, string> = {
   New: "Starting...",
   Intent: "Analyzing intent...",
+  Planning: "Planning query...",
+  FeedbackRequested: "Awaiting approval...",
   SQL: "Generating query...",
   Retry: "Refining response...",
   DataFetch: "Fetching data...",
@@ -28,7 +30,7 @@ const Status: Record<string, string> = {
   Error: "Error",
 };
 
-const RequestStages = ["Intent", "SQL", "Finalizing"];
+const RequestStages = ["Intent", "Planning", "SQL", "Finalizing"];
 
 const CustomStepIcon = (props: StepIconProps) => (
   <ArrowRight sx={{ fontSize: "small", ml: "5px" }} />
@@ -76,6 +78,16 @@ export const ResponseTextStatus = ({
   if (lastMessage && isLinkedQuerySummarizing) {
     return <PulsingText variant="body2">Summarizing...</PulsingText>;
   }
+
+  // FeedbackRequested is a terminal-like state waiting for user action
+  if (lastMessage && status === "FeedbackRequested") {
+    return (
+      <Typography variant="body2" color="primary">
+        {Status[status]}
+      </Typography>
+    );
+  }
+
   if (
     lastMessage &&
     (status === "Cancelled" || status === "Error" || status === "Done")

@@ -243,6 +243,112 @@ export interface paths {
         patch: operations["admin_update_request_api_v1_admin_requests__request_id__patch"];
         trace?: never;
     };
+    "/api/v1/admin/data-fetches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Admin Get All Data Fetches
+         * @description Get all data fetch records for admin with pagination and filtering.
+         *     Returns total count for proper pagination.
+         */
+        get: operations["admin_get_all_data_fetches_api_v1_admin_data_fetches_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/queries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Admin Get All Queries
+         * @description Get all queries for admin with pagination, search, and data_fetches.
+         *     Returns total count for proper pagination.
+         *     Each query includes its associated data_fetches for monitoring.
+         */
+        get: operations["admin_get_all_queries_api_v1_admin_queries_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/traces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Admin Get All Traces
+         * @description Get all request traces for admin with pagination.
+         *     Returns traces with full step details and summary statistics.
+         */
+        get: operations["admin_get_all_traces_api_v1_admin_traces_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/traces/{request_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Admin Get Request Trace
+         * @description Get detailed trace for a specific request.
+         *     Returns all trace steps with full metadata and summary.
+         */
+        get: operations["admin_get_request_trace_api_v1_admin_traces__request_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/prompt-versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Admin Get All Prompt Versions
+         * @description Get all prompt versions for admin with pagination.
+         *     Prompt versions are content-addressable records of prompts used in LLM calls.
+         */
+        get: operations["admin_get_all_prompt_versions_api_v1_admin_prompt_versions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/chart": {
         parameters: {
             query?: never;
@@ -389,6 +495,11 @@ export interface paths {
          *     2. Launches Celery task for data fetching
          *     3. Streams progress events to client
          *     4. Returns final data when ready
+         *
+         *     Args:
+         *         request_id: Optional request ID for linking data_fetch to a request.
+         *                    Only pass this when fetching from a grid session context.
+         *                    Dashboard items and detached /q/:id views should not pass this.
          */
         get: operations["stream_data_fetch_api_v1_data_sse__query_id__get"];
         put?: never;
@@ -512,12 +623,68 @@ export interface components {
             query_id?: string | null;
         };
         /**
+         * AdminDataFetchesResponse
+         * @description Paginated response for admin data fetches endpoint.
+         */
+        AdminDataFetchesResponse: {
+            /** Data Fetches */
+            data_fetches: components["schemas"]["GetDataFetchModel"][];
+            /** Total */
+            total: number;
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+        };
+        /**
+         * AdminPromptVersionsResponse
+         * @description Paginated response for admin prompt versions endpoint.
+         */
+        AdminPromptVersionsResponse: {
+            /** Prompt Versions */
+            prompt_versions: components["schemas"]["GetPromptVersionModel"][];
+            /** Total */
+            total: number;
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+        };
+        /**
+         * AdminQueriesResponse
+         * @description Paginated response for admin queries endpoint.
+         */
+        AdminQueriesResponse: {
+            /** Queries */
+            queries: components["schemas"]["GetQueryModel"][];
+            /** Total */
+            total: number;
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+        };
+        /**
          * AdminRequestsResponse
          * @description Paginated response for admin requests endpoint.
          */
         AdminRequestsResponse: {
             /** Requests */
             requests: components["schemas"]["GetRequestModel"][];
+            /** Total */
+            total: number;
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+        };
+        /**
+         * AdminTracesResponse
+         * @description Paginated response for admin traces endpoint.
+         */
+        AdminTracesResponse: {
+            /** Traces */
+            traces: components["schemas"]["GetRequestTraceModel"][];
             /** Total */
             total: number;
             /** Limit */
@@ -612,10 +779,91 @@ export interface components {
          */
         DBType: "" | "NWH" | "V2";
         /**
+         * DataFetchStatus
+         * @enum {string}
+         */
+        DataFetchStatus: "pending" | "running" | "success" | "error" | "cancelled" | "timed_out";
+        /**
          * FlowType
          * @enum {string}
          */
         FlowType: "OpenAISimple" | "OpenAISimpleNWH" | "OpenAISimpleV2" | "GeminiSimple" | "GeminiSimpleNWH" | "GeminiSimpleV2" | "DeepseekSimple" | "DeepseekSimpleNWH" | "DeepseekSimpleV2" | "AnthropicSimple" | "AnthropicSimpleNWH" | "AnthropicSimpleV2" | "OpenAIMultisteps" | "OpenAIMultistep" | "GeminiMultistep" | "DeepseekMultistep" | "AnthropicMultistep" | "Simple" | "Multistep" | "DataOnly" | "MCP" | "Flex" | "LangGraph" | "Interactive";
+        /**
+         * GetDataFetchModel
+         * @description Model for reading a data fetch record.
+         */
+        GetDataFetchModel: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Query Id
+             * Format: uuid
+             */
+            query_id: string;
+            /** Request Id */
+            request_id?: string | null;
+            /** Task Id */
+            task_id?: string | null;
+            /** Requestor */
+            requestor: string;
+            status: components["schemas"]["DataFetchStatus"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Started At */
+            started_at?: string | null;
+            /** Completed At */
+            completed_at?: string | null;
+            /** Duration Ms */
+            duration_ms?: number | null;
+            /** Query Params */
+            query_params?: {
+                [key: string]: unknown;
+            } | null;
+            /** Row Count */
+            row_count?: number | null;
+            /** Error */
+            error?: string | null;
+            /**
+             * Cache Hit
+             * @default false
+             */
+            cache_hit: boolean;
+        };
+        /**
+         * GetPromptVersionModel
+         * @description Model for reading a prompt version record.
+         */
+        GetPromptVersionModel: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Content Hash */
+            content_hash: string;
+            /** Source */
+            source: string;
+            /** Source Version */
+            source_version?: string | null;
+            prompt_item_type: components["schemas"]["PromptItemType"];
+            /** Content */
+            content: string;
+            /** Metadata */
+            metadata?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
         /** GetQueryModel */
         GetQueryModel: {
             /** Request */
@@ -659,6 +907,12 @@ export interface components {
              * Format: uuid
              */
             query_id: string;
+            /** Request Id */
+            request_id?: string | null;
+            /** Created At */
+            created_at?: string | null;
+            /** Data Fetches */
+            data_fetches?: components["schemas"]["GetDataFetchModel"][] | null;
         };
         /** GetRequestModel */
         GetRequestModel: {
@@ -718,6 +972,8 @@ export interface components {
             linked_session_id?: string | null;
             query?: components["schemas"]["GetQueryModel"] | null;
             view?: components["schemas"]["View"] | null;
+            /** Data Fetches */
+            data_fetches?: components["schemas"]["GetDataFetchModel"][] | null;
             /** Is Test */
             is_test?: boolean | null;
             /** Is Fixed */
@@ -728,6 +984,20 @@ export interface components {
             fixed_ts?: string | null;
             /** Fix Comment */
             fix_comment?: string | null;
+        };
+        /**
+         * GetRequestTraceModel
+         * @description Full trace for a request including all steps.
+         */
+        GetRequestTraceModel: {
+            /**
+             * Request Id
+             * Format: uuid
+             */
+            request_id: string;
+            /** Steps */
+            steps: components["schemas"]["GetTraceStepModel"][];
+            summary: components["schemas"]["TraceSummary"];
         };
         /** GetSessionModel */
         GetSessionModel: {
@@ -757,6 +1027,68 @@ export interface components {
             /** Message Count */
             message_count?: number | null;
         };
+        /**
+         * GetTraceStepModel
+         * @description Model for reading a trace step record.
+         */
+        GetTraceStepModel: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Request Id
+             * Format: uuid
+             */
+            request_id: string;
+            /** Step Number */
+            step_number: number;
+            step_type: components["schemas"]["TraceStepType"];
+            /** Model */
+            model?: string | null;
+            /** Tokens In */
+            tokens_in?: number | null;
+            /** Tokens Out */
+            tokens_out?: number | null;
+            /** Input Hash */
+            input_hash?: string | null;
+            /** Output Raw */
+            output_raw?: string | null;
+            /** Output Parsed */
+            output_parsed?: {
+                [key: string]: unknown;
+            } | null;
+            /** Tool Name */
+            tool_name?: string | null;
+            /** Tool Input */
+            tool_input?: {
+                [key: string]: unknown;
+            } | null;
+            /** Prompt Version Ids */
+            prompt_version_ids?: string[] | null;
+            /** Validation Type */
+            validation_type?: string | null;
+            /** Validation Success */
+            validation_success?: boolean | null;
+            /** Validation Errors */
+            validation_errors?: {
+                [key: string]: unknown;
+            }[] | null;
+            /** Duration Ms */
+            duration_ms?: number | null;
+            /** Error */
+            error?: string | null;
+            /** Metadata */
+            metadata?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -766,7 +1098,7 @@ export interface components {
          * InteractiveRequestType
          * @enum {string}
          */
-        InteractiveRequestType: "tbd" | "interactive_query" | "data_analysis" | "general_chat" | "disambiguation" | "linked_session" | "linked_query" | "manual_query" | "discovery";
+        InteractiveRequestType: "tbd" | "interactive_query" | "data_analysis" | "general_chat" | "disambiguation" | "linked_session" | "linked_query" | "manual_query" | "discovery" | "plan_approval";
         /**
          * ModelType
          * @enum {string}
@@ -791,6 +1123,11 @@ export interface components {
             /** Tags */
             tags?: string | null;
         };
+        /**
+         * PromptItemType
+         * @enum {string}
+         */
+        PromptItemType: "DBStruct" | "QueryExample" | "DataDescription" | "RefSources" | "Instruction" | "DataSample" | "SlotSchema";
         /** Refs */
         Refs: {
             /** Parent */
@@ -806,7 +1143,36 @@ export interface components {
          * RequestStatus
          * @enum {string}
          */
-        RequestStatus: "New" | "Intent" | "SQL" | "DataFetch" | "Retry" | "Finalizing" | "InProgress" | "Scheduled" | "Error" | "Done" | "Cancelled";
+        RequestStatus: "New" | "Intent" | "Planning" | "FeedbackRequested" | "SQL" | "DataFetch" | "Retry" | "Finalizing" | "InProgress" | "Scheduled" | "Error" | "Done" | "Cancelled";
+        /**
+         * TraceStepType
+         * @enum {string}
+         */
+        TraceStepType: "request_context" | "prompt_assembly" | "mcp_call" | "llm_call" | "validation" | "repair" | "sql_execution" | "error";
+        /**
+         * TraceSummary
+         * @description Summary of trace execution for quick stats on request table.
+         */
+        TraceSummary: {
+            /** Total Steps */
+            total_steps: number;
+            /** Llm Calls */
+            llm_calls: number;
+            /** Mcp Calls */
+            mcp_calls: number;
+            /** Validations */
+            validations: number;
+            /** Repairs */
+            repairs: number;
+            /** Total Tokens In */
+            total_tokens_in: number;
+            /** Total Tokens Out */
+            total_tokens_out: number;
+            /** Total Duration Ms */
+            total_duration_ms: number;
+            /** Has Errors */
+            has_errors: boolean;
+        };
         /**
          * UpdateNotificationRequest
          * @description Request body for updating notification settings.
@@ -1388,6 +1754,172 @@ export interface operations {
             };
         };
     };
+    admin_get_all_data_fetches_api_v1_admin_data_fetches_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                status?: components["schemas"]["DataFetchStatus"] | null;
+                /** @description Filter by query ID */
+                query_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminDataFetchesResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    admin_get_all_queries_api_v1_admin_queries_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                /** @description Search in request, SQL, or summary */
+                search?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminQueriesResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    admin_get_all_traces_api_v1_admin_traces_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminTracesResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    admin_get_request_trace_api_v1_admin_traces__request_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GetRequestTraceModel"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    admin_get_all_prompt_versions_api_v1_admin_prompt_versions_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                /** @description Filter by prompt item type */
+                prompt_type?: components["schemas"]["PromptItemType"] | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminPromptVersionsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     generate_chart_api_v1_chart_post: {
         parameters: {
             query?: never;
@@ -1684,6 +2216,8 @@ export interface operations {
                 notify_on_complete?: boolean;
                 user_email?: string | null;
                 force?: boolean;
+                /** @description Request ID for tracking (grid session context only) */
+                request_id?: string | null;
             };
             header?: never;
             path: {

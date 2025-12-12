@@ -43,7 +43,10 @@ export const responseToBotMessage = (r: TResponseResult) =>
     view: r.view,
     isPending:
       !r.status ||
-      (r.status !== "Error" && r.status !== "Done" && r.status !== "Cancelled"),
+      (r.status !== "Error" &&
+        r.status !== "Done" &&
+        r.status !== "Cancelled" &&
+        r.status !== "FeedbackRequested"),
     structuredResponse: {
       request: r.request,
       sql: r.sql,
@@ -214,7 +217,11 @@ export const pollForResponse = (
             return;
           }
 
-          if (result.status === "Done" || result.status === "Cancelled") {
+          if (
+            result.status === "Done" ||
+            result.status === "Cancelled" ||
+            result.status === "FeedbackRequested"
+          ) {
             resolve(responseToSuccessBotMessage(result));
             return;
           }

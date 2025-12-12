@@ -842,6 +842,7 @@ export const GridSessionProvider = ({
       latestUpdate?.status !== "Done" &&
       latestUpdate?.status !== "Error" &&
       latestUpdate?.status !== "Canceled" &&
+      latestUpdate?.status !== "FeedbackRequested" &&
       !pending
     ) {
       setPending(true);
@@ -860,13 +861,33 @@ export const GridSessionProvider = ({
       );
     }
 
-    if (latestUpdate?.status && latestUpdate?.status !== "Done") {
+    if (
+      latestUpdate?.status &&
+      latestUpdate?.status !== "Done" &&
+      latestUpdate?.status !== "FeedbackRequested"
+    ) {
       setSects(
         withPendingMessage(
           { status: latestUpdate.status } as TResponseResult,
           undefined,
         ),
       );
+    }
+
+    // FeedbackRequested is a terminal-like state - stop polling, show response
+    if (latestUpdate?.status === "FeedbackRequested") {
+      mutate()
+        .then(() =>
+          fetch(
+            `/api/apegpt/message?sessionId=${sessionId}&seqNum=${latestUpdate.sequence_number}`,
+          ),
+        )
+        .then((r) => r.json())
+        .then((status: TResponseResult) => {
+          setSects(withDoneMessage(status));
+        })
+        .then(() => setPending(false))
+        .then(() => scrollToBottom());
     }
 
     if (
