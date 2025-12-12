@@ -517,6 +517,7 @@ def wrk_fetch_data(self, args):
             - sort_order: str
             - notify_on_complete: bool (optional)
             - user_email: str (optional, for notifications)
+            - data_fetch_id: str (UUID, optional) - for tracking
     Returns:
         dict with keys:
             - status: "success" | "error"
@@ -525,9 +526,11 @@ def wrk_fetch_data(self, args):
             - error: str (if error)
     """
 
+    from uuid import UUID as PyUUID
+
     from sqlalchemy import text
 
-    from fm_app.cache.query_cache import get_cached_query, set_cached_query
+    from fm_app.cache.query_cache import get_cached_query, run_async, set_cached_query
 
     query_id = args.get("query_id")
     sql = args.get("sql")
@@ -538,6 +541,46 @@ def wrk_fetch_data(self, args):
     notify_on_complete = args.get("notify_on_complete", False)
     user_email = args.get("user_email")
     force = args.get("force", False)
+    data_fetch_id = args.get("data_fetch_id")
+
+    # Helper to update data_fetch status
+    def update_data_fetch_status(status, row_count=None, error=None, cache_hit=False):
+        if not data_fetch_id:
+            return
+        try:
+            from fm_app.api.model import DataFetchStatus
+            from fm_app.db.data_fetch_db import (
+                update_data_fetch_completed,
+                update_data_fetch_error,
+                update_data_fetch_started,
+            )
+            from fm_app.workers.db_session import get_db
+
+            async def do_update():
+                async for db in get_db():
+                    df_id = PyUUID(data_fetch_id)
+                    if status == "running":
+                        await update_data_fetch_started(db, df_id)
+                    elif status == "success":
+                        await update_data_fetch_completed(
+                            db, df_id, row_count or 0, cache_hit
+                        )
+                    elif status == "error":
+                        await update_data_fetch_error(
+                            db, df_id, error or "Unknown error", DataFetchStatus.error
+                        )
+                    elif status == "timed_out":
+                        await update_data_fetch_error(
+                            db, df_id, error or "Timeout", DataFetchStatus.timed_out
+                        )
+                    elif status == "cancelled":
+                        await update_data_fetch_error(
+                            db, df_id, error or "Cancelled", DataFetchStatus.cancelled
+                        )
+
+            run_async(do_update())
+        except Exception as e:
+            logger.warning(f"Failed to update data_fetch status: {e}")
 
     # Report task has started (prevents false "workers_busy" warnings)
     self.update_state(
@@ -547,6 +590,9 @@ def wrk_fetch_data(self, args):
             "stage": "started",
         },
     )
+
+    # Update data_fetch to running status
+    update_data_fetch_status("running")
 
     logger.info(
         f"Starting data fetch for query {query_id}",
@@ -580,11 +626,12 @@ def wrk_fetch_data(self, args):
 
         if cached_result:
             logger.info(f"Returning cached data for query {query_id}")
+            total_rows = cached_result["total_rows"]
             result = {
                 "status": "success",
                 "query_id": query_id,
                 "rows": cached_result["rows"],
-                "total_rows": cached_result["total_rows"],
+                "total_rows": total_rows,
                 "limit": limit,
                 "offset": offset,
                 "from_cache": True,
@@ -595,6 +642,9 @@ def wrk_fetch_data(self, args):
             from fm_app.cache.task_tracker import clear_running_task
 
             run_async(clear_running_task(query_id))
+
+            # Update data_fetch tracking - cache hit success
+            update_data_fetch_status("success", row_count=total_rows, cache_hit=True)
 
             # Do NOT send notification for cached results - only for fresh queries
             # Cache hits return immediately, so notifications aren't needed
@@ -716,6 +766,9 @@ def wrk_fetch_data(self, args):
 
             run_async(clear_running_task(query_id))
 
+            # Update data_fetch tracking - database query success
+            update_data_fetch_status("success", row_count=total_count, cache_hit=False)
+
             logger.info(
                 f"Data fetch completed successfully for query {query_id}",
                 extra={
@@ -770,13 +823,17 @@ def wrk_fetch_data(self, args):
                         f"Timeout notification already sent for query {query_id}"
                     )
 
+            # Update data_fetch tracking - timeout
+            timeout_error = (
+                f"Query execution timed out ({timeout_minutes} minute limit). "
+                "Please simplify your query or add more filters."
+            )
+            update_data_fetch_status("timed_out", error=timeout_error)
+
             return {
                 "status": "error",
                 "query_id": query_id,
-                "error": (
-                    f"Query execution timed out ({timeout_minutes} minute limit). "
-                    "Please simplify your query or add more filters."
-                ),
+                "error": timeout_error,
             }
 
         logger.error(
@@ -784,6 +841,10 @@ def wrk_fetch_data(self, args):
             query_id=query_id,
             exc_info=True,
         )
+
+        # Update data_fetch tracking - general error
+        update_data_fetch_status("error", error=str(e))
+
         return {
             "status": "error",
             "query_id": query_id,

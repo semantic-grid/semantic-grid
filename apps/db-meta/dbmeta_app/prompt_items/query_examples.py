@@ -36,10 +36,22 @@ def get_query_example_prompt_item(query: str, db: str) -> PromptItem:
     # Combine all examples into a single LLM input string
     llm_prompt = "\n\n".join(formatted_examples)
 
+    # Compute hash and metadata for lineage tracking
+    from dbmeta_app.prompt_items.utils import compute_content_hash
+
+    content_hash = compute_content_hash(llm_prompt)
+    metadata = {
+        "profile": db,
+        "examples_count": len(data),
+        "query_hash": compute_content_hash(query),
+    }
+
     result = PromptItem(
         text=llm_prompt,
         prompt_item_type=PromptItemType.query_example,
         score=100_000,
+        content_hash=content_hash,
+        metadata=metadata,
     )
 
     # Cache the result

@@ -6,6 +6,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fm_app.api.model import (
+    GetDataFetchModel,
     GetQueryModel,
     GetRequestModel,
     GetSessionModel,
@@ -161,6 +162,39 @@ async def get_all_requests_admin_v2(
     res = await db.execute(get_all_requests_sql, params=params)
     data = res.mappings().fetchall()
 
+    # Collect all query_ids to fetch data_fetches in bulk
+    query_ids = []
+    for row in data:
+        q_query_id = row.get("q_query_id")
+        if q_query_id:
+            query_ids.append(q_query_id)
+
+    # Fetch all data_fetches for these queries in one query
+    data_fetches_by_query: dict = {}
+    if query_ids:
+        data_fetches_sql = text(
+            """
+            SELECT id, query_id, request_id, task_id, requestor, status,
+                   created_at, started_at, completed_at, duration_ms,
+                   query_params, row_count, error, cache_hit
+            FROM data_fetch
+            WHERE query_id = ANY(:query_ids)
+            ORDER BY created_at DESC;
+            """
+        )
+        df_res = await db.execute(data_fetches_sql, params={"query_ids": query_ids})
+        df_rows = df_res.mappings().fetchall()
+
+        for df_row in df_rows:
+            try:
+                df_model = GetDataFetchModel.model_validate(df_row)
+                query_id = df_row["query_id"]
+                if query_id not in data_fetches_by_query:
+                    data_fetches_by_query[query_id] = []
+                data_fetches_by_query[query_id].append(df_model)
+            except ValidationError as e:
+                logging.warning(f"Can't validate DataFetch object: {e}")
+
     result = []
     for row in data:
         try:
@@ -193,6 +227,12 @@ async def get_all_requests_admin_v2(
                     session_id=request_model.session_id,
                     created_at=request_model.created_at,
                 )
+
+            # Attach data_fetches if we have them for this request's query
+            q_query_id = query_data.get("query_id")
+            if q_query_id and q_query_id in data_fetches_by_query:
+                request_model.data_fetches = data_fetches_by_query[q_query_id]
+
             result.append(request_model)
         except ValidationError as e:
             logging.error(f"Can't validate Request object from DB error: {e}")
@@ -268,3 +308,110 @@ async def update_request_admin(
     except ValidationError as e:
         logging.error(f"Can't validate Request object from DB error: {e}")
         raise HTTPException(status_code=500, detail=str("Internal error"))
+
+
+class AdminQueriesResult:
+    """Result container for admin queries with pagination metadata."""
+
+    def __init__(self, queries: list[GetQueryModel], total: int):
+        self.queries = queries
+        self.total = total
+
+
+async def get_all_queries_admin(
+    limit: int,
+    offset: int,
+    admin: str,
+    search: str | None,
+    db: AsyncSession,
+) -> AdminQueriesResult:
+    """
+    Get all queries for admin with data_fetches and total count.
+    """
+    logging.debug(
+        "Get all queries for admin",
+        extra={"admin": admin, "action": "db::get_all_queries_admin"},
+    )
+
+    # Build WHERE clause
+    where_conditions = ["1=1"]
+    params: dict = {"limit": limit, "offset": offset}
+
+    if search:
+        where_conditions.append(
+            "(q.request ILIKE :search OR q.sql ILIKE :search "
+            "OR q.summary ILIKE :search)"
+        )
+        params["search"] = f"%{search}%"
+
+    where_clause = " AND ".join(where_conditions)
+
+    # Count query
+    count_sql = text(
+        f"""
+        SELECT COUNT(*) as total
+        FROM query q
+        WHERE {where_clause};
+        """
+    )
+    count_res = await db.execute(count_sql, params=params)
+    total = count_res.scalar() or 0
+
+    # Data query
+    get_all_queries_sql = text(
+        f"""
+        SELECT q.*
+        FROM query q
+        WHERE {where_clause}
+        ORDER BY q.created_at DESC
+        LIMIT :limit OFFSET :offset;
+        """
+    )
+    res = await db.execute(get_all_queries_sql, params=params)
+    data = res.mappings().fetchall()
+
+    # Collect all query_ids to fetch data_fetches in bulk
+    query_ids = [row["query_id"] for row in data]
+
+    # Fetch all data_fetches for these queries in one query
+    data_fetches_by_query: dict = {}
+    if query_ids:
+        data_fetches_sql = text(
+            """
+            SELECT id, query_id, request_id, task_id, requestor, status,
+                   created_at, started_at, completed_at, duration_ms,
+                   query_params, row_count, error, cache_hit
+            FROM data_fetch
+            WHERE query_id = ANY(:query_ids)
+            ORDER BY created_at DESC;
+            """
+        )
+        df_res = await db.execute(data_fetches_sql, params={"query_ids": query_ids})
+        df_rows = df_res.mappings().fetchall()
+
+        for df_row in df_rows:
+            try:
+                df_model = GetDataFetchModel.model_validate(df_row)
+                qid = df_row["query_id"]
+                if qid not in data_fetches_by_query:
+                    data_fetches_by_query[qid] = []
+                data_fetches_by_query[qid].append(df_model)
+            except ValidationError as e:
+                logging.warning(f"Can't validate DataFetch object: {e}")
+
+    result = []
+    for row in data:
+        try:
+            query_model = GetQueryModel.model_validate(row)
+
+            # Attach data_fetches if we have them for this query
+            qid = row["query_id"]
+            if qid in data_fetches_by_query:
+                query_model.data_fetches = data_fetches_by_query[qid]
+
+            result.append(query_model)
+        except ValidationError as e:
+            logging.error(f"Can't validate Query object from DB error: {e}")
+            raise HTTPException(status_code=500, detail=str("Internal error"))
+
+    return AdminQueriesResult(queries=result, total=total)

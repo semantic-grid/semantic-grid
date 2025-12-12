@@ -49,6 +49,7 @@ from fm_app.db.db import (
     update_session_name,
 )
 from fm_app.mcp_servers.db_meta import db_meta_mcp_analyze_query
+from fm_app.tracing import TracingTimer
 from fm_app.validators import MetadataValidator
 from fm_app.workers.interactive_flow.setup import FlowContext, build_prompt_variables
 
@@ -88,6 +89,44 @@ async def handle_interactive_query(ctx: FlowContext, intent: IntentAnalysis) -> 
             history_length=len(history),
         )
 
+    # Trace request context (refs, linked queries, history)
+    tracer = ctx.tracer
+    if tracer:
+        # Build linked query info if available
+        linked_query_info = None
+        if req.query is not None:
+            linked_query_info = {
+                "query_id": str(req.query.query_id),
+                "summary": req.query.summary,
+                "sql": req.query.sql,
+            }
+
+        # Extract refs as dict if available
+        refs_dict = None
+        if req.refs is not None:
+            refs_dict = {
+                "cols": req.refs.cols,
+                "rows": req.refs.rows,
+                "parent": str(req.refs.parent) if req.refs.parent else None,
+            }
+
+        await tracer.trace_request_context(
+            user_request=req.request,
+            session_id=str(req.session_id),
+            linked_query=linked_query_info,
+            parent_query_id=str(req.refs.parent)
+            if req.refs and req.refs.parent
+            else None,
+            refs=refs_dict,
+            history_length=len(history),
+            intent=intent.intent if intent else None,
+            metadata={
+                "request_type": str(req.request_type) if req.request_type else None,
+                "flow": str(req.flow) if req.flow else None,
+                "model": str(req.model) if req.model else None,
+            },
+        )
+
     interactive_query_vars = await build_prompt_variables(ctx)
 
     db_meta_caps = {}
@@ -103,14 +142,31 @@ async def handle_interactive_query(ctx: FlowContext, intent: IntentAnalysis) -> 
         "flow_step_num": next(flow_step),
     }
 
-    slot = await assembler.render_async(
-        "interactive_query",
-        variables=interactive_query_vars,
-        req_ctx=mcp_ctx,
-        mcp_caps=db_meta_caps,
-    )
+    with TracingTimer() as prompt_timer:
+        slot = await assembler.render_async(
+            "interactive_query",
+            variables=interactive_query_vars,
+            req_ctx=mcp_ctx,
+            mcp_caps=db_meta_caps,
+        )
 
     query_llm_system_prompt = slot.prompt_text
+
+    # Trace prompt assembly
+    if tracer:
+        await tracer.trace_prompt_assembly(
+            slot_name="interactive_query",
+            prompt_hash=slot.lineage.get("content_hash", "")[:16]
+            if slot.lineage
+            else "",
+            duration_ms=prompt_timer.duration_ms,
+            metadata={
+                "slot_lineage": slot.lineage,
+                "mcp_requirements": slot.lineage.get("mcp_lineage")
+                if slot.lineage
+                else None,
+            },
+        )
 
     if ai_model.get_name() != "gemini":
         messages = [{"role": "system", "content": query_llm_system_prompt}]
@@ -140,7 +196,21 @@ async def handle_interactive_query(ctx: FlowContext, intent: IntentAnalysis) -> 
         )
 
         try:
-            llm_response = ai_model.get_structured(messages, QueryMetadata)
+            with TracingTimer() as llm_timer:
+                llm_response = ai_model.get_structured(messages, QueryMetadata)
+
+            # Trace LLM call
+            if tracer:
+                await tracer.trace_llm_call(
+                    model=ai_model.get_name(),
+                    input_messages=messages,
+                    output_raw=llm_response.model_dump_json(),
+                    output_parsed=llm_response.model_dump(),
+                    tokens_in=None,  # TODO: get from model response if available
+                    tokens_out=None,
+                    duration_ms=llm_timer.duration_ms,
+                    metadata={"attempt": attempt},
+                )
         except Exception as e:
             logger.error(
                 "Error getting LLM response",
@@ -148,11 +218,20 @@ async def handle_interactive_query(ctx: FlowContext, intent: IntentAnalysis) -> 
                 flow_step_num=next(flow_step),
                 error=str(e),
             )
+            # Trace error
+            if tracer:
+                await tracer.trace_error(
+                    error_message=str(e),
+                    error_type="llm_call_failed",
+                    metadata={"attempt": attempt},
+                )
             req.status = RequestStatus.error
             req.err = str(e)
             await update_request_status(
                 RequestStatus.error, req.err, db, req.request_id
             )
+            if tracer:
+                await tracer.finalize()
             return
 
         if ai_model.get_name() != "gemini":
@@ -176,9 +255,24 @@ async def handle_interactive_query(ctx: FlowContext, intent: IntentAnalysis) -> 
             original_result = llm_response.result
 
         # Validate QueryMetadata consistency
-        validation_result = MetadataValidator.validate_metadata(
-            llm_response, dialect=warehouse_dialect
-        )
+        with TracingTimer() as validation_timer:
+            validation_result = MetadataValidator.validate_metadata(
+                llm_response, dialect=warehouse_dialect
+            )
+
+        # Trace validation
+        if tracer:
+            await tracer.trace_validation(
+                validation_type="metadata_validation",
+                success=validation_result["valid"],
+                errors=[{"error": e} for e in validation_result.get("errors", [])],
+                duration_ms=validation_timer.duration_ms,
+                metadata={
+                    "attempt": attempt,
+                    "warnings": validation_result.get("warnings", []),
+                },
+            )
+
         if not validation_result["valid"]:
             logger.warning(
                 "QueryMetadata validation failed",
@@ -228,6 +322,13 @@ async def handle_interactive_query(ctx: FlowContext, intent: IntentAnalysis) -> 
                     flow_stage="metadata_repair",
                     flow_step_num=next(flow_step),
                 )
+                # Trace repair attempt
+                if tracer:
+                    await tracer.trace_repair(
+                        repair_attempt=attempt,
+                        error_message=errors_list,
+                        metadata={"repair_type": "metadata_validation"},
+                    )
                 attempt += 1
                 continue
         else:
@@ -326,9 +427,27 @@ async def handle_interactive_query(ctx: FlowContext, intent: IntentAnalysis) -> 
                 extracted_sql=extracted_sql,
             )
 
-            analyzed = await db_meta_mcp_analyze_query(
-                req, extracted_sql, 5, settings, logger
-            )
+            with TracingTimer() as preflight_timer:
+                analyzed = await db_meta_mcp_analyze_query(
+                    req, extracted_sql, 5, settings, logger
+                )
+
+            # Trace SQL preflight validation
+            if tracer:
+                preflight_success = analyzed.get("explanation") is not None
+                await tracer.trace_validation(
+                    validation_type="sql_preflight",
+                    success=preflight_success,
+                    errors=[{"error": analyzed.get("error")}]
+                    if analyzed.get("error")
+                    else None,
+                    duration_ms=preflight_timer.duration_ms,
+                    metadata={
+                        "attempt": attempt,
+                        "estimated_rows": analyzed.get("estimated_rows"),
+                        "estimated_size_gb": analyzed.get("estimated_output_size_gb"),
+                    },
+                )
 
             if analyzed.get("explanation"):
                 explain_output = analyzed.get("explanation")[0]
@@ -609,6 +728,12 @@ async def handle_interactive_query(ctx: FlowContext, intent: IntentAnalysis) -> 
                 flow_stage="no_sql",
                 flow_step_num=next(flow_step),
             )
+            if tracer:
+                await tracer.trace_error(
+                    error_message="No SQL generated",
+                    error_type="no_sql_output",
+                )
+                await tracer.finalize()
             return
 
         # Complete the flow
@@ -643,6 +768,10 @@ async def handle_interactive_query(ctx: FlowContext, intent: IntentAnalysis) -> 
             refs=req.refs,
         )
 
+        # Finalize tracing on successful completion
+        if tracer:
+            await tracer.finalize()
+
         return
 
     # If we reach here, exhausted all attempts
@@ -667,5 +796,15 @@ async def handle_interactive_query(ctx: FlowContext, intent: IntentAnalysis) -> 
         flow_step_num=next(flow_step),
         retry_errors=retry_errors,
     )
+
+    # Trace error and finalize
+    if tracer:
+        await tracer.trace_error(
+            error_message=detailed_error,
+            error_type="max_retries_exceeded",
+            metadata={"retry_errors": retry_errors},
+        )
+        await tracer.finalize()
+
     req.status = RequestStatus.error
     req.err = detailed_error

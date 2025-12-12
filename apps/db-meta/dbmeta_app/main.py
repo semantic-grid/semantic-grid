@@ -42,7 +42,7 @@ async def check_mcp(mcp_server: FastMCP):
                 },
             )
 
-        except Exception as e:
+        except Exception:
             pass
 
     return mcp_server

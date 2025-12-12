@@ -392,7 +392,7 @@ def assemble_tree(
                             "utf-8"
                         )
                         continue
-                except Exception as e:
+                except Exception:
                     # fall back to replacement
                     pass
             tree[rel] = ap.read_bytes()

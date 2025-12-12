@@ -26,7 +26,7 @@ def get_data_sample_prompt_item():
                 if rows:
                     sample_data[table] = rows
 
-            except Exception as e:
+            except Exception:
                 # Log the error and continue
                 pass
 

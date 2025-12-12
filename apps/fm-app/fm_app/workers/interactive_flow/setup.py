@@ -2,9 +2,9 @@
 
 import itertools
 import pathlib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Type
+from typing import Optional, Type
 
 import structlog
 from celery.utils.log import get_task_logger
@@ -20,6 +20,7 @@ from fm_app.mcp_servers.mcp_async_providers import (
     DbRefAsyncProvider,
 )
 from fm_app.prompt_assembler.prompt_packs import PromptAssembler
+from fm_app.tracing import RequestTracer
 from fm_app.utils import get_cached_warehouse_dialect
 
 
@@ -38,6 +39,7 @@ class FlowContext:
     flow_step: itertools.count
     request_session: any
     parent_session: any
+    tracer: Optional[RequestTracer] = field(default=None)
 
 
 async def initialize_flow(
@@ -76,6 +78,9 @@ async def initialize_flow(
         else None
     )
 
+    # Initialize request tracer for observability
+    tracer = RequestTracer(req.request_id, db)
+
     return FlowContext(
         req=req,
         ai_model=ai_model,
@@ -88,6 +93,7 @@ async def initialize_flow(
         flow_step=flow_step,
         request_session=request_session,
         parent_session=parent_session,
+        tracer=tracer,
     )
 
 

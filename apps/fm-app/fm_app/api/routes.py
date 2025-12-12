@@ -29,22 +29,31 @@ from fm_app.api.db_session import engine, get_db, wh_engine
 from fm_app.api.model import (
     AddLinkedRequestModel,
     AddRequestModel,
+    AdminDataFetchesResponse,
+    AdminPromptVersionsResponse,
+    AdminQueriesResponse,
     AdminRequestsResponse,
+    AdminTracesResponse,
     ChartRequest,
     ChartStructuredRequest,
     ChartType,
+    CreateDataFetchModel,
     CreateQueryFromSqlModel,
     CreateSessionModel,
+    DataFetchQueryParams,
+    DataFetchStatus,
     DBType,
     FlowType,
     GetDataResponse,
     GetQueryModel,
     GetRequestModel,
+    GetRequestTraceModel,
     GetSessionModel,
     InteractiveRequestType,
     ModelType,
     PatchAdminRequestModel,
     PatchSessionModel,
+    PromptItemType,
     RequestStatus,
     UpdateRequestStatusModel,
     Version,
@@ -52,10 +61,12 @@ from fm_app.api.model import (
     WorkerRequest,
 )
 from fm_app.db.admin_db import (
+    get_all_queries_admin,
     get_all_requests_admin_v2,
     get_all_sessions_admin,
     update_request_admin,
 )
+from fm_app.db.data_fetch_db import create_data_fetch
 from fm_app.db.db import (
     add_new_session,
     add_request,
@@ -1184,6 +1195,170 @@ async def admin_update_request(
     return result
 
 
+@api_router.get("/admin/data-fetches")
+async def admin_get_all_data_fetches(
+    db: AsyncSession = Depends(get_db),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    status_param: Optional[DataFetchStatus] = Query(None, alias="status"),
+    query_id: Optional[UUID] = Query(None, description="Filter by query ID"),
+    auth_result: dict = Security(auth.verify, scopes=["admin:requests"]),
+) -> AdminDataFetchesResponse:
+    """
+    Get all data fetch records for admin with pagination and filtering.
+    Returns total count for proper pagination.
+    """
+    if auth_result is None or auth_result.get("sub") is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Not an admin"
+        )
+
+    from fm_app.db.data_fetch_db import get_all_data_fetches_admin
+
+    result = await get_all_data_fetches_admin(
+        db=db,
+        limit=limit,
+        offset=offset,
+        status=status_param,
+        query_id=query_id,
+    )
+    return AdminDataFetchesResponse(
+        data_fetches=result.data_fetches,
+        total=result.total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@api_router.get("/admin/queries")
+async def admin_get_all_queries(
+    db: AsyncSession = Depends(get_db),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    search: Optional[str] = Query(
+        None, description="Search in request, SQL, or summary"
+    ),
+    auth_result: dict = Security(auth.verify, scopes=["admin:requests"]),
+) -> AdminQueriesResponse:
+    """
+    Get all queries for admin with pagination, search, and data_fetches.
+    Returns total count for proper pagination.
+    Each query includes its associated data_fetches for monitoring.
+    """
+    if auth_result is None or auth_result.get("sub") is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Not an admin"
+        )
+    admin = auth_result.get("sub")
+
+    result = await get_all_queries_admin(
+        limit=limit,
+        offset=offset,
+        admin=admin,
+        search=search,
+        db=db,
+    )
+    return AdminQueriesResponse(
+        queries=result.queries,
+        total=result.total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@api_router.get("/admin/traces")
+async def admin_get_all_traces(
+    db: AsyncSession = Depends(get_db),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    auth_result: dict = Security(auth.verify, scopes=["admin:requests"]),
+) -> AdminTracesResponse:
+    """
+    Get all request traces for admin with pagination.
+    Returns traces with full step details and summary statistics.
+    """
+    if auth_result is None or auth_result.get("sub") is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Not an admin"
+        )
+
+    from fm_app.db.trace_db import get_requests_with_traces
+
+    traces, total = await get_requests_with_traces(
+        db=db,
+        limit=limit,
+        offset=offset,
+    )
+    return AdminTracesResponse(
+        traces=traces,
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@api_router.get("/admin/traces/{request_id}")
+async def admin_get_request_trace(
+    request_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    auth_result: dict = Security(auth.verify, scopes=["admin:requests"]),
+) -> GetRequestTraceModel:
+    """
+    Get detailed trace for a specific request.
+    Returns all trace steps with full metadata and summary.
+    """
+    if auth_result is None or auth_result.get("sub") is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Not an admin"
+        )
+
+    from fm_app.db.trace_db import get_request_trace
+
+    trace = await get_request_trace(db=db, request_id=request_id)
+    if trace is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Trace not found for this request",
+        )
+    return trace
+
+
+@api_router.get("/admin/prompt-versions")
+async def admin_get_all_prompt_versions(
+    db: AsyncSession = Depends(get_db),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    prompt_type: Optional[PromptItemType] = Query(
+        None, description="Filter by prompt item type"
+    ),
+    auth_result: dict = Security(auth.verify, scopes=["admin:requests"]),
+) -> AdminPromptVersionsResponse:
+    """
+    Get all prompt versions for admin with pagination.
+    Prompt versions are content-addressable records of prompts used in LLM calls.
+    """
+    if auth_result is None or auth_result.get("sub") is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Not an admin"
+        )
+
+    from fm_app.db.trace_db import get_all_prompt_versions
+
+    prompt_type_value = prompt_type.value if prompt_type else None
+    versions, total = await get_all_prompt_versions(
+        db=db,
+        limit=limit,
+        offset=offset,
+        prompt_item_type=prompt_type_value,
+    )
+    return AdminPromptVersionsResponse(
+        prompt_versions=versions,
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
 @api_router.post("/chart")
 async def generate_chart(request: ChartRequest):
     # TODO: add server-to-server authentication !!!
@@ -1590,6 +1765,9 @@ async def stream_data_fetch(
     notify_on_complete: bool = Query(False),
     user_email: Optional[str] = Query(None),
     force: bool = Query(False),
+    request_id: Optional[UUID] = Query(
+        None, description="Request ID for tracking (grid session context only)"
+    ),
     db: AsyncSession = Depends(get_db),
     auth_result: dict = Depends(verify_any_token),
 ):
@@ -1601,6 +1779,11 @@ async def stream_data_fetch(
     2. Launches Celery task for data fetching
     3. Streams progress events to client
     4. Returns final data when ready
+
+    Args:
+        request_id: Optional request ID for linking data_fetch to a request.
+                   Only pass this when fetching from a grid session context.
+                   Dashboard items and detached /q/:id views should not pass this.
     """
     user_owner = auth_result.get("sub")
     if user_owner is None:
@@ -1694,6 +1877,7 @@ async def stream_data_fetch(
         task_id = running_task_info["task_id"]
         task = wrk_fetch_data.AsyncResult(task_id)
         is_reconnecting = True
+        data_fetch_id = None  # Don't create new record for reconnection
 
         # Add this user as a subscriber
         await add_task_subscriber(tracking_id, user_email, notify_on_complete)
@@ -1701,6 +1885,26 @@ async def stream_data_fetch(
         logger.info(f"Reconnecting to existing task {task_id} for query {tracking_id}")
     else:
         is_reconnecting = False
+
+        # Create data_fetch record for tracking
+        # request_id is only passed from grid session context
+        data_fetch_record = await create_data_fetch(
+            db=db,
+            data=CreateDataFetchModel(
+                query_id=UUID(tracking_id) if actual_query_id else query_id,
+                request_id=request_id,  # Linked when fetching from grid session
+                requestor="user",
+                query_params=DataFetchQueryParams(
+                    limit=limit,
+                    offset=offset,
+                    sort_by=sort_by,
+                    sort_order=sort_order,
+                    force=force,
+                ),
+            ),
+        )
+        data_fetch_id = str(data_fetch_record.id)
+
         # Launch new Celery task
         task_args = {
             "query_id": tracking_id,
@@ -1712,10 +1916,16 @@ async def stream_data_fetch(
             "notify_on_complete": notify_on_complete,
             "user_email": user_email,
             "force": force,
+            "data_fetch_id": data_fetch_id,
         }
 
         task = wrk_fetch_data.apply_async(args=[task_args])
         task_id = task.id
+
+        # Update data_fetch with task_id
+        from fm_app.db.data_fetch_db import update_data_fetch_task_id
+
+        await update_data_fetch_task_id(db, data_fetch_record.id, task_id)
 
         # Store task info in Redis with initial subscriber
         await set_running_task(tracking_id, task_id, notify_on_complete, user_email)
@@ -1724,6 +1934,7 @@ async def stream_data_fetch(
             extra={
                 "task_id": task_id,
                 "query_id": tracking_id,
+                "data_fetch_id": data_fetch_id,
                 "notify_on_complete": notify_on_complete,
                 "has_email": bool(user_email),
             },

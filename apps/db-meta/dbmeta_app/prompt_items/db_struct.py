@@ -846,10 +846,23 @@ def get_schema_prompt_item(
     # Step 4: Render to text
     prompt = render_schema_to_text(filtered_schema)
 
+    # Compute hash and metadata for lineage tracking
+    from dbmeta_app.prompt_items.utils import compute_content_hash
+
+    content_hash = compute_content_hash(prompt)
+    metadata = {
+        "profile": settings.default_profile,
+        "top_k": top_k,
+        "tables_selected": sorted(relevant_tables) if relevant_tables else None,
+        "user_request_provided": user_request is not None,
+    }
+
     items = PromptItem(
         text=prompt,
         prompt_item_type=PromptItemType.db_struct,
         score=100_000,
+        content_hash=content_hash,
+        metadata=metadata,
     )
     return items
 
