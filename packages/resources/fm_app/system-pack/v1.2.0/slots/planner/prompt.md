@@ -67,6 +67,29 @@ If request_type is *general_chat* or *disambiguation*,
 set the **response** field to a human-readable response to the user request,
 or a question to the user to clarify the request.
 
+---
+
+## Complexity Assessment
+
+If request_type is **interactive_query**, assess whether the query is complex enough
+to require a planning step before SQL generation.
+
+Set **requires_plan_approval** to `true` if ANY of the following apply:
+- Multiple tables are mentioned or implied (joins required)
+- Aggregations with grouping (GROUP BY with SUM, COUNT, AVG, etc.)
+- Temporal comparisons ("month over month", "vs last year", "trend")
+- Ambiguous terms requiring interpretation ("top", "recent", "active", "best")
+- Subqueries or CTEs likely needed
+- User asks for "analysis", "comparison", or "breakdown"
+- Request involves derived metrics or calculations
+
+Set **requires_plan_approval** to `false` for simple queries:
+- Single table lookup or search
+- Simple filter + select (e.g., "show me user X", "find orders from yesterday")
+- Direct column references with clear values
+- Explicit LIMIT in request
+- Modifications to existing query (add/remove column)
+
 --- 
 
 {{ intent_hint }}
