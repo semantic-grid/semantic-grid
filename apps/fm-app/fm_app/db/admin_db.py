@@ -107,8 +107,20 @@ async def get_all_requests_admin_v2(
     where_conditions = ["r.status = :status"]
     params: dict = {"status": status, "limit": limit, "offset": offset}
 
-    # Only filter for non-null SQL when not looking at Error status
-    if status != RequestStatus.error:
+    # Only filter for non-null SQL when not looking at statuses without SQL yet
+    # - error: may have failed before SQL generation
+    # - feedback_requested: waiting for user approval of query plan
+    # - planning: actively generating query plan
+    # - intent: just analyzed intent
+    # - in_process: early stage before SQL
+    statuses_without_sql = {
+        RequestStatus.error,
+        RequestStatus.feedback_requested,
+        RequestStatus.planning,
+        RequestStatus.intent,
+        RequestStatus.in_process,
+    }
+    if status not in statuses_without_sql:
         where_conditions.append("r.sql is not null")
 
     if search:
