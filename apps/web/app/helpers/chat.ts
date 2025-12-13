@@ -41,6 +41,7 @@ export const responseToBotMessage = (r: TResponseResult) =>
     rating: r.rating,
     query: r.query,
     view: r.view,
+    query_plan: r.query_plan,
     isPending:
       !r.status ||
       (r.status !== "Error" &&
@@ -117,6 +118,7 @@ export const responseToSuccessBotMessage = (result: TResponseResult) =>
     status: result.status || "Done",
     query: result.query,
     view: result.view,
+    query_plan: result.query_plan,
     structuredResponse: {
       request: result.request,
       sql: result.sql,

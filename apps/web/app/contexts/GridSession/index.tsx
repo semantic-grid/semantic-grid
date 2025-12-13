@@ -513,6 +513,7 @@ export const GridSessionProvider = ({
               linkedSession: apeResponse?.structuredResponse?.linked_session_id,
               query: apeResponse.query,
               view: apeResponse.view,
+              query_plan: apeResponse?.query_plan,
             });
           } else {
             // If no matching column, add to general section
@@ -533,6 +534,7 @@ export const GridSessionProvider = ({
               linkedSession: apeResponse?.structuredResponse?.linked_session_id,
               query: apeResponse?.query,
               view: apeResponse?.view,
+              query_plan: apeResponse?.query_plan,
             });
           }
           return acc;
@@ -575,6 +577,7 @@ export const GridSessionProvider = ({
           linkedSession: botMsg?.structuredResponse?.linked_session_id,
           query: botMsg?.query,
           view: botMsg?.view,
+          query_plan: botMsg?.query_plan,
         };
       });
 
