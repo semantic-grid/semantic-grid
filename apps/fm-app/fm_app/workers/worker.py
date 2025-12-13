@@ -486,6 +486,11 @@ async def _wrk_add_request(args):
                                 else None
                             ),
                             linked_session_id=structured_response.linked_session_id,
+                            query_plan=(
+                                structured_response.query_plan.model_dump()
+                                if structured_response.query_plan
+                                else None
+                            ),
                         ),
                     )
             # await db.close()

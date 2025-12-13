@@ -349,6 +349,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/prompt-versions/{version_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Admin Get Prompt Version
+         * @description Get a specific prompt version by ID.
+         *     Returns full prompt content and metadata.
+         */
+        get: operations["admin_get_prompt_version_api_v1_admin_prompt_versions__version_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/chart": {
         parameters: {
             query?: never;
@@ -1127,7 +1148,7 @@ export interface components {
          * PromptItemType
          * @enum {string}
          */
-        PromptItemType: "DBStruct" | "QueryExample" | "DataDescription" | "RefSources" | "Instruction" | "DataSample" | "SlotSchema";
+        PromptItemType: "DBStruct" | "QueryExample" | "DataDescription" | "RefSources" | "Instruction" | "DataSample" | "SlotSchema" | "SQLDialect" | "AssembledPrompt";
         /** Refs */
         Refs: {
             /** Parent */
@@ -1907,6 +1928,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminPromptVersionsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    admin_get_prompt_version_api_v1_admin_prompt_versions__version_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                version_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GetPromptVersionModel"];
                 };
             };
             /** @description Validation Error */

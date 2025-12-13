@@ -417,6 +417,8 @@ class GetRequestModel(BaseModel):
     view: Optional[View] = None
     # data fetches for this request's query (populated in admin endpoints)
     data_fetches: Optional[list["GetDataFetchModel"]] = None
+    # query plan for multi-step flow (populated when status=FeedbackRequested)
+    query_plan: Optional["QueryPlan"] = None
     # admin fields
     is_test: Optional[bool] = None
     is_fixed: Optional[bool] = None
@@ -474,6 +476,7 @@ class UpdateRequestModel(BaseModel):
     linked_session_id: Optional[UUID] = None
     query_id: Optional[UUID] = None
     view: Optional[View] = None
+    query_plan: Optional[dict[str, Any]] = None  # JSON serialized QueryPlan
 
 
 ## Data Query Models

@@ -25,6 +25,13 @@ def upgrade() -> None:
     op.execute(
         "ALTER TYPE request_status_type ADD VALUE IF NOT EXISTS 'FeedbackRequested';"
     )
+    # Add query_plan column to store the plan as JSONB
+    op.execute(
+        """
+        ALTER TABLE request
+        ADD COLUMN IF NOT EXISTS query_plan JSONB;
+        """
+    )
 
 
 def downgrade() -> None:

@@ -591,6 +591,7 @@ async def update_request(db: AsyncSession, update: UpdateRequestModel):
         rows = json.dumps(update.raw_data_rows) if update.raw_data_rows else None
         refs_json = json.dumps(update.refs) if update.refs else None
         view_json = update.view.model_dump_json() if update.view else None
+        query_plan_json = json.dumps(update.query_plan) if update.query_plan else None
 
         update_sql = text(
             """
@@ -613,7 +614,8 @@ async def update_request(db: AsyncSession, update: UpdateRequestModel):
                 linked_session_id=COALESCE(:linked_session_id, linked_session_id),
                 updated_at = now(),
                 query_id = COALESCE(:query_id, query_id),
-                view = COALESCE(:view_json, view)
+                view = COALESCE(:view_json, view),
+                query_plan = COALESCE(:query_plan, query_plan)
             WHERE request_id=:request_id
         """
         )
@@ -638,6 +640,7 @@ async def update_request(db: AsyncSession, update: UpdateRequestModel):
                 "linked_session_id": update.linked_session_id,
                 "query_id": update.query_id,
                 "view_json": view_json,
+                "query_plan": query_plan_json,
             },
         )
 
