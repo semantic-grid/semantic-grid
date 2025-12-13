@@ -954,6 +954,44 @@ def count_wh_request(request: str, db: Session) -> Optional[int]:
 #     logging.error(f"SQL execution error {e}")
 
 
+async def get_previous_request_with_plan(
+    session_id: UUID, db: AsyncSession
+) -> Optional[GetRequestModel]:
+    """
+    Get the most recent request in the session that has a query_plan.
+    Used for plan_approval flow to retrieve the plan from the previous FeedbackRequested request.
+    """
+    logging.debug(
+        "Get previous request with plan",
+        extra={
+            "action": "db::get_previous_request_with_plan",
+            "session_id": session_id,
+        },
+    )
+    get_prev_request_sql = text(
+        """
+        SELECT *
+        FROM request
+        WHERE session_id = :session_id
+          AND query_plan IS NOT NULL
+        ORDER BY sequence_number DESC
+        LIMIT 1;
+        """
+    )
+    res = await db.execute(get_prev_request_sql, params={"session_id": session_id})
+    row = res.mappings().fetchone()
+    if not row:
+        return None
+
+    try:
+        result = GetRequestModel.model_validate(row)
+    except ValidationError as e:
+        logging.error(f"Can't validate Request object from DB error: {e}")
+        return None
+
+    return result
+
+
 async def get_history(
     db: AsyncSession, session_id: UUID, include_responses: bool = False
 ):

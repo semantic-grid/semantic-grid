@@ -7,6 +7,7 @@ from sqlalchemy.orm.session import Session
 
 from fm_app.ai_models.model import AIModel
 from fm_app.api.model import (
+    IntentAnalysis,
     InteractiveRequestType,
     PlanningMode,
     RequestStatus,
@@ -54,6 +55,44 @@ async def interactive_flow(
 
     elif req.request_type == InteractiveRequestType.discovery:
         await handle_discovery(ctx)
+        return req
+
+    elif req.request_type == InteractiveRequestType.plan_approval:
+        # User approved a plan - skip intent analysis and proceed directly
+        # Get the approved plan from the previous FeedbackRequested request
+        from fm_app.db.db import get_previous_request_with_plan
+
+        prev_request = await get_previous_request_with_plan(req.session_id, ctx.db)
+        query_plan = None
+
+        if prev_request and prev_request.query_plan:
+            query_plan = prev_request.query_plan
+            ctx.logger.info(
+                "Retrieved query plan from previous request",
+                flow_stage="plan_approval_retrieve",
+                previous_request_id=str(prev_request.request_id),
+            )
+
+        if query_plan is None:
+            ctx.logger.warning(
+                "No query plan found for plan_approval",
+                flow_stage="plan_approval_error",
+            )
+            # Create a minimal intent for interactive query fallback
+            intent = IntentAnalysis(
+                intent=prev_request.intent if prev_request else req.request,
+                request_type=InteractiveRequestType.interactive_query,
+                requires_plan_approval=False,
+            )
+            await handle_interactive_query(ctx, intent)
+        else:
+            # Create intent using the original intent from the plan request
+            intent = IntentAnalysis(
+                intent=prev_request.intent if prev_request else req.request,
+                request_type=InteractiveRequestType.plan_approval,
+                requires_plan_approval=False,
+            )
+            await handle_interactive_query(ctx, intent, query_plan=query_plan)
         return req
 
     else:
@@ -114,15 +153,6 @@ async def interactive_flow(
 
             # Simple query - proceed directly to SQL generation
             await handle_interactive_query(ctx, intent)
-            return req
-
-        elif intent.request_type == InteractiveRequestType.plan_approval:
-            # User approved a plan - proceed with SQL generation using the plan
-            # Get the approved plan from structured_response
-            query_plan = None
-            if req.structured_response and req.structured_response.query_plan:
-                query_plan = req.structured_response.query_plan
-            await handle_interactive_query(ctx, intent, query_plan=query_plan)
             return req
 
         elif intent.request_type == InteractiveRequestType.data_analysis:
