@@ -1098,10 +1098,29 @@ export const GridSessionProvider = ({
     });
   }, [sessionId, refs, query?.query_id, model.value]);
 
-  // Reject query plan - send rejection feedback
+  // Reject query plan - mark as rejected and ask user what to do instead
   const rejectPlan = useCallback(() => {
-    // For now, just clear the pending state and let user enter a new request
-    // Could also send a specific rejection request to the backend
+    // Update the last section's status to PlanRejected
+    setSects((prevSects) =>
+      prevSects.map((s, idx, allS) => {
+        if (idx === allS.length - 1) {
+          return {
+            ...s,
+            status: "PlanRejected",
+            messages: s.messages
+              ? [
+                  ...s.messages.slice(0, s.messages.length - 1),
+                  {
+                    ...s.messages[s.messages.length - 1],
+                    status: "PlanRejected",
+                  },
+                ]
+              : s.messages,
+          };
+        }
+        return s;
+      }),
+    );
     setPending(false);
     setPromptVal(""); // Clear any pending input
   }, []);

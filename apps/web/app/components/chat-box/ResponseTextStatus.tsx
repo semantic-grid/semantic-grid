@@ -22,6 +22,7 @@ const Status: Record<string, string> = {
   Intent: "Analyzing intent...",
   Planning: "Planning query...",
   FeedbackRequested: "Awaiting approval...",
+  PlanRejected: "Plan rejected. What would you like to do instead?",
   SQL: "Generating query...",
   Retry: "Refining response...",
   DataFetch: "Fetching data...",
@@ -83,6 +84,15 @@ export const ResponseTextStatus = ({
   if (lastMessage && status === "FeedbackRequested") {
     return (
       <Typography variant="body2" color="primary">
+        {Status[status]}
+      </Typography>
+    );
+  }
+
+  // PlanRejected - user rejected the plan and can start fresh
+  if (lastMessage && status === "PlanRejected") {
+    return (
+      <Typography variant="body2" color="warning.main">
         {Status[status]}
       </Typography>
     );
