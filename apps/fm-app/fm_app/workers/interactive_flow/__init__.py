@@ -65,12 +65,25 @@ async def interactive_flow(
         prev_request = await get_previous_request_with_plan(req.session_id, ctx.db)
         query_plan = None
 
+        ctx.logger.info(
+            "Processing plan_approval request",
+            flow_stage="plan_approval_start",
+            has_prev_request=prev_request is not None,
+            prev_request_id=str(prev_request.request_id) if prev_request else None,
+            prev_has_query_plan=prev_request.query_plan is not None
+            if prev_request
+            else False,
+        )
+
         if prev_request and prev_request.query_plan:
             query_plan = prev_request.query_plan
             ctx.logger.info(
                 "Retrieved query plan from previous request",
                 flow_stage="plan_approval_retrieve",
                 previous_request_id=str(prev_request.request_id),
+                plan_summary=query_plan.plan_summary
+                if hasattr(query_plan, "plan_summary")
+                else str(query_plan)[:100],
             )
 
         if query_plan is None:
@@ -86,9 +99,20 @@ async def interactive_flow(
             )
             await handle_interactive_query(ctx, intent)
         else:
+            # IMPORTANT: Override req.request with the original intent so the LLM
+            # generates SQL for the original query, not for "Approved - proceed..."
+            original_intent = prev_request.intent if prev_request else req.request
+            req.request = original_intent
+
+            ctx.logger.info(
+                "Using original intent for SQL generation",
+                flow_stage="plan_approval_intent_override",
+                original_intent=original_intent[:200] if original_intent else None,
+            )
+
             # Create intent using the original intent from the plan request
             intent = IntentAnalysis(
-                intent=prev_request.intent if prev_request else req.request,
+                intent=original_intent,
                 request_type=InteractiveRequestType.plan_approval,
                 requires_plan_approval=False,
             )

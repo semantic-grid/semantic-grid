@@ -968,6 +968,37 @@ async def get_previous_request_with_plan(
             "session_id": str(session_id),
         },
     )
+
+    # Debug: check all requests in session to see their query_plan status
+    debug_sql = text(
+        """
+        SELECT request_id, sequence_number, status,
+               CASE WHEN query_plan IS NULL THEN 'NULL' ELSE 'HAS_PLAN' END as plan_status
+        FROM request
+        WHERE session_id = :session_id
+        ORDER BY sequence_number DESC
+        LIMIT 5;
+        """
+    )
+    debug_res = await db.execute(debug_sql, params={"session_id": session_id})
+    debug_rows = debug_res.mappings().fetchall()
+    logging.info(
+        "Debug: requests in session",
+        extra={
+            "action": "db::get_previous_request_with_plan_debug",
+            "session_id": str(session_id),
+            "requests": [
+                {
+                    "request_id": str(r["request_id"]),
+                    "seq": r["sequence_number"],
+                    "status": r["status"],
+                    "plan_status": r["plan_status"],
+                }
+                for r in debug_rows
+            ],
+        },
+    )
+
     get_prev_request_sql = text(
         """
         SELECT *
