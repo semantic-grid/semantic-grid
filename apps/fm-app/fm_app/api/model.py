@@ -266,6 +266,8 @@ class PromptItemType(str, Enum):
     instruction = "Instruction"
     data_sample = "DataSample"
     slot_schema = "SlotSchema"
+    sql_dialect = "SQLDialect"
+    assembled_prompt = "AssembledPrompt"  # Full assembled prompt from slot
 
 
 class GetPromptModel(BaseModel):

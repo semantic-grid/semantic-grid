@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from fm_app.api.model import (
     CreatePromptVersionModel,
     CreateTraceStepModel,
+    PromptItemType,
     TraceStepType,
 )
 from fm_app.db.trace_db import (
@@ -335,9 +336,40 @@ class RequestTracer:
         prompt_hash: str,
         duration_ms: Optional[int] = None,
         metadata: Optional[dict[str, Any]] = None,
+        prompt_content: Optional[str] = None,
     ) -> None:
-        """Trace prompt assembly step."""
+        """Trace prompt assembly step and optionally store prompt content.
+
+        Args:
+            slot_name: Name of the prompt slot being assembled
+            prompt_hash: Hash of the assembled prompt content
+            duration_ms: Time taken to assemble the prompt
+            metadata: Additional metadata about the assembly
+            prompt_content: The full assembled prompt text (stored in prompt_version)
+        """
         self.step_number += 1
+
+        # Store prompt content in prompt_version table if provided
+        prompt_version_id = None
+        if prompt_content:
+            # Use full hash for content-addressable storage
+            full_hash = hashlib.sha256(prompt_content.encode("utf-8")).hexdigest()
+            version = await get_or_create_prompt_version(
+                self.db,
+                CreatePromptVersionModel(
+                    content_hash=full_hash,
+                    source="prompt_assembler",
+                    source_version="1.0.0",
+                    prompt_item_type=PromptItemType.assembled_prompt,
+                    content=prompt_content,
+                    metadata={
+                        "slot_name": slot_name,
+                        "short_hash": prompt_hash or full_hash[:16],
+                    },
+                ),
+            )
+            prompt_version_id = version.id
+            self._prompt_version_ids.append(version.id)
 
         await create_trace_step(
             self.db,
@@ -346,6 +378,7 @@ class RequestTracer:
                 step_number=self.step_number,
                 step_type=TraceStepType.prompt_assembly,
                 input_hash=prompt_hash,
+                prompt_version_ids=[prompt_version_id] if prompt_version_id else None,
                 duration_ms=duration_ms,
                 metadata={
                     **(metadata or {}),

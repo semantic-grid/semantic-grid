@@ -1,6 +1,7 @@
 import json
 import re
-from typing import Optional
+from dataclasses import dataclass
+from typing import Optional, TypeVar
 
 import vertexai
 from anthropic import Anthropic
@@ -10,6 +11,18 @@ from vertexai.generative_models import Content, GenerationConfig, GenerativeMode
 
 from fm_app.ai_models.model import AIModel, ChatMessage, InvestigationStep, schema
 from fm_app.api.model import IntentAnalysis, QueryMetadata
+
+T = TypeVar("T")
+
+
+@dataclass
+class LLMResponse:
+    """Wrapper for LLM response with usage statistics."""
+
+    result: T
+    tokens_in: Optional[int] = None
+    tokens_out: Optional[int] = None
+    model: Optional[str] = None
 
 
 def normalize_schema(sch):
@@ -125,6 +138,45 @@ class OpenAIModel(AIModel):
             resp.choices[0].message.content, object_hook=fix_nulls_and_convert_rows
         )
         return step(**data)
+
+    @staticmethod
+    def get_structured_with_usage(
+        messages: list[ChatMessage],
+        step: type[InvestigationStep | QueryMetadata | IntentAnalysis],
+        model_override: Optional[str] = None,
+    ) -> LLMResponse:
+        """Generates a structured response with token usage statistics."""
+        if OpenAIModel._client is None:
+            raise ValueError(
+                "Client not initialized. Call `get_client(settings)` first."
+            )
+
+        model_name = model_override or OpenAIModel.llm_name
+        temperature = 1 if model_name.startswith("gpt-5") else 0
+        resp = OpenAIModel._client.chat.completions.create(
+            temperature=temperature,
+            model=model_name,
+            messages=messages,
+            response_format={"type": "json_object"},
+            extra_headers={"OpenAI-Beta": "prompt-caching"},
+        )
+        data = json.loads(
+            resp.choices[0].message.content, object_hook=fix_nulls_and_convert_rows
+        )
+
+        # Extract token usage
+        tokens_in = None
+        tokens_out = None
+        if resp.usage:
+            tokens_in = resp.usage.prompt_tokens
+            tokens_out = resp.usage.completion_tokens
+
+        return LLMResponse(
+            result=step(**data),
+            tokens_in=tokens_in,
+            tokens_out=tokens_out,
+            model=model_name,
+        )
 
 
 class DeepSeekModel(AIModel):

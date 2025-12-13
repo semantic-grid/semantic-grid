@@ -195,6 +195,7 @@ async def handle_interactive_query(
                 if slot.lineage
                 else None,
             },
+            prompt_content=query_llm_system_prompt,
         )
 
     if ai_model.get_name() != "gemini":
@@ -226,7 +227,18 @@ async def handle_interactive_query(
 
         try:
             with TracingTimer() as llm_timer:
-                llm_response = ai_model.get_structured(messages, QueryMetadata)
+                # Use get_structured_with_usage to get token counts for tracing
+                if hasattr(ai_model, "get_structured_with_usage"):
+                    llm_result = ai_model.get_structured_with_usage(
+                        messages, QueryMetadata
+                    )
+                    llm_response = llm_result.result
+                    tokens_in = llm_result.tokens_in
+                    tokens_out = llm_result.tokens_out
+                else:
+                    llm_response = ai_model.get_structured(messages, QueryMetadata)
+                    tokens_in = None
+                    tokens_out = None
 
             # Trace LLM call
             if tracer:
@@ -235,8 +247,8 @@ async def handle_interactive_query(
                     input_messages=messages,
                     output_raw=llm_response.model_dump_json(),
                     output_parsed=llm_response.model_dump(),
-                    tokens_in=None,  # TODO: get from model response if available
-                    tokens_out=None,
+                    tokens_in=tokens_in,
+                    tokens_out=tokens_out,
                     duration_ms=llm_timer.duration_ms,
                     metadata={"attempt": attempt},
                 )

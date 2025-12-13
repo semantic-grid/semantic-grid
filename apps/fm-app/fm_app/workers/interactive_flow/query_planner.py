@@ -80,6 +80,7 @@ async def generate_query_plan(ctx: FlowContext, intent: str) -> QueryPlan:
                 else None,
                 "intent": intent,
             },
+            prompt_content=planner_system_prompt,
         )
 
     # Use query-specific history if working on a specific query
