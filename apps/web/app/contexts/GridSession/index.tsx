@@ -31,7 +31,6 @@ import { AppContext } from "@/app/contexts/App";
 import { useData } from "@/app/contexts/DataContext";
 import { useSessionContext } from "@/app/contexts/SessionStatus";
 import { isSolanaAddress, isSolanaSignature } from "@/app/helpers/cell";
-
 import { useAppUser } from "@/app/hooks/useAppUser";
 import { useUserSession } from "@/app/hooks/useUserSession";
 import type {
@@ -118,6 +117,8 @@ export interface ChatSessionContextType {
   onFetchData: (withNotification?: boolean) => void;
   query: any;
   hasCachedData: boolean;
+  approvePlan: () => void;
+  rejectPlan: () => void;
 }
 
 export const getDecision = async (
@@ -253,6 +254,7 @@ const withDoneMessage = (status: TResponseResult) => (ss: TChatSection[]) =>
   ss.map((s, idx, allS) => ({
     ...s,
     query: status.query || s.query,
+    query_plan: status.query_plan || s.query_plan,
     status: idx < allS.length - 1 ? s.status : status.status,
     chat:
       // eslint-disable-next-line no-nested-ternary
@@ -1068,6 +1070,33 @@ export const GridSessionProvider = ({
     cancelFetch(queryId);
   }, [queryId, cancelFetch]);
 
+  // Approve query plan - submit plan_approval request
+  const approvePlan = useCallback(() => {
+    setPending(true);
+    createRequest({
+      request: "Approved - proceed with SQL generation",
+      requestType: "plan_approval",
+      flow: "Interactive",
+      model: model.value,
+      db: "V2",
+      sessionId,
+      refs,
+      queryId: query?.query_id,
+    }).then((request) => {
+      console.log("plan approval request", request);
+      setSects(withNewMessage(request as any, "Plan approved"));
+      return request;
+    });
+  }, [sessionId, refs, query?.query_id, model.value]);
+
+  // Reject query plan - send rejection feedback
+  const rejectPlan = useCallback(() => {
+    // For now, just clear the pending state and let user enter a new request
+    // Could also send a specific rejection request to the backend
+    setPending(false);
+    setPromptVal(""); // Clear any pending input
+  }, []);
+
   return (
     <Index.Provider
       value={{
@@ -1118,6 +1147,8 @@ export const GridSessionProvider = ({
         onFetchData,
         query,
         hasCachedData,
+        approvePlan,
+        rejectPlan,
       }}
     >
       {children}

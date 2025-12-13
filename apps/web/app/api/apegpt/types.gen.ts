@@ -995,6 +995,7 @@ export interface components {
             view?: components["schemas"]["View"] | null;
             /** Data Fetches */
             data_fetches?: components["schemas"]["GetDataFetchModel"][] | null;
+            query_plan?: components["schemas"]["QueryPlan"] | null;
             /** Is Test */
             is_test?: boolean | null;
             /** Is Fixed */
@@ -1149,6 +1150,114 @@ export interface components {
          * @enum {string}
          */
         PromptItemType: "DBStruct" | "QueryExample" | "DataDescription" | "RefSources" | "Instruction" | "DataSample" | "SlotSchema" | "SQLDialect" | "AssembledPrompt";
+        /**
+         * QueryPlan
+         * @description Human-readable query plan for user approval before SQL generation.
+         *
+         *     This captures the LLM's understanding of what the query will do,
+         *     allowing users to verify intent before SQL is generated.
+         */
+        QueryPlan: {
+            /** Tables */
+            tables: string[];
+            /** Primary Table */
+            primary_table: string;
+            /**
+             * Joins
+             * @default []
+             */
+            joins: (components["schemas"]["QueryPlanJoin"] | string)[];
+            /** Columns Selected */
+            columns_selected: string[];
+            /**
+             * Filters
+             * @default []
+             */
+            filters: (components["schemas"]["QueryPlanFilter"] | string)[];
+            /**
+             * Aggregations
+             * @default []
+             */
+            aggregations: (components["schemas"]["QueryPlanAggregation"] | string)[];
+            /**
+             * Group By
+             * @default []
+             */
+            group_by: string[];
+            /**
+             * Order By
+             * @default []
+             */
+            order_by: string[];
+            /** Limit */
+            limit?: number | null;
+            /**
+             * Assumptions
+             * @default []
+             */
+            assumptions: string[];
+            /**
+             * Default Params
+             * @default []
+             */
+            default_params: string[];
+            /** Plan Summary */
+            plan_summary: string;
+            /**
+             * Estimated Complexity
+             * @default moderate
+             */
+            estimated_complexity: string;
+            /** Reason For Approval */
+            reason_for_approval?: string | null;
+            /** Relevant Schema */
+            relevant_schema?: string | null;
+        };
+        /**
+         * QueryPlanAggregation
+         * @description Describes an aggregation in the query plan.
+         */
+        QueryPlanAggregation: {
+            /** Function */
+            function: string;
+            /** Column */
+            column?: string | null;
+            /** Alias */
+            alias?: string | null;
+            /** Description */
+            description?: string | null;
+        };
+        /**
+         * QueryPlanFilter
+         * @description Describes a filter/WHERE condition in the query plan.
+         */
+        QueryPlanFilter: {
+            /** Column */
+            column: string;
+            /** Operator */
+            operator: string;
+            /** Value */
+            value: string;
+            /**
+             * Source
+             * @default inferred
+             */
+            source: string;
+        };
+        /**
+         * QueryPlanJoin
+         * @description Describes a join between two tables in the query plan.
+         */
+        QueryPlanJoin: {
+            /** Left Table */
+            left_table: string;
+            /** Right Table */
+            right_table: string;
+            /** Join Type */
+            join_type: string;
+            /** Join Condition */
+            join_condition: string;
+        };
         /** Refs */
         Refs: {
             /** Parent */

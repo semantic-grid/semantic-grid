@@ -23,6 +23,7 @@ import { ResponseTextMessage } from "@/app/components/chat-box/ResponseTextMessa
 import { ResponseTextStatus } from "@/app/components/chat-box/ResponseTextStatus";
 import CopyQueryUrl from "@/app/components/CopyQueryUrl";
 import { QueryFeedback } from "@/app/components/QueryFeedback";
+import { QueryPlanCard } from "@/app/components/QueryPlanCard";
 import SaveQueryUrl from "@/app/components/SaveQueryUrl";
 import ShareQueryUrl from "@/app/components/ShareQueryUrl";
 import { useGridSession } from "@/app/contexts/GridSession";
@@ -82,6 +83,8 @@ export const ChatContainer = ({
     setActiveColumn,
     setActiveRows,
     setSelectionModel,
+    approvePlan,
+    rejectPlan,
   } = useGridSession();
   const inputRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
@@ -416,6 +419,18 @@ export const ChatContainer = ({
                                   Boolean(section.query)
                                 }
                               />
+                              {/* Show QueryPlanCard when FeedbackRequested with a plan */}
+                              {section.status === "FeedbackRequested" &&
+                                section.query_plan &&
+                                i === arr.length - 1 &&
+                                idx === sects.length - 1 && (
+                                  <QueryPlanCard
+                                    plan={section.query_plan}
+                                    onApprove={approvePlan}
+                                    onReject={rejectPlan}
+                                    isLoading={pending}
+                                  />
+                                )}
                             </Box>
                           )}
                           {i % 2 !== 0 &&
