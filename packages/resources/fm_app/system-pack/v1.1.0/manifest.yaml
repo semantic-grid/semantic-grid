@@ -1,5 +1,5 @@
 pack_name: fm-app-core
-version: 1.0.0
+version: 1.1.0
 target_component: fm_app
 dependencies:
   - name: db-meta-core

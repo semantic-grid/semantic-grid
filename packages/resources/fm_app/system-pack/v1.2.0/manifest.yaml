@@ -1,5 +1,5 @@
 pack_name: fm-app-core
-version: 1.0.0
+version: 1.2.0
 target_component: fm_app
 dependencies:
   - name: db-meta-core
@@ -23,6 +23,30 @@ slots:
         selected_column_data,
       ]
     outputs: [intent_analysis]
+
+  query_planner:
+    # generates human-readable query plan for user approval before SQL generation
+    required: false
+    inputs:
+      [
+        client_id,
+        intent,
+        user_request,
+        selected_row_data,
+        selected_column_data,
+        db_meta_prompt_items,
+      ]
+    outputs: [query_plan]
+    requires:
+      mcp:
+        - name: db-meta
+          vars: [db_meta_prompt_items]
+          resources:
+            - "db-meta://schema/summary"
+        - name: db-ref
+          vars: [db_ref_prompt_items]
+          resources:
+            - "db-ref://entities/topk?k=50"
 
   linked_query:
     # start of a session from a query; LLM job is to summarize the query for user
