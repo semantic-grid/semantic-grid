@@ -961,11 +961,11 @@ async def get_previous_request_with_plan(
     Get the most recent request in the session that has a query_plan.
     Used for plan_approval flow to retrieve the plan from the previous FeedbackRequested request.
     """
-    logging.debug(
+    logging.info(
         "Get previous request with plan",
         extra={
             "action": "db::get_previous_request_with_plan",
-            "session_id": session_id,
+            "session_id": str(session_id),
         },
     )
     get_prev_request_sql = text(
@@ -981,10 +981,38 @@ async def get_previous_request_with_plan(
     res = await db.execute(get_prev_request_sql, params={"session_id": session_id})
     row = res.mappings().fetchone()
     if not row:
+        logging.warning(
+            "No request with query_plan found",
+            extra={
+                "action": "db::get_previous_request_with_plan",
+                "session_id": str(session_id),
+            },
+        )
         return None
 
+    # Convert row to dict for processing
+    data = dict(row)
+
+    # Parse query_plan JSON if it's a string
+    if data.get("query_plan") and isinstance(data["query_plan"], str):
+        try:
+            data["query_plan"] = json.loads(data["query_plan"])
+        except json.JSONDecodeError as e:
+            logging.error(f"Failed to parse query_plan JSON: {e}")
+            data["query_plan"] = None
+
+    logging.info(
+        "Found request with query_plan",
+        extra={
+            "action": "db::get_previous_request_with_plan",
+            "session_id": str(session_id),
+            "request_id": str(data.get("request_id")),
+            "has_query_plan": data.get("query_plan") is not None,
+        },
+    )
+
     try:
-        result = GetRequestModel.model_validate(row)
+        result = GetRequestModel.model_validate(data)
     except ValidationError as e:
         logging.error(f"Can't validate Request object from DB error: {e}")
         return None
