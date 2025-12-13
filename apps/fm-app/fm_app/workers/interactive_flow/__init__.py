@@ -80,11 +80,25 @@ async def interactive_flow(
                 should_run_planning = intent.requires_plan_approval
             # planning_mode == PlanningMode.never: should_run_planning stays False
 
+            ctx.logger.info(
+                "Planning decision",
+                flow_stage="planning_decision",
+                planning_mode=str(planning_mode),
+                requires_plan_approval=intent.requires_plan_approval,
+                should_run_planning=should_run_planning,
+            )
+
             if should_run_planning:
                 try:
                     query_plan = await generate_query_plan(ctx, intent.intent)
-                except Exception:
-                    # Error already logged and status updated in generate_query_plan
+                except Exception as e:
+                    # Log the exception for debugging
+                    ctx.logger.error(
+                        "Query planning failed",
+                        flow_stage="error_query_plan",
+                        error=str(e),
+                        error_type=type(e).__name__,
+                    )
                     return req
 
                 # Store plan in structured response and return for user approval
