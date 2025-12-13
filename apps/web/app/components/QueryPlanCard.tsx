@@ -308,6 +308,15 @@ export const QueryPlanCard = ({
           Approve & Generate SQL
         </Button>
       </Stack>
+
+      {/* Hint for amendments */}
+      <Typography
+        variant="caption"
+        color="text.secondary"
+        sx={{ mt: 1, display: "block", textAlign: "right" }}
+      >
+        To request changes, type your feedback in the prompt box below.
+      </Typography>
     </Paper>
   );
 };

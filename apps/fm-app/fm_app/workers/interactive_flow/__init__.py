@@ -95,6 +95,48 @@ async def interactive_flow(
             await handle_interactive_query(ctx, intent, query_plan=query_plan)
         return req
 
+    elif req.request_type == InteractiveRequestType.plan_amendment:
+        # User requested changes to the plan - re-run planning with their feedback
+        from fm_app.db.db import get_previous_request_with_plan
+
+        prev_request = await get_previous_request_with_plan(req.session_id, ctx.db)
+
+        # Build combined intent: original intent + user's amendment request
+        original_intent = prev_request.intent if prev_request else ""
+        amendment_request = req.request
+
+        combined_intent = f"{original_intent}\n\nUser feedback: {amendment_request}"
+
+        ctx.logger.info(
+            "Processing plan amendment",
+            flow_stage="plan_amendment",
+            original_intent=original_intent,
+            amendment_request=amendment_request,
+        )
+
+        # Re-run query planning with the combined intent
+        try:
+            query_plan = await generate_query_plan(ctx, combined_intent)
+        except Exception as e:
+            ctx.logger.error(
+                "Query planning failed during amendment",
+                flow_stage="error_plan_amendment",
+                error=str(e),
+                error_type=type(e).__name__,
+            )
+            return req
+
+        # Store updated plan and return for user approval again
+        if req.structured_response is None:
+            req.structured_response = StructuredResponse()
+        req.structured_response.query_plan = query_plan
+        req.structured_response.intent = combined_intent
+        req.status = RequestStatus.feedback_requested
+        await update_request_status(
+            RequestStatus.feedback_requested, None, ctx.db, req.request_id
+        )
+        return req
+
     else:
         # For all other types, analyze intent first
         try:

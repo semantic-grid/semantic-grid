@@ -43,7 +43,8 @@ class InteractiveRequestType(str, Enum):
     linked_query = "linked_query"
     manual_query = "manual_query"
     discovery = "discovery"
-    plan_approval = "plan_approval"  # User responding to a query plan
+    plan_approval = "plan_approval"  # User approving a query plan
+    plan_amendment = "plan_amendment"  # User requesting changes to a query plan
     # chart_request = "chart_request"
 
 
@@ -245,7 +246,7 @@ class QueryPlan(BaseModel):
 
     # Ordering and limits
     order_by: list[str] = []  # e.g., ["volume descending", "date ascending"]
-    limit: Optional[int] = None
+    limit: Optional[Union[int, str]] = None  # Accept string explanations from LLM
 
     # Assumptions and defaults applied
     assumptions: list[str] = []  # e.g., "Assuming 'recent' means last 7 days"

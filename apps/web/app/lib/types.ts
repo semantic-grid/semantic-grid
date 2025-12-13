@@ -139,7 +139,7 @@ export type TQueryPlan = {
   aggregations: (TQueryPlanAggregation | string)[];
   group_by: string[];
   order_by: string[];
-  limit?: number;
+  limit?: number | string; // Can be a number or string explanation from LLM
   assumptions: string[];
   default_params: string[];
   plan_summary: string;

@@ -827,6 +827,12 @@ export const GridSessionProvider = ({
   }, [context]);
 
   const requestType = () => {
+    // Check if we're in FeedbackRequested state - user is providing plan amendment
+    const lastSection = sects[sects.length - 1];
+    if (lastSection?.status === "FeedbackRequested") {
+      return "plan_amendment";
+    }
+
     switch (selectedAction) {
       case "submit":
         return "interactive_query";
