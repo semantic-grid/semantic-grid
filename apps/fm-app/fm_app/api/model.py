@@ -212,8 +212,9 @@ class QueryPlanAggregation(BaseModel):
     """Describes an aggregation in the query plan."""
 
     function: str  # "count", "sum", "avg", "min", "max", "count_distinct"
-    column: str  # column being aggregated, or "*" for count(*)
-    alias: str  # result column name
+    column: Optional[str] = None  # column being aggregated, or "*" for count(*)
+    alias: Optional[str] = None  # result column name
+    description: Optional[str] = None  # human-readable description as fallback
 
 
 class QueryPlan(BaseModel):
@@ -229,14 +230,17 @@ class QueryPlan(BaseModel):
     primary_table: str
 
     # Relationships
-    joins: list[QueryPlanJoin] = []
+    # Accept either structured objects or simple strings for flexibility
+    joins: list[Union[QueryPlanJoin, str]] = []
 
     # Data selection
     columns_selected: list[str]  # columns to return (human-readable descriptions)
-    filters: list[QueryPlanFilter] = []
+    # Accept either structured objects or simple strings for flexibility
+    filters: list[Union[QueryPlanFilter, str]] = []
 
     # Aggregations and grouping
-    aggregations: list[QueryPlanAggregation] = []
+    # Accept either structured objects or simple strings for flexibility
+    aggregations: list[Union[QueryPlanAggregation, str]] = []
     group_by: list[str] = []
 
     # Ordering and limits
