@@ -363,12 +363,15 @@ async def handle_interactive_query(
                     flow_stage="metadata_repair",
                     flow_step_num=next(flow_step),
                 )
-                # Trace repair attempt
+                # Trace repair attempt with prompt content
                 if tracer:
                     await tracer.trace_repair(
                         repair_attempt=attempt,
                         error_message=errors_list,
-                        metadata={"repair_type": "metadata_validation"},
+                        metadata={
+                            "repair_type": "metadata_validation",
+                            "repair_prompt": validation_error_msg[:1000],
+                        },
                     )
                 attempt += 1
                 continue
@@ -457,6 +460,19 @@ async def handle_interactive_query(
                                     "content": validation_error_msg,
                                 }
                             )
+
+                            # Trace repair attempt for unqualified tables
+                            if tracer:
+                                unqualified_err = ", ".join(actual_unqualified)
+                                err_msg = f"Unqualified tables: {unqualified_err}"
+                                await tracer.trace_repair(
+                                    repair_attempt=attempt,
+                                    error_message=err_msg,
+                                    metadata={
+                                        "repair_type": "unqualified_tables",
+                                        "repair_prompt": validation_error_msg[:1000],
+                                    },
+                                )
 
                             attempt += 1
                             continue
@@ -606,21 +622,34 @@ async def handle_interactive_query(
                 )
                 attempt += 1
 
+                repair_prompt = f"""
+                    We have got DB exception: {error_message}\n.
+                    Please regenerate SQL to fix the issue.
+                    Remember instructions from original prompt!.
+
+                    IMPORTANT: Keep the 'result' field exactly as you
+                    wrote it originally. The result should describe what
+                    the query accomplishes for the user, NOT what you
+                    fixed. Do NOT mention fixes or repairs in result.
+                """
+
                 messages.append(
                     {
                         "role": "system",
-                        "content": f"""
-                            We have got DB exception: {error_message}\n.
-                            Please regenerate SQL to fix the issue.
-                            Remember instructions from original prompt!.
-
-                            IMPORTANT: Keep the 'result' field exactly as you
-                            wrote it originally. The result should describe what
-                            the query accomplishes for the user, NOT what you
-                            fixed. Do NOT mention fixes or repairs in result.
-                        """,
+                        "content": repair_prompt,
                     }
                 )
+
+                # Trace repair attempt for db_exception
+                if tracer:
+                    await tracer.trace_repair(
+                        repair_attempt=attempt - 1,
+                        error_message=error_message.strip()[:500],
+                        metadata={
+                            "repair_type": "db_exception",
+                            "repair_prompt": repair_prompt[:1000],
+                        },
+                    )
                 continue
 
             # Smart row count: skip if query is too expensive based on EXPLAIN estimates
