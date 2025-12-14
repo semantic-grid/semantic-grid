@@ -251,44 +251,51 @@ const withNewMessage =
   ];
 
 const withDoneMessage = (status: TResponseResult) => (ss: TChatSection[]) =>
-  ss.map((s, idx, allS) => ({
-    ...s,
-    query: status.query || s.query,
-    query_plan: status.query_plan || s.query_plan,
-    status: idx < allS.length - 1 ? s.status : status.status,
-    chat:
-      // eslint-disable-next-line no-nested-ternary
-      idx < allS.length - 1 || status.response === undefined
-        ? s.chat
-        : s.chat
-          ? [...s.chat.slice(0, s.chat.length - 1), status.response || ""]
-          : [status.response || ""],
-    messages:
-      // eslint-disable-next-line no-nested-ternary
-      idx < allS.length - 1
-        ? s.messages
-        : s.messages
-          ? [
-              ...s.messages.slice(0, s.messages.length - 1),
-              {
-                uid: status.request_id || "pending",
-                text:
-                  s.messages[s.messages.length - 1]?.text ||
-                  status.response ||
-                  "",
-                isBot: true,
-                status: status.status,
-              },
-            ]
-          : [
-              {
-                uid: status.request_id || "pending",
-                text: status.response || "",
-                isBot: true,
-                status: status.status,
-              },
-            ],
-  }));
+  ss.map((s, idx, allS) => {
+    // For error status, use err field; otherwise use response
+    const messageText =
+      status.status === "Error"
+        ? status.err || "An error occurred"
+        : s.messages?.[s.messages.length - 1]?.text || status.response || "";
+
+    return {
+      ...s,
+      query: status.query || s.query,
+      query_plan: status.query_plan || s.query_plan,
+      status: idx < allS.length - 1 ? s.status : status.status,
+      chat:
+        // eslint-disable-next-line no-nested-ternary
+        idx < allS.length - 1 || status.response === undefined
+          ? s.chat
+          : s.chat
+            ? [...s.chat.slice(0, s.chat.length - 1), status.response || ""]
+            : [status.response || ""],
+      messages:
+        // eslint-disable-next-line no-nested-ternary
+        idx < allS.length - 1
+          ? s.messages
+          : s.messages
+            ? [
+                ...s.messages.slice(0, s.messages.length - 1),
+                {
+                  uid: status.request_id || "pending",
+                  text: messageText,
+                  isBot: true,
+                  status: status.status,
+                  isError: status.status === "Error",
+                },
+              ]
+            : [
+                {
+                  uid: status.request_id || "pending",
+                  text: messageText,
+                  isBot: true,
+                  status: status.status,
+                  isError: status.status === "Error",
+                },
+              ],
+    };
+  });
 
 const withPendingMessage =
   (status: TResponseResult, text: string | undefined) => (ss: TChatSection[]) =>
@@ -1101,23 +1108,19 @@ export const GridSessionProvider = ({
 
   // Reject query plan - mark as rejected and ask user what to do instead
   const rejectPlan = useCallback(() => {
-    // Update the last section's status to PlanRejected and mark selection
+    // Update the last section's status to PlanRejected
     setSects((prevSects) =>
-      prevSects.map((s, idx, allS) => {
-        if (idx === allS.length - 1) {
+      prevSects.map((s, idx, allS): TChatSection => {
+        if (idx === allS.length - 1 && s.messages && s.messages.length > 0) {
+          const lastMessage = s.messages[s.messages.length - 1];
+          const updatedMessages: TChatMessage[] = [
+            ...s.messages.slice(0, -1),
+            { ...lastMessage, status: "PlanRejected" } as TChatMessage,
+          ];
           return {
             ...s,
             status: "PlanRejected",
-            userPlanSelection: "rejected" as const,
-            messages: s.messages
-              ? [
-                  ...s.messages.slice(0, s.messages.length - 1),
-                  {
-                    ...s.messages[s.messages.length - 1],
-                    status: "PlanRejected",
-                  },
-                ]
-              : s.messages,
+            messages: updatedMessages,
           };
         }
         return s;

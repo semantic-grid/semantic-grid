@@ -38,10 +38,10 @@ const remapAnchor = ({ children, href, ...props }: any) => (
 );
 
 export const ResponseTextMessage = ({
-                                      text,
-                                      status,
-                                      linkedSession,
-                                    }: {
+  text,
+  status,
+  linkedSession,
+}: {
   text?: string;
   status?: string;
   linkedSession?: string; // whether to show the link icon
@@ -59,6 +59,19 @@ export const ResponseTextMessage = ({
       },
     }}
   >
+    {text && status === "Error" && (
+      <Box
+        sx={{
+          color: "text.secondary",
+          fontSize: "0.875rem",
+        }}
+      >
+        <Box component="span" sx={{ color: "error.main", fontWeight: 500 }}>
+          Error:
+        </Box>{" "}
+        {text}
+      </Box>
+    )}
     {text && status !== "Error" && (
       <Box sx={{ "& a:hover": { color: "primary.main" } }}>
         {!linkedSession && (

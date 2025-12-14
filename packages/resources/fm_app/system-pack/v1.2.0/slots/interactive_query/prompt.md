@@ -91,11 +91,11 @@ Please take into account now is {{ current_datetime }}.
 
 The user has approved the following query plan. Generate SQL that implements this plan's intent.
 
-**CRITICAL**: 
-- Use ONLY table names from the Database Schema section below (fully-qualified names like `iceberg.radius.table_name`)
-- Use ONLY column names that exist in the Database Schema section below
-- Do NOT invent or assume table/column names from the plan - the plan is a high-level description
-- If the plan mentions a concept (like "first_seen"), find the actual column in the schema that represents it
+**CRITICAL - READ CAREFULLY**: 
+1. **Table Names**: Use ONLY fully-qualified table names from the Database Schema below (e.g., `iceberg.radius.table_name`). The plan may use shorthand names - you MUST map them to actual schema tables.
+2. **Column Names**: Use ONLY columns that exist in the Database Schema. If the plan mentions a concept (like "first_seen"), search the schema for the actual column that represents it (e.g., `start_ts`, `created_at`, `timestamp`).
+3. **Functions**: Use only Trino-compatible functions. For percentiles use `approx_percentile(column, 0.5)` not `median()`. For date operations use `date_trunc`, `date_diff`, etc.
+4. **Do NOT guess**: If you cannot find a matching table or column in the schema, do NOT invent one. Instead, use the closest available alternative or explain in the result field.
 
 ```json
 {{ query_plan }}
