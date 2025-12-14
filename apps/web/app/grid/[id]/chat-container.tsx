@@ -420,19 +420,16 @@ export const ChatContainer = ({
                                   Boolean(section.query)
                                 }
                               />
-                              {/* Show QueryPlanCard only on the section that received the plan */}
-                              {section.query_plan &&
-                                i === arr.length - 1 &&
-                                (section.status === "FeedbackRequested" ||
-                                  section.userPlanSelection !== undefined) && (
-                                  <QueryPlanCard
-                                    plan={section.query_plan}
-                                    onApprove={approvePlan}
-                                    onReject={rejectPlan}
-                                    isLoading={pending}
-                                    userSelection={section.userPlanSelection}
-                                  />
-                                )}
+                              {/* Show QueryPlanCard when section has a plan */}
+                              {section.query_plan && i === arr.length - 1 && (
+                                <QueryPlanCard
+                                  plan={section.query_plan}
+                                  onApprove={approvePlan}
+                                  onReject={rejectPlan}
+                                  isLoading={pending}
+                                  userSelection={section.userPlanSelection}
+                                />
+                              )}
                             </Box>
                           )}
                           {i % 2 !== 0 &&
