@@ -3,7 +3,7 @@ from enum import Enum
 from typing import Any, Optional, Union
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 ### General Models
 
