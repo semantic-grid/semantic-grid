@@ -1,5 +1,6 @@
 import csv
 import json
+import logging
 from io import StringIO
 from typing import Any, Optional
 from uuid import UUID, uuid4
@@ -7,6 +8,8 @@ from uuid import UUID, uuid4
 from clickhouse_driver import Client
 from fastapi import HTTPException
 from pydantic import ValidationError
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 from uuid_extensions import uuid7
@@ -918,14 +921,6 @@ def run_structured_wh_request(request: str, db: Session):
     output.close()
     logging.debug("Produced CSV", extra={"action": "create_csv", "content": csv_result})
     return {"csv": csv_result, "rows": len(rows)}
-
-
-import logging
-from typing import Optional
-
-from sqlalchemy import text
-from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import Session
 
 
 def count_wh_request(request: str, db: Session) -> Optional[int]:
