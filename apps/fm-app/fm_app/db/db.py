@@ -959,7 +959,8 @@ async def get_previous_request_with_plan(
 ) -> Optional[GetRequestModel]:
     """
     Get the most recent request in the session that has a query_plan.
-    Used for plan_approval flow to retrieve the plan from the previous FeedbackRequested request.
+    Used for plan_approval flow to retrieve the plan from the previous
+    FeedbackRequested request.
     """
     logging.info(
         "Get previous request with plan",
@@ -973,7 +974,8 @@ async def get_previous_request_with_plan(
     debug_sql = text(
         """
         SELECT request_id, sequence_number, status,
-               CASE WHEN query_plan IS NULL THEN 'NULL' ELSE 'HAS_PLAN' END as plan_status
+               CASE WHEN query_plan IS NULL THEN 'NULL'
+                    ELSE 'HAS_PLAN' END as plan_status
         FROM request
         WHERE session_id = :session_id
         ORDER BY sequence_number DESC

@@ -89,8 +89,13 @@ Please take into account now is {{ current_datetime }}.
 {% if query_plan %}
 ## Approved Query Plan
 
-The user has approved the following query plan. Generate SQL that implements this plan exactly.
-Follow the plan's structure for tables, joins, filters, aggregations, and ordering.
+The user has approved the following query plan. Generate SQL that implements this plan's intent.
+
+**CRITICAL**: 
+- Use ONLY table names from the Database Schema section below (fully-qualified names like `iceberg.radius.table_name`)
+- Use ONLY column names that exist in the Database Schema section below
+- Do NOT invent or assume table/column names from the plan - the plan is a high-level description
+- If the plan mentions a concept (like "first_seen"), find the actual column in the schema that represents it
 
 ```json
 {{ query_plan }}
@@ -106,6 +111,10 @@ Follow the plan's structure for tables, joins, filters, aggregations, and orderi
 {{ relevant_schema }}
 {% endif %}
 {% endif %}
+
+## Database Schema
+
+**IMPORTANT**: Only use tables and columns listed below. All table names must be fully-qualified (catalog.schema.table).
 
 {{ db_meta_prompt_items }}
 
