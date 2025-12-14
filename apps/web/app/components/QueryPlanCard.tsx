@@ -17,6 +17,7 @@ import {
   Stack,
   Typography,
 } from "@mui/material";
+import { useState } from "react";
 
 import type { TQueryPlan } from "@/app/lib/types";
 
@@ -44,8 +45,12 @@ export const QueryPlanCard = ({
   };
   const complexityColor = getComplexityColor();
 
-  // Accordions should be collapsed when user has made a selection
-  const accordionsCollapsed = userSelection !== null;
+  // Use controlled state for accordions - start collapsed if user already made selection
+  const [detailsExpanded, setDetailsExpanded] = useState(false);
+  const [assumptionsExpanded, setAssumptionsExpanded] = useState(
+    userSelection === null,
+  );
+  const [paramsExpanded, setParamsExpanded] = useState(false);
 
   return (
     <Box
@@ -84,7 +89,8 @@ export const QueryPlanCard = ({
 
       {/* Details Accordion */}
       <Accordion
-        defaultExpanded={false}
+        expanded={detailsExpanded}
+        onChange={(_, expanded) => setDetailsExpanded(expanded)}
         disableGutters
         elevation={0}
         sx={{
@@ -279,7 +285,8 @@ export const QueryPlanCard = ({
       {/* Assumptions */}
       {plan.assumptions.length > 0 && (
         <Accordion
-          defaultExpanded={!accordionsCollapsed}
+          expanded={assumptionsExpanded}
+          onChange={(_, expanded) => setAssumptionsExpanded(expanded)}
           disableGutters
           elevation={0}
           sx={{
@@ -317,7 +324,8 @@ export const QueryPlanCard = ({
       {/* Default Parameters */}
       {plan.default_params.length > 0 && (
         <Accordion
-          defaultExpanded={false}
+          expanded={paramsExpanded}
+          onChange={(_, expanded) => setParamsExpanded(expanded)}
           disableGutters
           elevation={0}
           sx={{

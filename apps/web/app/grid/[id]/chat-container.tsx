@@ -38,7 +38,8 @@ const rows = (count: number | undefined) =>
   count ? ` ${count?.toLocaleString()} rows` : "";
 
 const isVisible = (text: string | undefined = "") =>
-  text !== "Starting from existing query";
+  text !== "Starting from existing query" &&
+  text !== "Approved - proceed with SQL generation";
 
 export const ChatContainer = ({
   id,
@@ -419,16 +420,19 @@ export const ChatContainer = ({
                                   Boolean(section.query)
                                 }
                               />
-                              {/* Show QueryPlanCard when there's a plan */}
-                              {section.query_plan && i === arr.length - 1 && (
-                                <QueryPlanCard
-                                  plan={section.query_plan}
-                                  onApprove={approvePlan}
-                                  onReject={rejectPlan}
-                                  isLoading={pending}
-                                  userSelection={section.userPlanSelection}
-                                />
-                              )}
+                              {/* Show QueryPlanCard only on the section that received the plan */}
+                              {section.query_plan &&
+                                i === arr.length - 1 &&
+                                (section.status === "FeedbackRequested" ||
+                                  section.userPlanSelection !== undefined) && (
+                                  <QueryPlanCard
+                                    plan={section.query_plan}
+                                    onApprove={approvePlan}
+                                    onReject={rejectPlan}
+                                    isLoading={pending}
+                                    userSelection={section.userPlanSelection}
+                                  />
+                                )}
                             </Box>
                           )}
                           {i % 2 !== 0 &&
