@@ -187,6 +187,8 @@ export type TChatMessage = {
   query_plan?: TQueryPlan; // Query plan for multi-step flow
 };
 
+export type UserPlanSelection = "approved" | "rejected" | "commented" | null;
+
 export type TChatSection = {
   id: string;
   requestId?: string; // UUID of the request
@@ -199,6 +201,7 @@ export type TChatSection = {
   query?: TQuery; // Optional query object
   view?: TView; // Optional view object
   query_plan?: TQueryPlan; // Query plan for multi-step flow
+  userPlanSelection?: UserPlanSelection; // User's response to query plan
 };
 
 export type TChat = {

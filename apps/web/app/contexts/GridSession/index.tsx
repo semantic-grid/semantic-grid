@@ -941,10 +941,22 @@ export const GridSessionProvider = ({
   // MAIN EFFECT == HANDLE USER QUERY SUBMISSION AND RESPONSE POLLING
   useEffect(() => {
     if (prompt) {
+      const reqType = requestType();
+      // If submitting feedback on a plan, mark the section as "commented"
+      if (reqType === "plan_amendment") {
+        setSects((prevSects) =>
+          prevSects.map((s, idx, allS) => {
+            if (idx === allS.length - 1) {
+              return { ...s, userPlanSelection: "commented" as const };
+            }
+            return s;
+          }),
+        );
+      }
       setPending(true);
       createRequest({
         request: prompt,
-        requestType: requestType(),
+        requestType: reqType,
         flow: "Interactive",
         model: model.value,
         db: "V2",
@@ -1081,6 +1093,15 @@ export const GridSessionProvider = ({
 
   // Approve query plan - submit plan_approval request
   const approvePlan = useCallback(() => {
+    // Mark the current section as approved before submitting
+    setSects((prevSects) =>
+      prevSects.map((s, idx, allS) => {
+        if (idx === allS.length - 1) {
+          return { ...s, userPlanSelection: "approved" as const };
+        }
+        return s;
+      }),
+    );
     setPending(true);
     createRequest({
       request: "Approved - proceed with SQL generation",
@@ -1100,13 +1121,14 @@ export const GridSessionProvider = ({
 
   // Reject query plan - mark as rejected and ask user what to do instead
   const rejectPlan = useCallback(() => {
-    // Update the last section's status to PlanRejected
+    // Update the last section's status to PlanRejected and mark selection
     setSects((prevSects) =>
       prevSects.map((s, idx, allS) => {
         if (idx === allS.length - 1) {
           return {
             ...s,
             status: "PlanRejected",
+            userPlanSelection: "rejected" as const,
             messages: s.messages
               ? [
                   ...s.messages.slice(0, s.messages.length - 1),

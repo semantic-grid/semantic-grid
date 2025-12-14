@@ -80,13 +80,9 @@ export const ResponseTextStatus = ({
     return <PulsingText variant="body2">Summarizing...</PulsingText>;
   }
 
-  // FeedbackRequested is a terminal-like state waiting for user action
+  // FeedbackRequested - don't show status text, QueryPlanCard handles the UI
   if (lastMessage && status === "FeedbackRequested") {
-    return (
-      <Typography variant="body2" color="primary">
-        {Status[status]}
-      </Typography>
-    );
+    return null;
   }
 
   // PlanRejected - user rejected the plan and can start fresh
