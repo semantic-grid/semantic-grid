@@ -44,6 +44,9 @@ export const QueryPlanCard = ({
   };
   const complexityColor = getComplexityColor();
 
+  // Accordions should be collapsed when user has made a selection
+  const accordionsCollapsed = userSelection !== null;
+
   return (
     <Box
       sx={{
@@ -276,7 +279,7 @@ export const QueryPlanCard = ({
       {/* Assumptions */}
       {plan.assumptions.length > 0 && (
         <Accordion
-          defaultExpanded
+          defaultExpanded={!accordionsCollapsed}
           disableGutters
           elevation={0}
           sx={{
@@ -314,6 +317,7 @@ export const QueryPlanCard = ({
       {/* Default Parameters */}
       {plan.default_params.length > 0 && (
         <Accordion
+          defaultExpanded={false}
           disableGutters
           elevation={0}
           sx={{
@@ -350,41 +354,43 @@ export const QueryPlanCard = ({
 
       <Divider sx={{ my: 1 }} />
 
-      {/* Action Buttons or User Selection State */}
-      {userSelection ? (
-        <Box sx={{ textAlign: "right" }}>
-          <Typography variant="caption" color="text.secondary">
-            {userSelection === "approved" && "Approved"}
-            {userSelection === "rejected" && "Rejected"}
-            {userSelection === "commented" && "Feedback provided"}
-          </Typography>
-        </Box>
-      ) : (
-        <Stack direction="row" spacing={1} justifyContent="flex-end">
+      {/* Action Buttons - show only selected button when user has acted */}
+      <Stack direction="row" spacing={1} justifyContent="flex-end">
+        {/* Show Reject button: when no selection, or when rejected */}
+        {(userSelection === null || userSelection === "rejected") && (
           <Button
             variant="text"
             color="error"
             size="small"
             startIcon={<CloseIcon sx={{ fontSize: "1rem" }} />}
             onClick={onReject}
-            disabled={isLoading}
+            disabled={isLoading || userSelection === "rejected"}
             sx={{ textTransform: "none" }}
           >
             Reject
           </Button>
+        )}
+        {/* Show Approve button: when no selection, or when approved */}
+        {(userSelection === null || userSelection === "approved") && (
           <Button
             variant="text"
             color="success"
             size="small"
             startIcon={<CheckIcon sx={{ fontSize: "1rem" }} />}
             onClick={onApprove}
-            disabled={isLoading}
+            disabled={isLoading || userSelection === "approved"}
             sx={{ textTransform: "none" }}
           >
             Approve & Generate SQL
           </Button>
-        </Stack>
-      )}
+        )}
+        {/* Show feedback indicator when user commented */}
+        {userSelection === "commented" && (
+          <Typography variant="caption" color="text.secondary">
+            Feedback provided
+          </Typography>
+        )}
+      </Stack>
     </Box>
   );
 };
