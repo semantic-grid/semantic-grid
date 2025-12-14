@@ -834,9 +834,12 @@ export const GridSessionProvider = ({
   }, [context]);
 
   const requestType = () => {
-    // Check if we're in FeedbackRequested state - user is providing plan amendment
+    // Check if we're in FeedbackRequested or PlanRejected state - user is providing plan amendment
     const lastSection = sects[sects.length - 1];
-    if (lastSection?.status === "FeedbackRequested") {
+    if (
+      lastSection?.status === "FeedbackRequested" ||
+      lastSection?.status === "PlanRejected"
+    ) {
       return "plan_amendment";
     }
 
@@ -1106,9 +1109,9 @@ export const GridSessionProvider = ({
     });
   }, [sessionId, refs, query?.query_id, model.value]);
 
-  // Reject query plan - mark as rejected and ask user what to do instead
+  // Reject query plan - mark as rejected and add a new message asking what to do
   const rejectPlan = useCallback(() => {
-    // Update the last section's status to PlanRejected
+    // Update the last section's status to PlanRejected and add rejection message
     setSects((prevSects) =>
       prevSects.map((s, idx, allS): TChatSection => {
         if (idx === allS.length - 1 && s.messages && s.messages.length > 0) {
@@ -1116,6 +1119,12 @@ export const GridSessionProvider = ({
           const updatedMessages: TChatMessage[] = [
             ...s.messages.slice(0, -1),
             { ...lastMessage, status: "PlanRejected" } as TChatMessage,
+            {
+              uid: crypto.randomUUID(),
+              isBot: true,
+              text: "Plan rejected. What would you like to do instead?",
+              status: "PlanRejected",
+            },
           ];
           return {
             ...s,
