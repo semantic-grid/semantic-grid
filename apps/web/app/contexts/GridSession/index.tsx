@@ -942,7 +942,6 @@ export const GridSessionProvider = ({
   useEffect(() => {
     if (prompt) {
       const reqType = requestType();
-      const isPlanAmendment = reqType === "plan_amendment";
       setPending(true);
       createRequest({
         request: prompt,
@@ -955,19 +954,7 @@ export const GridSessionProvider = ({
         queryId: query?.query_id,
       }).then((request) => {
         console.log("request", request, "for query", query);
-        // If plan amendment, mark section as "commented" AND add new message
-        setSects((prevSects) => {
-          let updatedSects = prevSects;
-          if (isPlanAmendment) {
-            updatedSects = prevSects.map((s, idx, allS) => {
-              if (idx === allS.length - 1) {
-                return { ...s, userPlanSelection: "commented" as const };
-              }
-              return s;
-            });
-          }
-          return withNewMessage(request as any, prompt)(updatedSects);
-        });
+        setSects(withNewMessage(request as any, prompt));
         return request;
       });
     }
@@ -1107,16 +1094,7 @@ export const GridSessionProvider = ({
       queryId: query?.query_id,
     }).then((request) => {
       console.log("plan approval request", request);
-      // Mark current section as approved AND add new message in single update
-      setSects((prevSects) => {
-        const updatedSects = prevSects.map((s, idx, allS) => {
-          if (idx === allS.length - 1) {
-            return { ...s, userPlanSelection: "approved" as const };
-          }
-          return s;
-        });
-        return withNewMessage(request as any, "Plan approved")(updatedSects);
-      });
+      setSects(withNewMessage(request as any, "Plan approved"));
       return request;
     });
   }, [sessionId, refs, query?.query_id, model.value]);

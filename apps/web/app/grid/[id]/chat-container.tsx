@@ -427,7 +427,7 @@ export const ChatContainer = ({
                                   onApprove={approvePlan}
                                   onReject={rejectPlan}
                                   isLoading={pending}
-                                  userSelection={section.userPlanSelection}
+                                  disabled={idx !== sects.length - 1}
                                 />
                               )}
                             </Box>
