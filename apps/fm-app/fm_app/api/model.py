@@ -3,7 +3,7 @@ from enum import Enum
 from typing import Any, Optional, Union
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 ### General Models
 
@@ -240,16 +240,18 @@ class QueryPlan(BaseModel):
     allowing users to verify intent before SQL is generated.
     """
 
+    model_config = {"extra": "allow"}
+
     # Tables involved
-    tables: list[str]
-    primary_table: str
+    tables: list[str] = []
+    primary_table: str = ""
 
     # Relationships
     # Accept either structured objects or simple strings for flexibility
     joins: list[Union[QueryPlanJoin, str]] = []
 
     # Data selection
-    columns_selected: list[str]  # columns to return (human-readable descriptions)
+    columns_selected: list[str] = []  # columns to return (human-readable)
     # Accept either structured objects or simple strings for flexibility
     filters: list[Union[QueryPlanFilter, str]] = []
 
@@ -267,7 +269,7 @@ class QueryPlan(BaseModel):
     default_params: list[str] = []  # e.g., "Using default limit of 1000 rows"
 
     # Human-readable summary
-    plan_summary: str  # 2-3 sentence explanation of what the query will do
+    plan_summary: str = ""  # 2-3 sentence explanation of what the query will do
 
     # Complexity indicators (for transparency)
     estimated_complexity: str = "moderate"  # "simple", "moderate", "complex"
@@ -275,6 +277,79 @@ class QueryPlan(BaseModel):
 
     # Schema context for SQL generation (extracted during planning)
     relevant_schema: Optional[str] = None  # Schema subset for tables in this plan
+
+    @field_validator(
+        "tables",
+        "columns_selected",
+        "group_by",
+        "order_by",
+        "assumptions",
+        "default_params",
+        mode="before",
+    )
+    @classmethod
+    def coerce_string_to_list(cls, v):
+        """Handle LLM returning a string instead of a list."""
+        if v is None:
+            return []
+        if isinstance(v, str):
+            # If it's a non-empty string, wrap it in a list
+            return [v] if v.strip() else []
+        if isinstance(v, list):
+            # Filter out any non-string items and convert to strings
+            return [str(item) for item in v if item is not None]
+        return []
+
+    @field_validator("joins", "filters", "aggregations", mode="before")
+    @classmethod
+    def coerce_complex_to_list(cls, v):
+        """Handle LLM returning a string instead of a list for complex fields."""
+        if v is None:
+            return []
+        if isinstance(v, str):
+            # If it's a non-empty string, wrap it in a list
+            return [v] if v.strip() else []
+        if isinstance(v, list):
+            return v
+        if isinstance(v, dict):
+            # Single object, wrap in list
+            return [v]
+        return []
+
+    @field_validator("primary_table", "plan_summary", mode="before")
+    @classmethod
+    def coerce_to_string(cls, v):
+        """Handle LLM returning non-string values for string fields."""
+        if v is None:
+            return ""
+        if isinstance(v, list):
+            # If list, join elements or return empty
+            return ", ".join(str(item) for item in v) if v else ""
+        return str(v)
+
+    @field_validator("limit", mode="before")
+    @classmethod
+    def coerce_limit(cls, v):
+        """Handle LLM returning empty list or other unexpected values for limit."""
+        if v is None:
+            return None
+        if isinstance(v, list):
+            return None if len(v) == 0 else str(v)
+        if isinstance(v, (int, str)):
+            return v
+        return str(v)
+
+    @field_validator("estimated_complexity", mode="before")
+    @classmethod
+    def coerce_complexity(cls, v):
+        """Ensure complexity is a valid string, default to 'moderate'."""
+        if v is None or (isinstance(v, list) and len(v) == 0):
+            return "moderate"
+        if isinstance(v, list):
+            return str(v[0]) if v else "moderate"
+        valid_values = {"simple", "moderate", "complex"}
+        str_v = str(v).lower()
+        return str_v if str_v in valid_values else "moderate"
 
 
 class PromptItemType(str, Enum):
