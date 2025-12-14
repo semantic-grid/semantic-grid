@@ -86,6 +86,27 @@ Please take into account now is {{ current_datetime }}.
 
 {{ selected_column_data }}
 
+{% if query_plan %}
+## Approved Query Plan
+
+The user has approved the following query plan. Generate SQL that implements this plan exactly.
+Follow the plan's structure for tables, joins, filters, aggregations, and ordering.
+
+```json
+{{ query_plan }}
+```
+
+{% if plan_summary %}
+**Plan Summary**: {{ plan_summary }}
+{% endif %}
+
+{% if relevant_schema %}
+## Relevant Schema (from Query Plan)
+
+{{ relevant_schema }}
+{% endif %}
+{% endif %}
+
 {{ db_meta_prompt_items }}
 
 {{ db_ref_prompt_items }}

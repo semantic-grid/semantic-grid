@@ -194,28 +194,42 @@ class IntentAnalysis(BaseModel):
 class QueryPlanJoin(BaseModel):
     """Describes a join between two tables in the query plan."""
 
-    left_table: str
-    right_table: str
-    join_type: str  # "inner", "left", "right", "full", "cross"
-    join_condition: str  # human-readable, e.g., "on user_id"
+    left_table: Optional[str] = None
+    right_table: Optional[str] = None
+    join_type: Optional[str] = Field(
+        default=None, alias="type"
+    )  # "inner", "left", "right", "full", "cross"
+    join_condition: Optional[str] = Field(
+        default=None, alias="condition"
+    )  # human-readable, e.g., "on user_id"
+
+    model_config = {"populate_by_name": True, "extra": "allow"}
 
 
 class QueryPlanFilter(BaseModel):
     """Describes a filter/WHERE condition in the query plan."""
 
-    column: str
-    operator: str  # "=", ">", "<", ">=", "<=", "!=", "like", "in", "between"
-    value: str  # human-readable value representation
+    column: Optional[str] = None
+    operator: Optional[str] = (
+        None  # "=", ">", "<", ">=", "<=", "!=", "like", "in", "between"
+    )
+    value: Optional[str] = None  # human-readable value representation
     source: str = "inferred"  # "user_specified", "default", "inferred"
+
+    model_config = {"extra": "allow"}
 
 
 class QueryPlanAggregation(BaseModel):
     """Describes an aggregation in the query plan."""
 
-    function: str  # "count", "sum", "avg", "min", "max", "count_distinct"
+    function: Optional[str] = (
+        None  # "count", "sum", "avg", "min", "max", "count_distinct"
+    )
     column: Optional[str] = None  # column being aggregated, or "*" for count(*)
     alias: Optional[str] = None  # result column name
     description: Optional[str] = None  # human-readable description as fallback
+
+    model_config = {"extra": "allow"}
 
 
 class QueryPlan(BaseModel):

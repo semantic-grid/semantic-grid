@@ -91,6 +91,9 @@ slots:
         selected_column_data,
         db_meta_prompt_items,
         # db_ref_prompt_items,
+        query_plan, # approved query plan from multistep flow
+        plan_summary, # summary from approved plan
+        relevant_schema, # schema subset from plan
       ]
     outputs: [query_metadata]
     requires:
