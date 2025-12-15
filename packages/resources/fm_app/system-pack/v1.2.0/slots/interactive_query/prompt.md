@@ -80,6 +80,8 @@ Please take into account now is {{ current_datetime }}.
 
 {{ parent_query_metadata }}
 
+{{ parent_query_plan }}
+
 {{ parent_session_id }}
 
 {{ selected_row_data }}

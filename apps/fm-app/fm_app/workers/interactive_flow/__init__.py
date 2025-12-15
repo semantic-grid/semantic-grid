@@ -201,38 +201,51 @@ async def interactive_flow(
             InteractiveRequestType.linked_session,
             InteractiveRequestType.interactive_query,
         ):
-            # Determine if planning step should run based on planning_mode setting
+            # Always generate a plan for lineage/analytics
+            # Then decide whether to wait for user approval or auto-approve
             settings = get_settings()
             planning_mode = PlanningMode(settings.planning_mode)
 
-            should_run_planning = False
+            # Generate plan for every query (ensures plan_id lineage)
+            try:
+                query_plan, plan_id = await generate_query_plan(ctx, intent.intent)
+            except Exception as e:
+                ctx.logger.error(
+                    "Query planning failed",
+                    flow_stage="error_query_plan",
+                    error=str(e),
+                    error_type=type(e).__name__,
+                )
+                # Fall back to query without plan on planning failure
+                await handle_interactive_query(ctx, intent)
+                return req
+
+            # Determine if we need user approval or can auto-approve
+            requires_user_approval = False
             if planning_mode == PlanningMode.always:
-                should_run_planning = True
+                # Always require approval regardless of complexity
+                requires_user_approval = True
             elif planning_mode == PlanningMode.intent_based:
-                should_run_planning = intent.requires_plan_approval
-            # planning_mode == PlanningMode.never: should_run_planning stays False
+                # Require approval based on intent analysis AND plan complexity
+                # Auto-approve if: intent says simple OR plan complexity is "simple"
+                is_simple = (
+                    not intent.requires_plan_approval
+                    or query_plan.estimated_complexity == "simple"
+                )
+                requires_user_approval = not is_simple
+            # planning_mode == PlanningMode.never: requires_user_approval stays False
 
             ctx.logger.info(
                 "Planning decision",
                 flow_stage="planning_decision",
                 planning_mode=str(planning_mode),
-                requires_plan_approval=intent.requires_plan_approval,
-                should_run_planning=should_run_planning,
+                intent_requires_approval=intent.requires_plan_approval,
+                plan_complexity=query_plan.estimated_complexity,
+                requires_user_approval=requires_user_approval,
+                plan_id=str(plan_id) if plan_id else None,
             )
 
-            if should_run_planning:
-                try:
-                    query_plan, plan_id = await generate_query_plan(ctx, intent.intent)
-                except Exception as e:
-                    # Log the exception for debugging
-                    ctx.logger.error(
-                        "Query planning failed",
-                        flow_stage="error_query_plan",
-                        error=str(e),
-                        error_type=type(e).__name__,
-                    )
-                    return req
-
+            if requires_user_approval:
                 # Store plan in structured response and return for user approval
                 if req.structured_response is None:
                     req.structured_response = StructuredResponse()
@@ -244,8 +257,16 @@ async def interactive_flow(
                 )
                 return req
 
-            # Simple query - proceed directly to SQL generation
-            await handle_interactive_query(ctx, intent)
+            # Auto-approve: proceed directly to SQL generation with plan context
+            ctx.logger.info(
+                "Auto-approving plan",
+                flow_stage="plan_auto_approve",
+                plan_id=str(plan_id) if plan_id else None,
+                plan_summary=query_plan.plan_summary[:100] if query_plan else None,
+            )
+            await handle_interactive_query(
+                ctx, intent, query_plan=query_plan, plan_id=plan_id
+            )
             return req
 
         elif intent.request_type == InteractiveRequestType.data_analysis:
