@@ -992,9 +992,8 @@ const RequestDetailDrawer = ({
           borderTop: "1px solid",
           borderColor: "divider",
           display: "flex",
-          flexWrap: "wrap",
-          gap: 2,
-          alignItems: "center",
+          flexDirection: "column",
+          gap: 0.5,
         }}
       >
         <Typography variant="caption" color="text.secondary">
@@ -1011,9 +1010,8 @@ const RequestDetailDrawer = ({
             Query: {request.query.query_id}
           </Typography>
         )}
-        <Box sx={{ flex: 1 }} />
         <Typography variant="caption" color="text.secondary">
-          {new Date(request.created_at).toLocaleString()}
+          Date: {new Date(request.created_at).toLocaleString()}
         </Typography>
       </Box>
     </Drawer>
@@ -1118,6 +1116,13 @@ const Page = withPageAuthRequired(
           flex: 1,
           minWidth: 300,
           sortable: true,
+          renderCell: (params) => {
+            const request = params.value as string;
+            const isApproval = request?.startsWith(
+              "Approved - proceed with SQL generation",
+            );
+            return isApproval ? params.row.intent || request : request;
+          },
         },
         {
           field: "sql",
