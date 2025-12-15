@@ -110,12 +110,18 @@ The user has approved the following query plan. Generate SQL that implements thi
 
 {{ relevant_schema }}
 {% endif %}
-{% endif %}
 
-## Database Schema
+## Reference Materials
 
-**IMPORTANT**: Only use tables and columns listed below. All table names must be fully-qualified (catalog.schema.table).
+The following sections contain query examples, domain-specific business rules, and SQL dialect instructions.
 
 {{ db_meta_prompt_items }}
+{% else %}
+## Reference Materials
+
+**IMPORTANT**: Only use tables and columns from the Database Schema below. All table names must be fully-qualified (catalog.schema.table).
+
+{{ db_meta_prompt_items }}
+{% endif %}
 
 {{ db_ref_prompt_items }}
