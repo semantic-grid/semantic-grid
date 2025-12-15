@@ -170,6 +170,7 @@ const TraceStepRow = ({
           label={step.step_type}
           size="small"
           color={STEP_TYPE_COLORS[step.step_type] || "default"}
+          variant="outlined"
           sx={{ minWidth: 120 }}
         />
         {step.model && (
@@ -375,7 +376,12 @@ const TraceSection = ({ requestId }: { requestId: string }) => {
               />
             )}
             {trace.summary?.has_errors && (
-              <Chip label="Has errors" size="small" color="error" />
+              <Chip
+                label="Has errors"
+                size="small"
+                color="error"
+                variant="outlined"
+              />
             )}
           </Box>
           <Typography variant="caption" color="text.secondary">
@@ -424,6 +430,7 @@ const TraceSection = ({ requestId }: { requestId: string }) => {
                 <Chip
                   label={promptContent.prompt_item_type || "Unknown type"}
                   size="small"
+                  variant="outlined"
                 />
                 <Typography variant="caption" color="text.secondary">
                   Hash: {promptContent.content_hash?.slice(0, 16)}...
@@ -492,6 +499,7 @@ const DataFetchRow = ({
           label={dataFetch.status}
           size="small"
           color={DATA_FETCH_STATUS_COLORS[dataFetch.status] || "default"}
+          variant="outlined"
           sx={{ minWidth: 80 }}
         />
         {dataFetch.cache_hit && (
@@ -673,7 +681,14 @@ const DataFetchesSection = ({
               variant="outlined"
             />
           )}
-          {hasErrors && <Chip label="Has errors" size="small" color="error" />}
+          {hasErrors && (
+            <Chip
+              label="Has errors"
+              size="small"
+              color="error"
+              variant="outlined"
+            />
+          )}
         </Box>
         <Typography variant="caption" color="text.secondary">
           {formatDuration(totalDuration)}
@@ -745,13 +760,31 @@ const RequestDetailDrawer = ({
     isFixed !== (request.is_fixed ?? false) ||
     fixComment !== (request.fix_comment ?? "");
 
+  // Check if this is an "Approved - proceed with SQL generation" request
+  const isApprovalRequest = request.request?.startsWith(
+    "Approved - proceed with SQL generation",
+  );
+
+  // Display text: use intent for approval requests, otherwise original request
+  const displayRequest = isApprovalRequest
+    ? request.intent || request.request
+    : request.request;
+
+  // Show intent field only for original requests (not approval requests) that have intent
+  const showIntent = !isApprovalRequest && request.intent;
+
   return (
     <Drawer
       anchor="right"
       open={open}
       onClose={onClose}
       PaperProps={{
-        sx: { width: { xs: "100%", sm: "600px", md: "800px" }, p: 3 },
+        sx: {
+          width: { xs: "100%", sm: "600px", md: "800px" },
+          p: 3,
+          display: "flex",
+          flexDirection: "column",
+        },
       }}
     >
       <Box
@@ -768,7 +801,7 @@ const RequestDetailDrawer = ({
         </IconButton>
       </Box>
 
-      <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 3, flex: 1 }}>
         {/* Admin Controls */}
         <Box
           sx={{
@@ -829,25 +862,6 @@ const RequestDetailDrawer = ({
           </Button>
         </Box>
 
-        {/* User & Date */}
-        <Box>
-          <Typography variant="subtitle2" color="text.secondary">
-            User
-          </Typography>
-          <Typography variant="body1">
-            {request.session?.user || "Unknown"}
-          </Typography>
-        </Box>
-
-        <Box>
-          <Typography variant="subtitle2" color="text.secondary">
-            Date
-          </Typography>
-          <Typography variant="body1">
-            {new Date(request.created_at).toLocaleString()}
-          </Typography>
-        </Box>
-
         {/* Rating */}
         {request.rating !== null && request.rating !== undefined && (
           <Box>
@@ -882,9 +896,19 @@ const RequestDetailDrawer = ({
               borderRadius: 1,
             }}
           >
-            {request.request}
+            {displayRequest}
           </Typography>
         </Box>
+
+        {/* Intent - only for original requests */}
+        {showIntent && (
+          <Box>
+            <Typography variant="subtitle2" color="text.secondary">
+              Intent
+            </Typography>
+            <Typography variant="body1">{request.intent}</Typography>
+          </Box>
+        )}
 
         {/* SQL */}
         {request.sql && (
@@ -919,16 +943,6 @@ const RequestDetailDrawer = ({
             >
               Run Query
             </Button>
-          </Box>
-        )}
-
-        {/* Intent */}
-        {request.intent && (
-          <Box>
-            <Typography variant="subtitle2" color="text.secondary">
-              Intent
-            </Typography>
-            <Typography variant="body1">{request.intent}</Typography>
           </Box>
         )}
 
@@ -968,18 +982,39 @@ const RequestDetailDrawer = ({
           </Typography>
           <DataFetchesSection dataFetches={request.data_fetches} />
         </Box>
+      </Box>
 
-        {/* Session & Request IDs */}
-        <Box
-          sx={{ mt: 2, pt: 2, borderTop: "1px solid", borderColor: "divider" }}
-        >
-          <Typography variant="caption" color="text.secondary" display="block">
-            Session ID: {request.session_id}
+      {/* Footer with User, IDs, and Date */}
+      <Box
+        sx={{
+          mt: 3,
+          pt: 2,
+          borderTop: "1px solid",
+          borderColor: "divider",
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 2,
+          alignItems: "center",
+        }}
+      >
+        <Typography variant="caption" color="text.secondary">
+          User: {request.session?.user || "Unknown"}
+        </Typography>
+        <Typography variant="caption" color="text.secondary">
+          Session: {request.session_id}
+        </Typography>
+        <Typography variant="caption" color="text.secondary">
+          Request: {request.request_id}
+        </Typography>
+        {request.query?.query_id && (
+          <Typography variant="caption" color="text.secondary">
+            Query: {request.query.query_id}
           </Typography>
-          <Typography variant="caption" color="text.secondary" display="block">
-            Request ID: {request.request_id}
-          </Typography>
-        </Box>
+        )}
+        <Box sx={{ flex: 1 }} />
+        <Typography variant="caption" color="text.secondary">
+          {new Date(request.created_at).toLocaleString()}
+        </Typography>
       </Box>
     </Drawer>
   );
