@@ -59,32 +59,36 @@ async def interactive_flow(
 
     elif req.request_type == InteractiveRequestType.plan_approval:
         # User approved a plan - skip intent analysis and proceed directly
-        # Get the approved plan from the previous FeedbackRequested request
+        # Get the approved plan from the query_plan table (first-class entity)
         from fm_app.db.db import get_previous_request_with_plan
+        from fm_app.db.query_plan_db import get_latest_plan_for_session
 
         prev_request = await get_previous_request_with_plan(req.session_id, ctx.db)
-        query_plan = None
+
+        # Get the plan from DB (primary source)
+        plan_record = await get_latest_plan_for_session(ctx.db, req.session_id)
+        plan_id = plan_record.plan_id if plan_record else None
+
+        # Convert DB record to QueryPlan for the handler
+        query_plan = plan_record.to_query_plan() if plan_record else None
+
+        # Fallback to JSONB if DB record not found (backward compatibility)
+        if query_plan is None and prev_request and prev_request.query_plan:
+            query_plan = prev_request.query_plan
+            ctx.logger.info(
+                "Falling back to JSONB query_plan",
+                flow_stage="plan_approval_fallback",
+                previous_request_id=str(prev_request.request_id),
+            )
 
         ctx.logger.info(
             "Processing plan_approval request",
             flow_stage="plan_approval_start",
             has_prev_request=prev_request is not None,
             prev_request_id=str(prev_request.request_id) if prev_request else None,
-            prev_has_query_plan=prev_request.query_plan is not None
-            if prev_request
-            else False,
+            plan_id=str(plan_id) if plan_id else None,
+            has_query_plan=query_plan is not None,
         )
-
-        if prev_request and prev_request.query_plan:
-            query_plan = prev_request.query_plan
-            ctx.logger.info(
-                "Retrieved query plan from previous request",
-                flow_stage="plan_approval_retrieve",
-                previous_request_id=str(prev_request.request_id),
-                plan_summary=query_plan.plan_summary
-                if hasattr(query_plan, "plan_summary")
-                else str(query_plan)[:100],
-            )
 
         if query_plan is None:
             ctx.logger.warning(
@@ -101,13 +105,18 @@ async def interactive_flow(
         else:
             # IMPORTANT: Override req.request with the original intent so the LLM
             # generates SQL for the original query, not for "Approved - proceed..."
-            original_intent = prev_request.intent if prev_request else req.request
+            original_intent = (
+                plan_record.original_intent
+                if plan_record
+                else (prev_request.intent if prev_request else req.request)
+            )
             req.request = original_intent
 
             ctx.logger.info(
                 "Using original intent for SQL generation",
                 flow_stage="plan_approval_intent_override",
                 original_intent=original_intent[:200] if original_intent else None,
+                plan_id=str(plan_id) if plan_id else None,
             )
 
             # Create intent using the original intent from the plan request
@@ -116,17 +125,29 @@ async def interactive_flow(
                 request_type=InteractiveRequestType.plan_approval,
                 requires_plan_approval=False,
             )
-            await handle_interactive_query(ctx, intent, query_plan=query_plan)
+            # Pass plan_id so the query can be linked to the plan after creation
+            await handle_interactive_query(
+                ctx, intent, query_plan=query_plan, plan_id=plan_id
+            )
         return req
 
     elif req.request_type == InteractiveRequestType.plan_amendment:
         # User requested changes to the plan - re-run planning with their feedback
         from fm_app.db.db import get_previous_request_with_plan
+        from fm_app.db.query_plan_db import get_latest_plan_for_session
 
         prev_request = await get_previous_request_with_plan(req.session_id, ctx.db)
 
+        # Get the previous plan from DB (first-class entity)
+        prev_plan = await get_latest_plan_for_session(ctx.db, req.session_id)
+        parent_plan_id = prev_plan.plan_id if prev_plan else None
+
         # Build combined intent: original intent + user's amendment request
-        original_intent = prev_request.intent if prev_request else ""
+        original_intent = (
+            prev_plan.original_intent
+            if prev_plan
+            else (prev_request.intent if prev_request else "")
+        )
         amendment_request = req.request
 
         combined_intent = f"{original_intent}\n\nUser feedback: {amendment_request}"
@@ -136,11 +157,17 @@ async def interactive_flow(
             flow_stage="plan_amendment",
             original_intent=original_intent,
             amendment_request=amendment_request,
+            parent_plan_id=str(parent_plan_id) if parent_plan_id else None,
         )
 
-        # Re-run query planning with the combined intent
+        # Re-run query planning with the combined intent and parent plan reference
         try:
-            query_plan = await generate_query_plan(ctx, combined_intent)
+            query_plan, plan_id = await generate_query_plan(
+                ctx,
+                combined_intent,
+                parent_plan_id=parent_plan_id,
+                amendment_feedback=amendment_request,
+            )
         except Exception as e:
             ctx.logger.error(
                 "Query planning failed during amendment",
@@ -195,7 +222,7 @@ async def interactive_flow(
 
             if should_run_planning:
                 try:
-                    query_plan = await generate_query_plan(ctx, intent.intent)
+                    query_plan, plan_id = await generate_query_plan(ctx, intent.intent)
                 except Exception as e:
                     # Log the exception for debugging
                     ctx.logger.error(

@@ -1,6 +1,10 @@
 """Query planner - generate human-readable query plan before SQL generation."""
 
+from typing import Optional
+from uuid import UUID
+
 from fm_app.api.model import (
+    CreateQueryPlanModel,
     McpServerRequest,
     QueryPlan,
     RequestStatus,
@@ -10,11 +14,17 @@ from fm_app.db.db import (
     get_query_history,
     update_request_status,
 )
+from fm_app.db.query_plan_db import create_query_plan
 from fm_app.tracing import TracingTimer
 from fm_app.workers.interactive_flow.setup import FlowContext, build_prompt_variables
 
 
-async def generate_query_plan(ctx: FlowContext, intent: str) -> QueryPlan:
+async def generate_query_plan(
+    ctx: FlowContext,
+    intent: str,
+    parent_plan_id: Optional[UUID] = None,
+    amendment_feedback: Optional[str] = None,
+) -> tuple[QueryPlan, UUID]:
     """
     Generate a human-readable query plan for user approval.
 
@@ -29,6 +39,15 @@ async def generate_query_plan(ctx: FlowContext, intent: str) -> QueryPlan:
     - Default parameters applied
 
     The user can approve the plan or provide feedback to modify it.
+
+    Args:
+        ctx: Flow context with DB session, logger, etc.
+        intent: The user's intent (original or combined with amendments)
+        parent_plan_id: ID of the previous plan if this is an amendment
+        amendment_feedback: User's feedback that triggered this plan iteration
+
+    Returns:
+        Tuple of (QueryPlan, plan_id) where plan_id is the UUID of the saved plan
     """
     req = ctx.req
     logger = ctx.logger
@@ -177,6 +196,39 @@ async def generate_query_plan(ctx: FlowContext, intent: str) -> QueryPlan:
         complexity=llm_response.estimated_complexity,
     )
 
+    # Save plan to query_plan table
+    # Extract original intent (before any "User feedback:" additions)
+    original_intent = intent.split("\n\nUser feedback:")[0] if intent else ""
+
+    plan_db_model = CreateQueryPlanModel.from_query_plan(
+        plan=llm_response,
+        session_id=req.session_id,
+        request_id=req.request_id,
+        original_intent=original_intent,
+        parent_id=parent_plan_id,
+        amendment_feedback=amendment_feedback,
+    )
+
+    try:
+        saved_plan = await create_query_plan(db, plan_db_model)
+        plan_id = saved_plan.plan_id
+
+        logger.info(
+            "Saved query plan to database",
+            flow_stage="save_query_plan",
+            flow_step_num=next(flow_step),
+            plan_id=str(plan_id),
+            parent_plan_id=str(parent_plan_id) if parent_plan_id else None,
+        )
+    except Exception as e:
+        logger.error(
+            "Failed to save query plan to database",
+            flow_stage="error_save_query_plan",
+            error=str(e),
+        )
+        # Continue without failing - the plan still works, just not persisted
+        plan_id = None
+
     # Note: FeedbackRequested status is set by the orchestrator after this returns
 
-    return llm_response
+    return llm_response, plan_id

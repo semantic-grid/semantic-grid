@@ -28,6 +28,7 @@ refine queries and build on previous results.
 
 import re
 from typing import Optional
+from uuid import UUID
 
 from fm_app.api.model import (
     CreateQueryModel,
@@ -50,6 +51,7 @@ from fm_app.db.db import (
     update_request_status,
     update_session_name,
 )
+from fm_app.db.query_plan_db import update_query_plan_id
 from fm_app.mcp_servers.db_meta import db_meta_mcp_analyze_query
 from fm_app.tracing import TracingTimer
 from fm_app.validators import MetadataValidator
@@ -60,6 +62,7 @@ async def handle_interactive_query(
     ctx: FlowContext,
     intent: IntentAnalysis,
     query_plan: Optional[QueryPlan] = None,
+    plan_id: Optional[UUID] = None,
 ) -> None:
     """
     Handle interactive query flow with SQL generation and repair loop.
@@ -68,6 +71,7 @@ async def handle_interactive_query(
         ctx: Flow context with shared state
         intent: Intent analysis result
         query_plan: Optional approved query plan (if multistep flow)
+        plan_id: Optional plan ID to link the resulting query to
     """
     req = ctx.req
     logger = ctx.logger
@@ -169,6 +173,8 @@ async def handle_interactive_query(
             flow=req.flow,
         ),
         "flow_step_num": next(flow_step),
+        # Signal to MCP provider to skip schema fetch if plan provides it
+        "has_query_plan": query_plan is not None and bool(query_plan.relevant_schema),
     }
 
     with TracingTimer() as prompt_timer:
@@ -772,6 +778,24 @@ async def handle_interactive_query(
                     query_id=new_query_stored.query_id,
                 ),
             )
+
+            # Link query to the plan that produced it (if plan_id provided)
+            if plan_id is not None:
+                try:
+                    await update_query_plan_id(db, new_query_stored.query_id, plan_id)
+                    logger.info(
+                        "Linked query to plan",
+                        flow_stage="link_query_to_plan",
+                        flow_step_num=next(flow_step),
+                        query_id=str(new_query_stored.query_id),
+                        plan_id=str(plan_id),
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "Failed to link query to plan",
+                        flow_stage="link_query_to_plan_error",
+                        error=str(e),
+                    )
 
         elif new_metadata.get("result") is not None:
             req.response = new_metadata.get("result")

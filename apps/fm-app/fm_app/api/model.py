@@ -352,6 +352,129 @@ class QueryPlan(BaseModel):
         return str_v if str_v in valid_values else "moderate"
 
 
+### Query Plan DB Models (for first-class query plan storage)
+
+
+class CreateQueryPlanModel(BaseModel):
+    """Model for creating a new query plan record in the database."""
+
+    session_id: UUID
+    request_id: UUID
+    parent_id: Optional[UUID] = None  # Previous plan iteration
+    original_intent: str
+    amendment_feedback: Optional[str] = None  # User feedback that triggered this plan
+
+    # Plan content (from QueryPlan)
+    tables: list[str] = []
+    primary_table: str = ""
+    joins: list[Any] = []
+    columns_selected: list[str] = []
+    filters: list[Any] = []
+    aggregations: list[Any] = []
+    group_by: list[str] = []
+    order_by: list[str] = []
+    plan_limit: Optional[str] = None
+    assumptions: list[str] = []
+    default_params: list[str] = []
+    plan_summary: str
+    estimated_complexity: str = "moderate"
+    reason_for_approval: Optional[str] = None
+    relevant_schema: Optional[str] = None
+
+    @classmethod
+    def from_query_plan(
+        cls,
+        plan: "QueryPlan",
+        session_id: UUID,
+        request_id: UUID,
+        original_intent: str,
+        parent_id: Optional[UUID] = None,
+        amendment_feedback: Optional[str] = None,
+    ) -> "CreateQueryPlanModel":
+        """Create a DB model from a QueryPlan."""
+        return cls(
+            session_id=session_id,
+            request_id=request_id,
+            parent_id=parent_id,
+            original_intent=original_intent,
+            amendment_feedback=amendment_feedback,
+            tables=plan.tables,
+            primary_table=plan.primary_table,
+            joins=plan.joins,
+            columns_selected=plan.columns_selected,
+            filters=plan.filters,
+            aggregations=plan.aggregations,
+            group_by=plan.group_by,
+            order_by=plan.order_by,
+            plan_limit=str(plan.limit) if plan.limit else None,
+            assumptions=plan.assumptions,
+            default_params=plan.default_params,
+            plan_summary=plan.plan_summary,
+            estimated_complexity=plan.estimated_complexity,
+            reason_for_approval=plan.reason_for_approval,
+            relevant_schema=plan.relevant_schema,
+        )
+
+
+class GetQueryPlanModel(BaseModel):
+    """Model for reading a query plan record from the database."""
+
+    plan_id: UUID
+    session_id: UUID
+    request_id: UUID
+    parent_id: Optional[UUID] = None
+    original_intent: str
+    amendment_feedback: Optional[str] = None
+
+    # Plan content
+    tables: list[str] = []
+    primary_table: str = ""
+    joins: list[Any] = []
+    columns_selected: list[str] = []
+    filters: list[Any] = []
+    aggregations: list[Any] = []
+    group_by: list[str] = []
+    order_by: list[str] = []
+    plan_limit: Optional[str] = None
+    assumptions: list[str] = []
+    default_params: list[str] = []
+    plan_summary: str
+    estimated_complexity: str = "moderate"
+    reason_for_approval: Optional[str] = None
+    relevant_schema: Optional[str] = None
+
+    # Timestamps
+    created_at: datetime
+    updated_at: datetime
+
+    def to_query_plan(self) -> "QueryPlan":
+        """Convert DB model back to QueryPlan for API responses."""
+        return QueryPlan(
+            tables=self.tables,
+            primary_table=self.primary_table,
+            joins=self.joins,
+            columns_selected=self.columns_selected,
+            filters=self.filters,
+            aggregations=self.aggregations,
+            group_by=self.group_by,
+            order_by=self.order_by,
+            limit=self.plan_limit,
+            assumptions=self.assumptions,
+            default_params=self.default_params,
+            plan_summary=self.plan_summary,
+            estimated_complexity=self.estimated_complexity,
+            reason_for_approval=self.reason_for_approval,
+            relevant_schema=self.relevant_schema,
+        )
+
+
+class QueryPlanChainModel(BaseModel):
+    """Model for returning a chain of query plans (amendment history)."""
+
+    plans: list[GetQueryPlanModel]
+    total_iterations: int
+
+
 class PromptItemType(str, Enum):
     db_struct = "DBStruct"
     query_example = "QueryExample"
