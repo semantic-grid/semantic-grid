@@ -20,11 +20,100 @@ from fm_app.workers.interactive_flow.data_analysis import handle_data_analysis
 from fm_app.workers.interactive_flow.discovery import handle_discovery
 from fm_app.workers.interactive_flow.general_response import handle_general_response
 from fm_app.workers.interactive_flow.intent_analyzer import analyze_intent
-from fm_app.workers.interactive_flow.interactive_query import handle_interactive_query
+from fm_app.workers.interactive_flow.interactive_query import (
+    QueryResult,
+    handle_interactive_query,
+)
 from fm_app.workers.interactive_flow.linked_query import handle_linked_query
 from fm_app.workers.interactive_flow.manual_query import handle_manual_query
 from fm_app.workers.interactive_flow.query_planner import generate_query_plan
 from fm_app.workers.interactive_flow.setup import initialize_flow
+
+
+async def _handle_replan_on_failure(
+    ctx,
+    req: WorkerRequest,
+    intent: IntentAnalysis,
+    query_result: QueryResult,
+    original_plan_id=None,
+) -> WorkerRequest:
+    """
+    Handle re-planning when query generation fails after max retries.
+
+    This function generates a new plan with error context and returns it
+    to the user for approval. The user must explicitly approve the new plan.
+
+    Args:
+        ctx: Flow context
+        req: Worker request
+        intent: Original intent analysis
+        query_result: Result from failed query generation (contains errors)
+        original_plan_id: ID of the plan that led to failure (for lineage)
+
+    Returns:
+        WorkerRequest with new plan for user approval
+    """
+    # Build error context for the new plan
+    error_context = ""
+    if query_result.errors:
+        error_msgs = [
+            f"- {e.get('type', 'error')}: {e.get('error', 'unknown')}"
+            for e in query_result.errors
+        ]
+        error_context = (
+            "\n\nPrevious SQL generation failed with errors:\n"
+            + "\n".join(error_msgs)
+            + "\n\nPlease create a revised plan that avoids these issues."
+        )
+
+    # Combine original intent with error feedback
+    combined_intent = f"{intent.intent}{error_context}"
+
+    ctx.logger.info(
+        "Re-planning after query failure",
+        flow_stage="replan_on_failure",
+        original_plan_id=str(original_plan_id) if original_plan_id else None,
+        error_count=len(query_result.errors) if query_result.errors else 0,
+    )
+
+    try:
+        new_plan, new_plan_id = await generate_query_plan(
+            ctx,
+            combined_intent,
+            parent_plan_id=original_plan_id,
+            amendment_feedback="Query generation failed - revised plan needed",
+        )
+    except Exception as e:
+        ctx.logger.error(
+            "Re-planning also failed",
+            flow_stage="error_replan",
+            error=str(e),
+        )
+        # Keep the error status from query generation
+        return req
+
+    # Return new plan for user approval (always require approval for re-plans)
+    if req.structured_response is None:
+        req.structured_response = StructuredResponse()
+    req.structured_response.query_plan = new_plan
+    req.structured_response.intent = intent.intent
+    req.structured_response.replan_reason = (
+        "The previous plan could not be executed successfully. "
+        "Please review the revised plan."
+    )
+    req.status = RequestStatus.feedback_requested
+    await update_request_status(
+        RequestStatus.feedback_requested, None, ctx.db, req.request_id
+    )
+
+    ctx.logger.info(
+        "Re-plan generated, awaiting user approval",
+        flow_stage="replan_awaiting_approval",
+        new_plan_id=str(new_plan_id) if new_plan_id else None,
+        plan_summary=new_plan.plan_summary[:100] if new_plan else None,
+    )
+
+    return req
 
 
 async def interactive_flow(
@@ -101,7 +190,8 @@ async def interactive_flow(
                 request_type=InteractiveRequestType.interactive_query,
                 requires_plan_approval=False,
             )
-            await handle_interactive_query(ctx, intent)
+            query_result = await handle_interactive_query(ctx, intent)
+            # No re-planning for fallback case (no plan to re-plan from)
         else:
             # IMPORTANT: Override req.request with the original intent so the LLM
             # generates SQL for the original query, not for "Approved - proceed..."
@@ -126,9 +216,15 @@ async def interactive_flow(
                 requires_plan_approval=False,
             )
             # Pass plan_id so the query can be linked to the plan after creation
-            await handle_interactive_query(
+            query_result = await handle_interactive_query(
                 ctx, intent, query_plan=query_plan, plan_id=plan_id
             )
+
+            # Handle re-planning if query generation failed after max retries
+            if query_result.needs_replan:
+                return await _handle_replan_on_failure(
+                    ctx, req, intent, query_result, original_plan_id=plan_id
+                )
         return req
 
     elif req.request_type == InteractiveRequestType.plan_amendment:
@@ -217,7 +313,8 @@ async def interactive_flow(
                     error_type=type(e).__name__,
                 )
                 # Fall back to query without plan on planning failure
-                await handle_interactive_query(ctx, intent)
+                # No re-planning for this case (planning itself failed)
+                _ = await handle_interactive_query(ctx, intent)
                 return req
 
             # Determine if we need user approval or can auto-approve
@@ -264,9 +361,15 @@ async def interactive_flow(
                 plan_id=str(plan_id) if plan_id else None,
                 plan_summary=query_plan.plan_summary[:100] if query_plan else None,
             )
-            await handle_interactive_query(
+            query_result = await handle_interactive_query(
                 ctx, intent, query_plan=query_plan, plan_id=plan_id
             )
+
+            # Handle re-planning if query generation failed after max retries
+            if query_result.needs_replan:
+                return await _handle_replan_on_failure(
+                    ctx, req, intent, query_result, original_plan_id=plan_id
+                )
             return req
 
         elif intent.request_type == InteractiveRequestType.data_analysis:

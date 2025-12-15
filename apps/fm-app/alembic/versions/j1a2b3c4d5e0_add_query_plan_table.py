@@ -36,6 +36,7 @@ def upgrade() -> None:
             primary_table VARCHAR,
             joins JSONB DEFAULT '[]',
             columns_selected JSONB DEFAULT '[]',
+            columns_referenced JSONB DEFAULT '[]',
             filters JSONB DEFAULT '[]',
             aggregations JSONB DEFAULT '[]',
             group_by JSONB DEFAULT '[]',

@@ -21,12 +21,14 @@ Key features:
 - Stores rich metadata including columns, explanations, and row counts
 - Supports conversational queries that reference previous queries in the session
 - Validates that metadata columns exactly match SQL result columns
+- On max retries: signals orchestrator to re-plan (requires user approval)
 
 This flow is optimized for interactive data exploration where users iteratively
 refine queries and build on previous results.
 """
 
 import re
+from dataclasses import dataclass
 from typing import Optional
 from uuid import UUID
 
@@ -58,12 +60,21 @@ from fm_app.validators import MetadataValidator
 from fm_app.workers.interactive_flow.setup import FlowContext, build_prompt_variables
 
 
+@dataclass
+class QueryResult:
+    """Result of interactive query generation."""
+
+    success: bool
+    needs_replan: bool = False
+    errors: Optional[list[dict]] = None
+
+
 async def handle_interactive_query(
     ctx: FlowContext,
     intent: IntentAnalysis,
     query_plan: Optional[QueryPlan] = None,
     plan_id: Optional[UUID] = None,
-) -> None:
+) -> QueryResult:
     """
     Handle interactive query flow with SQL generation and repair loop.
 
@@ -72,6 +83,9 @@ async def handle_interactive_query(
         intent: Intent analysis result
         query_plan: Optional approved query plan (if multistep flow)
         plan_id: Optional plan ID to link the resulting query to
+
+    Returns:
+        QueryResult with success status and optional re-plan signal
     """
     req = ctx.req
     logger = ctx.logger
@@ -279,7 +293,7 @@ async def handle_interactive_query(
             )
             if tracer:
                 await tracer.finalize()
-            return
+            return QueryResult(success=False)
 
         if ai_model.get_name() != "gemini":
             messages.append(
@@ -828,7 +842,7 @@ async def handle_interactive_query(
                     error_type="no_sql_output",
                 )
                 await tracer.finalize()
-            return
+            return QueryResult(success=False)
 
         # Complete the flow
         logger.info(
@@ -866,7 +880,7 @@ async def handle_interactive_query(
         if tracer:
             await tracer.finalize()
 
-        return
+        return QueryResult(success=True)
 
     # If we reach here, exhausted all attempts
     # Build detailed error message with all retry errors
@@ -902,3 +916,7 @@ async def handle_interactive_query(
 
     req.status = RequestStatus.error
     req.err = detailed_error
+
+    # Signal that re-planning is needed - orchestrator will handle this
+    # by generating a new plan with the error context and returning to user
+    return QueryResult(success=False, needs_replan=True, errors=retry_errors)

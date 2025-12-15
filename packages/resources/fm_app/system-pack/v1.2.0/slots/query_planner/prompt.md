@@ -36,17 +36,25 @@ The user has made a request that requires a complex query. Your job is to:
 
 Create a query plan that describes:
 
-1. **Tables**: Which table(s) will be used (use fully-qualified names)
+1. **Tables**: Which table(s) will be used (use fully-qualified names from schema)
 2. **Primary Table**: The main table the query is based on
 3. **Joins**: If multiple tables, how they connect (which columns link them)
 4. **Columns Selected**: What data will be returned (in human terms)
-5. **Filters**: What conditions will filter the data
-6. **Aggregations**: Any calculations (counts, sums, averages)
-7. **Grouping**: How results will be grouped
-8. **Ordering**: How results will be sorted
-9. **Limit**: Any row limits applied
-10. **Assumptions**: Any interpretations you're making about ambiguous terms
-11. **Default Parameters**: Any default values being applied
+5. **Columns Referenced**: List of ACTUAL column names from the schema that will be
+   used in the query. This includes columns for SELECT, WHERE, JOIN, GROUP BY, ORDER BY.
+   Use EXACT column names as they appear in the schema - do NOT use conceptual names.
+   Example: use "event_timestamp" not "first_seen", use "nas_identifier" not "wallet_id"
+6. **Filters**: What conditions will filter the data
+7. **Aggregations**: Any calculations (counts, sums, averages)
+8. **Grouping**: How results will be grouped
+9. **Ordering**: How results will be sorted
+10. **Limit**: Any row limits applied
+11. **Assumptions**: Any interpretations you're making about ambiguous terms
+12. **Default Parameters**: Any default values being applied
+
+**CRITICAL**: The `columns_referenced` field is validated against the database schema.
+If you reference a column that doesn't exist, the plan will be rejected. Always verify
+column names against the schema provided above before including them.
 
 ---
 

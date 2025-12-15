@@ -56,23 +56,23 @@ async def create_query_plan(
         """
         INSERT INTO query_plan (
             session_id, request_id, parent_id,
-            tables, primary_table, joins, columns_selected, filters,
-            aggregations, group_by, order_by, plan_limit,
+            tables, primary_table, joins, columns_selected, columns_referenced,
+            filters, aggregations, group_by, order_by, plan_limit,
             assumptions, default_params, plan_summary, estimated_complexity,
             reason_for_approval, relevant_schema,
             original_intent, amendment_feedback
         )
         VALUES (
             :session_id, :request_id, :parent_id,
-            :tables, :primary_table, :joins, :columns_selected, :filters,
-            :aggregations, :group_by, :order_by, :plan_limit,
+            :tables, :primary_table, :joins, :columns_selected, :columns_referenced,
+            :filters, :aggregations, :group_by, :order_by, :plan_limit,
             :assumptions, :default_params, :plan_summary, :estimated_complexity,
             :reason_for_approval, :relevant_schema,
             :original_intent, :amendment_feedback
         )
         RETURNING plan_id, session_id, request_id, parent_id,
-                  tables, primary_table, joins, columns_selected, filters,
-                  aggregations, group_by, order_by, plan_limit,
+                  tables, primary_table, joins, columns_selected, columns_referenced,
+                  filters, aggregations, group_by, order_by, plan_limit,
                   assumptions, default_params, plan_summary, estimated_complexity,
                   reason_for_approval, relevant_schema,
                   original_intent, amendment_feedback,
@@ -91,6 +91,7 @@ async def create_query_plan(
                 "primary_table": data.primary_table,
                 "joins": json_dumps_safe(data.joins),
                 "columns_selected": json_dumps_safe(data.columns_selected),
+                "columns_referenced": json_dumps_safe(data.columns_referenced),
                 "filters": json_dumps_safe(data.filters),
                 "aggregations": json_dumps_safe(data.aggregations),
                 "group_by": json_dumps_safe(data.group_by),
@@ -127,8 +128,8 @@ async def get_query_plan_by_id(
     select_sql = text(
         """
         SELECT plan_id, session_id, request_id, parent_id,
-               tables, primary_table, joins, columns_selected, filters,
-               aggregations, group_by, order_by, plan_limit,
+               tables, primary_table, joins, columns_selected, columns_referenced,
+               filters, aggregations, group_by, order_by, plan_limit,
                assumptions, default_params, plan_summary, estimated_complexity,
                reason_for_approval, relevant_schema,
                original_intent, amendment_feedback,
@@ -163,8 +164,8 @@ async def get_query_plan_by_request_id(
     select_sql = text(
         """
         SELECT plan_id, session_id, request_id, parent_id,
-               tables, primary_table, joins, columns_selected, filters,
-               aggregations, group_by, order_by, plan_limit,
+               tables, primary_table, joins, columns_selected, columns_referenced,
+               filters, aggregations, group_by, order_by, plan_limit,
                assumptions, default_params, plan_summary, estimated_complexity,
                reason_for_approval, relevant_schema,
                original_intent, amendment_feedback,
@@ -199,8 +200,8 @@ async def get_latest_plan_for_session(
     select_sql = text(
         """
         SELECT plan_id, session_id, request_id, parent_id,
-               tables, primary_table, joins, columns_selected, filters,
-               aggregations, group_by, order_by, plan_limit,
+               tables, primary_table, joins, columns_selected, columns_referenced,
+               filters, aggregations, group_by, order_by, plan_limit,
                assumptions, default_params, plan_summary, estimated_complexity,
                reason_for_approval, relevant_schema,
                original_intent, amendment_feedback,
@@ -243,8 +244,8 @@ async def get_plan_chain(
         WITH RECURSIVE plan_chain AS (
             -- Base case: start with the given plan
             SELECT plan_id, session_id, request_id, parent_id,
-                   tables, primary_table, joins, columns_selected, filters,
-                   aggregations, group_by, order_by, plan_limit,
+                   tables, primary_table, joins, columns_selected, columns_referenced,
+                   filters, aggregations, group_by, order_by, plan_limit,
                    assumptions, default_params, plan_summary, estimated_complexity,
                    reason_for_approval, relevant_schema,
                    original_intent, amendment_feedback,
@@ -257,19 +258,19 @@ async def get_plan_chain(
 
             -- Recursive case: get parent plans
             SELECT p.plan_id, p.session_id, p.request_id, p.parent_id,
-                   p.tables, p.primary_table, p.joins, p.columns_selected, p.filters,
-                   p.aggregations, p.group_by, p.order_by, p.plan_limit,
-                   p.assumptions, p.default_params, p.plan_summary,
-                   p.estimated_complexity, p.reason_for_approval, p.relevant_schema,
-                   p.original_intent, p.amendment_feedback,
+                   p.tables, p.primary_table, p.joins, p.columns_selected,
+                   p.columns_referenced, p.filters, p.aggregations, p.group_by,
+                   p.order_by, p.plan_limit, p.assumptions, p.default_params,
+                   p.plan_summary, p.estimated_complexity, p.reason_for_approval,
+                   p.relevant_schema, p.original_intent, p.amendment_feedback,
                    p.created_at, p.updated_at,
                    pc.depth + 1
             FROM query_plan p
             INNER JOIN plan_chain pc ON p.plan_id = pc.parent_id
         )
         SELECT plan_id, session_id, request_id, parent_id,
-               tables, primary_table, joins, columns_selected, filters,
-               aggregations, group_by, order_by, plan_limit,
+               tables, primary_table, joins, columns_selected, columns_referenced,
+               filters, aggregations, group_by, order_by, plan_limit,
                assumptions, default_params, plan_summary, estimated_complexity,
                reason_for_approval, relevant_schema,
                original_intent, amendment_feedback,
@@ -314,8 +315,8 @@ async def get_plans_for_session(
     select_sql = text(
         """
         SELECT plan_id, session_id, request_id, parent_id,
-               tables, primary_table, joins, columns_selected, filters,
-               aggregations, group_by, order_by, plan_limit,
+               tables, primary_table, joins, columns_selected, columns_referenced,
+               filters, aggregations, group_by, order_by, plan_limit,
                assumptions, default_params, plan_summary, estimated_complexity,
                reason_for_approval, relevant_schema,
                original_intent, amendment_feedback,
@@ -388,7 +389,8 @@ async def get_plan_for_query(
     select_sql = text(
         """
         SELECT qp.plan_id, qp.session_id, qp.request_id, qp.parent_id,
-               qp.tables, qp.primary_table, qp.joins, qp.columns_selected, qp.filters,
+               qp.tables, qp.primary_table, qp.joins, qp.columns_selected,
+               qp.columns_referenced, qp.filters,
                qp.aggregations, qp.group_by, qp.order_by, qp.plan_limit,
                qp.assumptions, qp.default_params, qp.plan_summary,
                qp.estimated_complexity, qp.reason_for_approval, qp.relevant_schema,

@@ -10,6 +10,8 @@ from dbmeta_app.api.model import (
     PromptItemType,
     PromptsSetModel,
     TestSqlModel,
+    ValidatePlanRequest,
+    ValidatePlanResult,
 )
 from dbmeta_app.config import get_settings
 from dbmeta_app.prompt_items.db_struct import (
@@ -19,6 +21,7 @@ from dbmeta_app.prompt_items.db_struct import (
     get_db_schema,
     get_schema_prompt_item,
     query_preflight,
+    validate_plan_against_schema,
 )
 from dbmeta_app.prompt_items.prompt_instructions import (
     get_prompt_instructions,
@@ -197,3 +200,24 @@ async def preflight_query(req: TestSqlModel) -> PreflightResult:
     """
     query = req.sql
     return query_preflight(query=query)
+
+
+@mcp.tool()
+async def validate_plan(req: ValidatePlanRequest) -> ValidatePlanResult:
+    """
+    Validate that tables and columns from a query plan exist in the database schema.
+
+    This tool checks:
+    1. All tables in the plan exist in the schema
+    2. All columns_referenced exist in the schema
+
+    Returns validation result with:
+    - valid: boolean indicating if all tables/columns exist
+    - errors: list of validation errors with type, name, and suggestion
+    - available_tables: list of valid table names (only if errors exist)
+    """
+    result = validate_plan_against_schema(
+        tables=req.tables,
+        columns_referenced=req.columns_referenced,
+    )
+    return ValidatePlanResult(**result)

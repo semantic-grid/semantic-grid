@@ -15,8 +15,12 @@ from fm_app.db.db import (
     update_request_status,
 )
 from fm_app.db.query_plan_db import create_query_plan
+from fm_app.mcp_servers.db_meta import validate_query_plan
 from fm_app.tracing import TracingTimer
 from fm_app.workers.interactive_flow.setup import FlowContext, build_prompt_variables
+
+# Maximum number of plan generation attempts before giving up
+MAX_PLAN_ATTEMPTS = 3
 
 
 async def generate_query_plan(
@@ -146,55 +150,154 @@ async def generate_query_plan(
     # Set transient Planning status while LLM generates plan
     await update_request_status(RequestStatus.planning, None, db, req.request_id)
 
-    try:
-        with TracingTimer() as llm_timer:
-            llm_response = ai_model.get_structured(
-                messages, QueryPlan, "gpt-4.1-2025-04-14"
+    # Plan generation loop with validation
+    llm_response = None
+    validation_feedback = ""
+    attempt = 0
+
+    while attempt < MAX_PLAN_ATTEMPTS:
+        attempt += 1
+
+        # Build messages with optional validation feedback from previous attempt
+        current_messages = messages.copy() if isinstance(messages, list) else messages
+        if validation_feedback and isinstance(current_messages, list):
+            # Add validation errors as system feedback for retry
+            current_messages = messages.copy()
+            current_messages.append(
+                {
+                    "role": "assistant",
+                    "content": (
+                        f"[Previous plan had validation errors: {validation_feedback}]"
+                    ),
+                }
+            )
+            current_messages.append(
+                {
+                    "role": "user",
+                    "content": (
+                        "Please regenerate the plan using only valid table "
+                        "and column names from the schema."
+                    ),
+                }
             )
 
-        # Trace LLM call
-        if tracer:
-            await tracer.trace_llm_call(
-                model=ai_model.get_name(),
-                input_messages=messages,
-                output_raw=llm_response.model_dump_json(),
-                output_parsed=llm_response.model_dump(),
-                tokens_in=None,  # TODO: get from model response if available
-                tokens_out=None,
-                duration_ms=llm_timer.duration_ms,
-                metadata={
-                    "step": "query_planner",
-                    "tables": llm_response.tables,
-                    "complexity": llm_response.estimated_complexity,
-                },
+        try:
+            with TracingTimer() as llm_timer:
+                llm_response = ai_model.get_structured(
+                    current_messages, QueryPlan, "gpt-4.1-2025-04-14"
+                )
+
+            # Trace LLM call
+            if tracer:
+                await tracer.trace_llm_call(
+                    model=ai_model.get_name(),
+                    input_messages=current_messages,
+                    output_raw=llm_response.model_dump_json(),
+                    output_parsed=llm_response.model_dump(),
+                    tokens_in=None,
+                    tokens_out=None,
+                    duration_ms=llm_timer.duration_ms,
+                    metadata={
+                        "step": "query_planner",
+                        "tables": llm_response.tables,
+                        "complexity": llm_response.estimated_complexity,
+                        "attempt": attempt,
+                    },
+                )
+
+        except Exception as e:
+            logger.error(
+                "Error generating query plan",
+                flow_stage="error_query_plan",
+                flow_step_num=next(flow_step),
+                error=str(e),
+                attempt=attempt,
             )
-    except Exception as e:
-        logger.error(
-            "Error generating query plan",
-            flow_stage="error_query_plan",
+            if tracer:
+                await tracer.trace_error(
+                    error_message=str(e),
+                    error_type="query_plan_generation_failed",
+                    metadata={"intent": intent, "attempt": attempt},
+                )
+            req.status = RequestStatus.error
+            req.err = str(e)
+            await update_request_status(
+                RequestStatus.error, req.err, db, req.request_id
+            )
+            raise
+
+        logger.info(
+            "Generated query plan",
+            flow_stage="llm_query_plan",
             flow_step_num=next(flow_step),
-            error=str(e),
+            plan_summary=llm_response.plan_summary,
+            tables=llm_response.tables,
+            columns_referenced=llm_response.columns_referenced,
+            complexity=llm_response.estimated_complexity,
+            attempt=attempt,
         )
-        # Trace error
-        if tracer:
-            await tracer.trace_error(
-                error_message=str(e),
-                error_type="query_plan_generation_failed",
-                metadata={"intent": intent},
-            )
-        req.status = RequestStatus.error
-        req.err = str(e)
-        await update_request_status(RequestStatus.error, req.err, db, req.request_id)
-        raise
 
-    logger.info(
-        "Generated query plan",
-        flow_stage="llm_query_plan",
-        flow_step_num=next(flow_step),
-        plan_summary=llm_response.plan_summary,
-        tables=llm_response.tables,
-        complexity=llm_response.estimated_complexity,
-    )
+        # Validate plan against schema
+        try:
+            validation_result = await validate_query_plan(
+                req=mcp_ctx["req"],
+                tables=llm_response.tables,
+                columns_referenced=llm_response.columns_referenced,
+                flow_step_num=next(flow_step),
+                settings=ctx.settings,
+                logger=logger,
+            )
+
+            if validation_result.valid:
+                logger.info(
+                    "Plan validation passed",
+                    flow_stage="plan_validation_success",
+                    flow_step_num=next(flow_step),
+                    attempt=attempt,
+                )
+                break  # Valid plan, exit loop
+
+            # Plan is invalid - build feedback for next attempt
+            error_msgs = []
+            for err in validation_result.errors:
+                if err.suggestion:
+                    error_msgs.append(
+                        f"{err.error_type}: '{err.name}' not found, "
+                        f"did you mean '{err.suggestion}'?"
+                    )
+                else:
+                    error_msgs.append(
+                        f"{err.error_type}: '{err.name}' does not exist in schema"
+                    )
+            validation_feedback = "; ".join(error_msgs)
+
+            logger.warning(
+                "Plan validation failed",
+                flow_stage="plan_validation_failed",
+                flow_step_num=next(flow_step),
+                attempt=attempt,
+                errors=validation_feedback,
+            )
+
+            if attempt >= MAX_PLAN_ATTEMPTS:
+                # Max attempts reached, proceed with invalid plan
+                # User will see it and can amend
+                logger.warning(
+                    "Max plan attempts reached, proceeding with invalid plan",
+                    flow_stage="plan_validation_max_attempts",
+                    attempt=attempt,
+                )
+                break
+
+        except Exception as e:
+            # Validation call failed - log but proceed with the plan
+            logger.warning(
+                "Plan validation call failed, proceeding without validation",
+                flow_stage="plan_validation_error",
+                flow_step_num=next(flow_step),
+                error=str(e),
+            )
+            break  # Proceed with plan even if validation fails
 
     # Save plan to query_plan table
     # Extract original intent (before any "User feedback:" additions)

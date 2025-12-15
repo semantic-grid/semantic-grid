@@ -177,6 +177,8 @@ class StructuredResponse(BaseModel):
     description: Optional[str] = None
     # Query plan for multistep flow (populated when status=Planning)
     query_plan: Optional["QueryPlan"] = None
+    # Reason for re-planning (when query generation failed and new plan is presented)
+    replan_reason: Optional[str] = None
 
 
 class IntentAnalysis(BaseModel):
@@ -278,9 +280,14 @@ class QueryPlan(BaseModel):
     # Schema context for SQL generation (extracted during planning)
     relevant_schema: Optional[str] = None  # Schema subset for tables in this plan
 
+    # Columns actually referenced (for validation against schema)
+    # LLM must list actual column names from schema, not user's conceptual names
+    columns_referenced: list[str] = []  # e.g., ["event_timestamp", "nas_identifier"]
+
     @field_validator(
         "tables",
         "columns_selected",
+        "columns_referenced",
         "group_by",
         "order_by",
         "assumptions",
@@ -369,6 +376,7 @@ class CreateQueryPlanModel(BaseModel):
     primary_table: str = ""
     joins: list[Any] = []
     columns_selected: list[str] = []
+    columns_referenced: list[str] = []  # Actual column names for validation
     filters: list[Any] = []
     aggregations: list[Any] = []
     group_by: list[str] = []
@@ -402,6 +410,7 @@ class CreateQueryPlanModel(BaseModel):
             primary_table=plan.primary_table,
             joins=plan.joins,
             columns_selected=plan.columns_selected,
+            columns_referenced=plan.columns_referenced,
             filters=plan.filters,
             aggregations=plan.aggregations,
             group_by=plan.group_by,
@@ -431,6 +440,7 @@ class GetQueryPlanModel(BaseModel):
     primary_table: str = ""
     joins: list[Any] = []
     columns_selected: list[str] = []
+    columns_referenced: list[str] = []
     filters: list[Any] = []
     aggregations: list[Any] = []
     group_by: list[str] = []
@@ -454,6 +464,7 @@ class GetQueryPlanModel(BaseModel):
             primary_table=self.primary_table,
             joins=self.joins,
             columns_selected=self.columns_selected,
+            columns_referenced=self.columns_referenced,
             filters=self.filters,
             aggregations=self.aggregations,
             group_by=self.group_by,
