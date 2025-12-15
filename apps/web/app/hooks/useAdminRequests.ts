@@ -139,5 +139,56 @@ export const fetchPromptVersion = async (
   if (!res.ok) {
     throw new Error("Failed to fetch prompt version");
   }
-  return res.json();
+
+// Query Explorer types and hooks
+type QueryExplorerResponse = components["schemas"]["QueryExplorerResponse"];
+export type QueryExplorerItem = components["schemas"]["QueryExplorerItem"];
+export type QueryExplorerRequestSummary =
+  components["schemas"]["QueryExplorerRequestSummary"];
+
+export const useQueryExplorer = (
+  limit: number = 50,
+  offset: number = 0,
+  search?: string,
+) => {
+  const fetcher = ([url, limit, offset, search]: [
+    string,
+    number,
+    number,
+    string | undefined,
+  ]) => {
+    const params = new URLSearchParams({
+      limit: String(limit),
+      offset: String(offset),
+    });
+    if (search) {
+      params.set("search", search);
+    }
+    return fetch(`${url}?${params.toString()}`).then((res) => {
+      if (res.ok) return res.json();
+      throw UnauthorizedError;
+    });
+  };
+
+  const { data, error, isLoading, mutate } = useSWR<QueryExplorerResponse>(
+    ["/api/apegpt/admin/query-explorer", limit, offset, search],
+    fetcher,
+    {
+      shouldRetryOnError: false,
+      revalidateOnFocus: false,
+      revalidateOnMount: true,
+      revalidateOnReconnect: false,
+      refreshWhenOffline: false,
+      refreshWhenHidden: false,
+      refreshInterval: 0,
+    },
+  );
+
+  return {
+    data: data?.queries,
+    total: data?.total ?? 0,
+    error,
+    isLoading,
+    mutate,
+  };
 };

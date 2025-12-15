@@ -786,6 +786,76 @@ class AdminQueriesResponse(BaseModel):
     offset: int
 
 
+### Query Explorer Models (for admin observability)
+
+
+class QueryExplorerRequestSummary(BaseModel):
+    """Summary of a request that contributed to a query."""
+
+    request_id: UUID
+    created_at: datetime
+    request_type: Optional[str] = None  # initial, plan_approval, plan_amendment, replan
+    request_text: str  # Original request text
+    status: RequestStatus
+    # Plan info (if this request generated a plan)
+    has_plan: bool = False
+    plan_summary: Optional[str] = None
+    plan_tables: Optional[list[str]] = None
+    # SQL attempts (if this request generated SQL)
+    sql_attempts: int = 0
+    sql_success: bool = False
+    # Outcome description
+    outcome: Optional[str] = None  # e.g., "Plan v1 generated", "SQL failed → replan"
+    # Trace summary
+    has_trace: bool = False
+    trace_llm_calls: int = 0
+    trace_repairs: int = 0
+    trace_errors: int = 0
+    trace_duration_ms: int = 0
+
+
+class QueryExplorerItem(BaseModel):
+    """A query with its full journey from intent to result."""
+
+    # Query info
+    query_id: UUID
+    created_at: datetime
+    summary: Optional[str] = None
+    sql: Optional[str] = None
+    row_count: Optional[int] = None
+    rating: Optional[int] = None
+
+    # Session/user info
+    session_id: UUID
+    user: Optional[str] = None
+
+    # The original intent that started this query journey
+    original_intent: Optional[str] = None
+
+    # Aggregated metrics
+    plan_iterations: int = 0  # How many plans were generated
+    sql_attempts: int = 0  # Total SQL generation attempts across all requests
+    total_duration_ms: int = 0  # From first request to query creation
+    total_tokens_in: int = 0
+    total_tokens_out: int = 0
+
+    # Contributing requests (for expansion)
+    requests: list[QueryExplorerRequestSummary] = []
+
+    # Status flags
+    had_replan: bool = False  # True if SQL generation failed and triggered replan
+    had_amendments: bool = False  # True if user amended the plan
+
+
+class QueryExplorerResponse(BaseModel):
+    """Paginated response for query explorer endpoint."""
+
+    queries: list[QueryExplorerItem]
+    total: int
+    limit: int
+    offset: int
+
+
 ### Data Fetch Models
 
 
