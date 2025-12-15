@@ -1,7 +1,7 @@
 """add_query_plan_table
 
 Revision ID: j1a2b3c4d5e0
-Revises: i1a2b3c4d5e9
+Revises: 7700d8fcfccb
 Create Date: 2025-12-15
 
 """
@@ -13,7 +13,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "j1a2b3c4d5e0"
-down_revision: Union[str, None] = "i1a2b3c4d5e9"
+down_revision: Union[str, None] = "7700d8fcfccb"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
