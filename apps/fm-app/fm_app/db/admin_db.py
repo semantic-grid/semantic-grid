@@ -484,12 +484,13 @@ async def get_query_explorer_data(
     count_res = await db.execute(count_sql, params=params)
     total = count_res.scalar() or 0
 
-    # Get queries with session info
+    # Get queries with session info (join through request table since query has no session_id)
     get_queries_sql = text(
         f"""
-        SELECT q.*, s.user_owner
+        SELECT q.*, r.session_id, s.user_owner
         FROM query q
-        LEFT JOIN session s ON q.session_id = s.session_id
+        LEFT JOIN request r ON r.query_id = q.query_id
+        LEFT JOIN session s ON r.session_id = s.session_id
         WHERE {where_clause}
         ORDER BY q.created_at DESC
         LIMIT :limit OFFSET :offset;
@@ -502,7 +503,7 @@ async def get_query_explorer_data(
         return QueryExplorerResult(queries=[], total=total)
 
     # Collect session_ids for batch fetching requests
-    session_ids = list({row["session_id"] for row in queries_data})
+    session_ids = list({row["session_id"] for row in queries_data if row["session_id"]})
 
     # Fetch all requests that contributed to these queries
     # A request contributes if it's in the same session and:

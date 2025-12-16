@@ -24,6 +24,13 @@ const GET = async (req: NextRequest) => {
       },
       headers: { Authorization: `Bearer ${token.accessToken}` },
     });
+    if (res.error) {
+      console.log("Backend error:", res.error);
+      return NextResponse.json(
+        { error: "Error fetching queries from backend" },
+        { status: 500 },
+      );
+    }
     return NextResponse.json(res.data);
   } catch (error: any) {
     console.log(error);
