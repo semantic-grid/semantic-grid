@@ -281,8 +281,10 @@ Configure all three in both fm-app and db-meta `.env` files with corresponding `
 ## Ground Rules
 
 - **NEVER switch git branches unless explicitly told to do so by the user**
+- **NEVER commit changes unless explicitly told to do so by the user**
 - Stay on the current branch for the entire session
 - If a task seems to require a different branch, ask the user first
+- If you think changes should be committed, ask the user first
 
 ## Important Notes
 
