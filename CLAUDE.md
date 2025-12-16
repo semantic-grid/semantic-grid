@@ -278,6 +278,12 @@ The system supports multiple warehouse database instances (profiles):
 
 Configure all three in both fm-app and db-meta `.env` files with corresponding `_port`, `_server`, `_params`, and `_db` suffixes.
 
+## Ground Rules
+
+- **NEVER switch git branches unless explicitly told to do so by the user**
+- Stay on the current branch for the entire session
+- If a task seems to require a different branch, ask the user first
+
 ## Important Notes
 
 - This is a monorepo managed by Turbo; always run setup tasks through Turbo to respect dependencies
