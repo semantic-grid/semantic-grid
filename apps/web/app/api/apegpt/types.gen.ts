@@ -286,6 +286,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/query-explorer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Admin Get Query Explorer
+         * @description Get query explorer data: queries with their full journey from intent to result.
+         *
+         *     For each query, returns:
+         *     - Query details (SQL, summary, row_count, rating)
+         *     - Original intent that started the journey
+         *     - All contributing requests with plan info and trace summaries
+         *     - Aggregated metrics (plan iterations, SQL attempts, duration, tokens)
+         *     - Flags for amendments and replans
+         *
+         *     Supports expandable rows in the frontend to show request-level details.
+         */
+        get: operations["admin_get_query_explorer_api_v1_admin_query_explorer_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/traces": {
         parameters: {
             query?: never;
@@ -1120,7 +1149,7 @@ export interface components {
          * InteractiveRequestType
          * @enum {string}
          */
-        InteractiveRequestType: "tbd" | "interactive_query" | "data_analysis" | "general_chat" | "disambiguation" | "linked_session" | "linked_query" | "manual_query" | "discovery" | "plan_approval";
+        InteractiveRequestType: "tbd" | "interactive_query" | "data_analysis" | "general_chat" | "disambiguation" | "linked_session" | "linked_query" | "manual_query" | "discovery" | "plan_approval" | "plan_amendment";
         /**
          * ModelType
          * @enum {string}
@@ -1151,6 +1180,160 @@ export interface components {
          */
         PromptItemType: "DBStruct" | "QueryExample" | "DataDescription" | "RefSources" | "Instruction" | "DataSample" | "SlotSchema" | "SQLDialect" | "AssembledPrompt";
         /**
+         * QueryExplorerItem
+         * @description A query with its full journey from intent to result.
+         */
+        QueryExplorerItem: {
+            /**
+             * Query Id
+             * Format: uuid
+             */
+            query_id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Summary */
+            summary?: string | null;
+            /** Sql */
+            sql?: string | null;
+            /** Row Count */
+            row_count?: number | null;
+            /** Rating */
+            rating?: number | null;
+            /**
+             * Session Id
+             * Format: uuid
+             */
+            session_id: string;
+            /** User */
+            user?: string | null;
+            /** Original Intent */
+            original_intent?: string | null;
+            /**
+             * Plan Iterations
+             * @default 0
+             */
+            plan_iterations: number;
+            /**
+             * Sql Attempts
+             * @default 0
+             */
+            sql_attempts: number;
+            /**
+             * Total Duration Ms
+             * @default 0
+             */
+            total_duration_ms: number;
+            /**
+             * Total Tokens In
+             * @default 0
+             */
+            total_tokens_in: number;
+            /**
+             * Total Tokens Out
+             * @default 0
+             */
+            total_tokens_out: number;
+            /**
+             * Requests
+             * @default []
+             */
+            requests: components["schemas"]["QueryExplorerRequestSummary"][];
+            /**
+             * Had Replan
+             * @default false
+             */
+            had_replan: boolean;
+            /**
+             * Had Amendments
+             * @default false
+             */
+            had_amendments: boolean;
+        };
+        /**
+         * QueryExplorerRequestSummary
+         * @description Summary of a request that contributed to a query.
+         */
+        QueryExplorerRequestSummary: {
+            /**
+             * Request Id
+             * Format: uuid
+             */
+            request_id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Request Type */
+            request_type?: string | null;
+            /** Request Text */
+            request_text: string;
+            status: components["schemas"]["RequestStatus"];
+            /**
+             * Has Plan
+             * @default false
+             */
+            has_plan: boolean;
+            /** Plan Summary */
+            plan_summary?: string | null;
+            /** Plan Tables */
+            plan_tables?: string[] | null;
+            /**
+             * Sql Attempts
+             * @default 0
+             */
+            sql_attempts: number;
+            /**
+             * Sql Success
+             * @default false
+             */
+            sql_success: boolean;
+            /** Outcome */
+            outcome?: string | null;
+            /**
+             * Has Trace
+             * @default false
+             */
+            has_trace: boolean;
+            /**
+             * Trace Llm Calls
+             * @default 0
+             */
+            trace_llm_calls: number;
+            /**
+             * Trace Repairs
+             * @default 0
+             */
+            trace_repairs: number;
+            /**
+             * Trace Errors
+             * @default 0
+             */
+            trace_errors: number;
+            /**
+             * Trace Duration Ms
+             * @default 0
+             */
+            trace_duration_ms: number;
+        };
+        /**
+         * QueryExplorerResponse
+         * @description Paginated response for query explorer endpoint.
+         */
+        QueryExplorerResponse: {
+            /** Queries */
+            queries: components["schemas"]["QueryExplorerItem"][];
+            /** Total */
+            total: number;
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+        };
+        /**
          * QueryPlan
          * @description Human-readable query plan for user approval before SQL generation.
          *
@@ -1158,16 +1341,25 @@ export interface components {
          *     allowing users to verify intent before SQL is generated.
          */
         QueryPlan: {
-            /** Tables */
+            /**
+             * Tables
+             * @default []
+             */
             tables: string[];
-            /** Primary Table */
+            /**
+             * Primary Table
+             * @default
+             */
             primary_table: string;
             /**
              * Joins
              * @default []
              */
             joins: (components["schemas"]["QueryPlanJoin"] | string)[];
-            /** Columns Selected */
+            /**
+             * Columns Selected
+             * @default []
+             */
             columns_selected: string[];
             /**
              * Filters
@@ -1190,7 +1382,7 @@ export interface components {
              */
             order_by: string[];
             /** Limit */
-            limit?: number | null;
+            limit?: number | string | null;
             /**
              * Assumptions
              * @default []
@@ -1201,7 +1393,10 @@ export interface components {
              * @default []
              */
             default_params: string[];
-            /** Plan Summary */
+            /**
+             * Plan Summary
+             * @default
+             */
             plan_summary: string;
             /**
              * Estimated Complexity
@@ -1212,6 +1407,13 @@ export interface components {
             reason_for_approval?: string | null;
             /** Relevant Schema */
             relevant_schema?: string | null;
+            /**
+             * Columns Referenced
+             * @default []
+             */
+            columns_referenced: string[];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * QueryPlanAggregation
@@ -1219,13 +1421,15 @@ export interface components {
          */
         QueryPlanAggregation: {
             /** Function */
-            function: string;
+            function?: string | null;
             /** Column */
             column?: string | null;
             /** Alias */
             alias?: string | null;
             /** Description */
             description?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * QueryPlanFilter
@@ -1233,16 +1437,18 @@ export interface components {
          */
         QueryPlanFilter: {
             /** Column */
-            column: string;
+            column?: string | null;
             /** Operator */
-            operator: string;
+            operator?: string | null;
             /** Value */
-            value: string;
+            value?: string | null;
             /**
              * Source
              * @default inferred
              */
             source: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * QueryPlanJoin
@@ -1250,13 +1456,15 @@ export interface components {
          */
         QueryPlanJoin: {
             /** Left Table */
-            left_table: string;
+            left_table?: string | null;
             /** Right Table */
-            right_table: string;
-            /** Join Type */
-            join_type: string;
-            /** Join Condition */
-            join_condition: string;
+            right_table?: string | null;
+            /** Type */
+            type?: string | null;
+            /** Condition */
+            condition?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /** Refs */
         Refs: {
@@ -1940,6 +2148,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminQueriesResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    admin_get_query_explorer_api_v1_admin_query_explorer_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                /** @description Search in request, SQL, or summary */
+                search?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueryExplorerResponse"];
                 };
             };
             /** @description Validation Error */

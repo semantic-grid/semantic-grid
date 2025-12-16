@@ -139,6 +139,8 @@ export const fetchPromptVersion = async (
   if (!res.ok) {
     throw new Error("Failed to fetch prompt version");
   }
+  return res.json();
+};
 
 // Query Explorer types and hooks
 type QueryExplorerResponse = components["schemas"]["QueryExplorerResponse"];
