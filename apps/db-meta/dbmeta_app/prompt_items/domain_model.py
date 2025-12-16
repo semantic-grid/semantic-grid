@@ -31,12 +31,17 @@ def get_domain_model_item(profile: str) -> PromptItem | None:
     if domain_model_path not in tree:
         return None
 
-    file_path = tree[domain_model_path]
-    try:
-        with open(file_path, "r", encoding="utf-8") as f:
-            content = f.read()
-    except (FileNotFoundError, IOError):
-        return None
+    # assemble_effective_tree returns content as bytes, not file paths
+    raw_content = tree[domain_model_path]
+    if isinstance(raw_content, bytes):
+        content = raw_content.decode("utf-8")
+    else:
+        # Fallback: if it's a path, read from file
+        try:
+            with open(raw_content, "r", encoding="utf-8") as f:
+                content = f.read()
+        except (FileNotFoundError, IOError):
+            return None
 
     if not content.strip():
         return None
@@ -50,7 +55,6 @@ def get_domain_model_item(profile: str) -> PromptItem | None:
         "profile": profile,
         "client": client,
         "env": env,
-        "source_file": str(file_path),
     }
 
     return PromptItem(

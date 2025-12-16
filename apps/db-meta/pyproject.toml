@@ -134,6 +134,8 @@ line_length = 88
 dev = [
     "black==25.1.0",
     "flake8==7.2.0",
+    "pytest>=9.0.2",
+    "pytest-asyncio>=1.3.0",
     "ruff==0.11.6",
 ]
 
