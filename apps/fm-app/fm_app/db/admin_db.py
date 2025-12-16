@@ -527,9 +527,9 @@ async def get_query_explorer_data(
         traces_sql = text(
             """
             SELECT request_id,
-                   COUNT(*) FILTER (WHERE trace_type = 'llm_call') as llm_calls,
-                   COUNT(*) FILTER (WHERE trace_type = 'repair') as repairs,
-                   COUNT(*) FILTER (WHERE trace_type = 'error') as errors,
+                   COUNT(*) FILTER (WHERE step_type = 'llm_call') as llm_calls,
+                   COUNT(*) FILTER (WHERE step_type = 'repair') as repairs,
+                   COUNT(*) FILTER (WHERE step_type = 'error') as errors,
                    SUM(duration_ms) as total_duration_ms,
                    SUM(tokens_in) as total_tokens_in,
                    SUM(tokens_out) as total_tokens_out
@@ -674,6 +674,13 @@ async def get_query_explorer_data(
             except ValidationError as e:
                 logging.warning(f"Can't validate request summary: {e}")
 
+        # Get rating from contributing requests (rating is on request, not query)
+        request_rating = None
+        for req in contributing:
+            if req.get("rating") is not None:
+                request_rating = req["rating"]
+                break
+
         try:
             item = QueryExplorerItem(
                 query_id=query_id,
@@ -681,7 +688,7 @@ async def get_query_explorer_data(
                 summary=q_row.get("summary"),
                 sql=q_row.get("sql"),
                 row_count=q_row.get("row_count"),
-                rating=q_row.get("rating"),
+                rating=request_rating,
                 session_id=session_id,
                 user=q_row.get("user_owner"),
                 original_intent=original_intent,
