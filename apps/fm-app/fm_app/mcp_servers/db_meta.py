@@ -114,7 +114,7 @@ async def get_db_meta_mcp_prompt_items_v2(
 
     # Default items if not specified
     if items is None:
-        items = ["DBStruct", "QueryExample", "Instruction", "SQLDialect"]
+        items = ["DBStruct", "QueryExample", "Instruction", "SQLDialect", "DomainModel"]
 
     client = Client(f"""{settings.dbmeta}sse""")
     async with client:

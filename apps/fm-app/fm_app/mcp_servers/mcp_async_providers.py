@@ -9,9 +9,15 @@ from fm_app.mcp_servers.db_meta import (
 from fm_app.mcp_servers.db_ref import get_db_ref_prompt_items
 
 # Define item type presets for different slots/scenarios
-MCP_ITEMS_FULL = ["DBStruct", "QueryExample", "Instruction", "SQLDialect"]
-# Planner needs schema, examples, and domain instructions to understand data model
-MCP_ITEMS_PLANNER = ["DBStruct", "QueryExample", "Instruction"]
+MCP_ITEMS_FULL = [
+    "DBStruct",
+    "QueryExample",
+    "Instruction",
+    "SQLDialect",
+    "DomainModel",
+]
+# Planner needs schema, examples, domain model to understand entity relationships
+MCP_ITEMS_PLANNER = ["DBStruct", "QueryExample", "Instruction", "DomainModel"]
 # With approved plan: skip schema (plan has it), keep examples and instructions
 MCP_ITEMS_WITH_PLAN = ["QueryExample", "Instruction", "SQLDialect"]
 

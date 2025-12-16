@@ -23,6 +23,7 @@ from dbmeta_app.prompt_items.db_struct import (
     query_preflight,
     validate_plan_against_schema,
 )
+from dbmeta_app.prompt_items.domain_model import get_domain_model_item
 from dbmeta_app.prompt_items.prompt_instructions import (
     get_prompt_instructions,
     get_prompt_instructions_item,
@@ -132,6 +133,11 @@ async def prompt_items_v2(
         elif item_type == PromptItemType.sql_dialect:
             item = get_sql_dialect_item(profile=db)
             prompt_items_list.append(item)
+
+        elif item_type == PromptItemType.domain_model:
+            item = get_domain_model_item(profile=db)
+            if item:  # Only append if domain_model.md exists
+                prompt_items_list.append(item)
 
     response = PromptsSetModel(
         prompt_items=prompt_items_list,

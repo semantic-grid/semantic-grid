@@ -11,6 +11,7 @@ class PromptItemType(str, Enum):
     instruction = "Instruction"
     data_description = "DataDescription"
     sql_dialect = "SQLDialect"
+    domain_model = "DomainModel"
 
 
 class GetPromptModel(BaseModel):
