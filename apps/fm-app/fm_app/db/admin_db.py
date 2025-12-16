@@ -484,7 +484,7 @@ async def get_query_explorer_data(
     count_res = await db.execute(count_sql, params=params)
     total = count_res.scalar() or 0
 
-    # Get queries with session info (join through request table since query has no session_id)
+    # Get queries with session info (join through request table)
     get_queries_sql = text(
         f"""
         SELECT q.*, r.session_id, s.user_owner
@@ -509,21 +509,10 @@ async def get_query_explorer_data(
     # A request contributes if it's in the same session and:
     # 1. Its query_id matches (direct link), OR
     # 2. It was created before/during query creation (intent, planning, etc.)
-    #
-    # Note: Uses LEFT JOIN to query_plan - works even if:
-    # - query_plan table is empty (new feature)
-    # - current_plan_id is NULL (older requests)
-    # - query_plan migration hasn't been applied (columns will be NULL)
     requests_sql = text(
         """
-        SELECT r.*,
-               qp.id as plan_id,
-               qp.plan_summary,
-               qp.tables as plan_tables,
-               qp.iteration_number as plan_iteration,
-               qp.status as plan_status
+        SELECT r.*
         FROM request r
-        LEFT JOIN query_plan qp ON r.current_plan_id = qp.id
         WHERE r.session_id = ANY(:session_ids)
         ORDER BY r.created_at ASC;
         """
@@ -591,27 +580,32 @@ async def get_query_explorer_data(
         for req in contributing:
             req_id = req["request_id"]
 
-            # Determine request type based on status and context
+            # Determine request type based on request text content
             request_type = "initial"
-            if req.get("plan_id"):
-                if req.get("plan_iteration", 1) > 1:
-                    request_type = "plan_amendment"
-                    had_amendments = True
-                else:
-                    request_type = "plan_approval"
-            # Check if this is a replan (structured_response contains replan_reason)
+            request_text = req.get("request") or ""
             structured = req.get("structured_response") or {}
+
+            # Check if this is a plan approval
+            if request_text.startswith("Approved"):
+                request_type = "plan_approval"
+            # Check if this is an amendment
+            elif "amend" in request_text.lower() or "change" in request_text.lower():
+                request_type = "plan_amendment"
+                had_amendments = True
+            # Check if this is a replan (structured_response contains replan_reason)
             if isinstance(structured, dict) and structured.get("replan_reason"):
                 request_type = "replan"
                 had_replan = True
 
             # Capture original intent from first request
             if original_intent is None and req.get("request"):
-                original_intent = req["request"]
+                # Skip approval messages for original intent
+                if not request_text.startswith("Approved"):
+                    original_intent = req["request"]
 
-            # Count plan iterations
-            if req.get("plan_id"):
-                plan_iterations = max(plan_iterations, req.get("plan_iteration", 1))
+            # Count plan iterations from query_plan in request if available
+            if req.get("query_plan"):
+                plan_iterations += 1
 
             # Count SQL attempts (based on structured_response or trace)
             sql_attempts = 0
@@ -638,20 +632,24 @@ async def get_query_explorer_data(
             status = req.get("status")
             if status == "error":
                 outcome = "Error occurred"
-            elif req.get("plan_summary"):
-                outcome = f"Plan: {req['plan_summary'][:50]}..."
             elif req.get("query_id") == query_id:
                 outcome = "Query generated"
 
-            # Plan tables as list of strings
+            # Plan tables from query_plan JSONB if available
             plan_tables = None
-            if req.get("plan_tables"):
-                tables_data = req["plan_tables"]
+            query_plan = req.get("query_plan")
+            if isinstance(query_plan, dict) and query_plan.get("tables"):
+                tables_data = query_plan["tables"]
                 if isinstance(tables_data, list):
                     plan_tables = [
                         t.get("name") if isinstance(t, dict) else str(t)
                         for t in tables_data
                     ]
+
+            # Get plan summary from query_plan JSONB
+            plan_summary = None
+            if isinstance(query_plan, dict):
+                plan_summary = query_plan.get("plan_summary")
 
             try:
                 summary = QueryExplorerRequestSummary(
@@ -660,8 +658,8 @@ async def get_query_explorer_data(
                     request_type=request_type,
                     request_text=req.get("request") or "",
                     status=RequestStatus(status) if status else RequestStatus.error,
-                    has_plan=bool(req.get("plan_id")),
-                    plan_summary=req.get("plan_summary"),
+                    has_plan=bool(query_plan),
+                    plan_summary=plan_summary,
                     plan_tables=plan_tables,
                     sql_attempts=sql_attempts,
                     sql_success=req.get("query_id") == query_id,

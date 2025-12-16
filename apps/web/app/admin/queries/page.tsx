@@ -1,7 +1,7 @@
 "use client";
 
 import { withPageAuthRequired } from "@auth0/nextjs-auth0/client";
-import { Close, Edit,Loop, Search } from "@mui/icons-material";
+import { Close, Search } from "@mui/icons-material";
 import {
   Box,
   Button,
@@ -26,7 +26,6 @@ import * as React from "react";
 import HighlightedSQL from "@/app/components/SqlView";
 import {
   type QueryExplorerItem,
-  type QueryExplorerRequestSummary,
   useQueryExplorer,
   useRequestTrace,
 } from "@/app/hooks/useAdminRequests";
@@ -71,167 +70,21 @@ const STATUS_COLORS: Record<
 
 // Custom footer with pagination
 const CustomFooter = () => (
-    <GridFooterContainer>
-      <Box sx={{ flex: 1 }} />
-      <GridPagination />
-    </GridFooterContainer>
-  );
+  <GridFooterContainer>
+    <Box sx={{ flex: 1 }} />
+    <GridPagination />
+  </GridFooterContainer>
+);
 
-// Request Summary Row Component (for expanded view)
-const RequestSummaryRow = ({
-  request,
-  onViewDetails,
-}: {
-  request: QueryExplorerRequestSummary;
-  onViewDetails: (requestId: string) => void;
-}) => (
-    <Box
-      sx={{
-        display: "flex",
-        alignItems: "center",
-        gap: 1,
-        py: 1,
-        px: 2,
-        borderBottom: "1px solid",
-        borderColor: "divider",
-        "&:hover": { backgroundColor: "action.hover" },
-        cursor: "pointer",
-      }}
-      onClick={() => onViewDetails(request.request_id)}
-    >
-      <Typography
-        variant="caption"
-        sx={{ width: 140, color: "text.secondary", flexShrink: 0 }}
-      >
-        {new Date(request.created_at).toLocaleTimeString()}
-      </Typography>
-      <Chip
-        label={request.request_type || "unknown"}
-        size="small"
-        color={REQUEST_TYPE_COLORS[request.request_type || ""] || "default"}
-        variant="outlined"
-        sx={{ minWidth: 100 }}
-      />
-      <Chip
-        label={request.status}
-        size="small"
-        color={STATUS_COLORS[request.status] || "default"}
-        variant="outlined"
-        sx={{ minWidth: 80 }}
-      />
-      <Typography
-        variant="body2"
-        sx={{
-          flex: 1,
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-        }}
-      >
-        {request.request_text?.slice(0, 100) || "-"}
-        {(request.request_text?.length || 0) > 100 && "..."}
-      </Typography>
-      {request.has_plan && (
-        <Chip
-          label={`Plan: ${request.plan_tables?.join(", ") || "?"}`}
-          size="small"
-          variant="outlined"
-          sx={{ maxWidth: 200 }}
-        />
-      )}
-      {request.trace_errors > 0 && (
-        <Chip
-          label={`${request.trace_errors} errors`}
-          size="small"
-          color="error"
-          variant="outlined"
-        />
-      )}
-      {request.trace_repairs > 0 && (
-        <Chip
-          label={`${request.trace_repairs} repairs`}
-          size="small"
-          color="warning"
-          variant="outlined"
-        />
-      )}
-      <Typography variant="caption" sx={{ color: "text.secondary", ml: 1 }}>
-        {formatDuration(request.trace_duration_ms)}
-      </Typography>
-    </Box>
-  );
-
-// Expanded Row Content (shows contributing requests)
-const ExpandedRowContent = ({
-  query,
-  onViewRequestDetails,
-}: {
-  query: QueryExplorerItem;
-  onViewRequestDetails: (requestId: string) => void;
-}) => (
-    <Box
-      sx={{
-        backgroundColor: "action.hover",
-        borderBottom: "2px solid",
-        borderColor: "primary.main",
-      }}
-    >
-      {/* Header */}
-      <Box
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          gap: 2,
-          px: 2,
-          py: 1,
-          borderBottom: "1px solid",
-          borderColor: "divider",
-        }}
-      >
-        <Typography variant="subtitle2" fontWeight={600}>
-          Contributing Requests ({query.requests?.length || 0})
-        </Typography>
-        <Box sx={{ flex: 1 }} />
-        <Typography variant="caption" color="text.secondary">
-          Total: {formatDuration(query.total_duration_ms)} |{" "}
-          {formatTokens(query.total_tokens_in)} in /{" "}
-          {formatTokens(query.total_tokens_out)} out
-        </Typography>
-      </Box>
-
-      {/* Request list */}
-      <Box sx={{ maxHeight: 300, overflow: "auto" }}>
-        {query.requests?.map((req) => (
-          <RequestSummaryRow
-            key={req.request_id}
-            request={req}
-            onViewDetails={onViewRequestDetails}
-          />
-        ))}
-        {(!query.requests || query.requests.length === 0) && (
-          <Typography
-            variant="body2"
-            color="text.secondary"
-            sx={{ p: 2, textAlign: "center" }}
-          >
-            No contributing requests found
-          </Typography>
-        )}
-      </Box>
-    </Box>
-  );
-
-// Query Drawer (aggregated timeline across all requests)
+// Query Drawer (shows query details)
 const QueryDrawer = ({
   query,
   open,
   onClose,
-  onViewRequestDetails,
 }: {
   query: QueryExplorerItem | null;
   open: boolean;
   onClose: () => void;
-  onViewRequestDetails: (requestId: string) => void;
 }) => {
   if (!query) return null;
 
@@ -288,7 +141,6 @@ const QueryDrawer = ({
             />
             {query.had_amendments && (
               <Chip
-                icon={<Edit fontSize="small" />}
                 label="Had amendments"
                 size="small"
                 color="warning"
@@ -297,7 +149,6 @@ const QueryDrawer = ({
             )}
             {query.had_replan && (
               <Chip
-                icon={<Loop fontSize="small" />}
                 label="Had replan"
                 size="small"
                 color="error"
@@ -698,14 +549,9 @@ const Page = withPageAuthRequired(
     });
     const [searchInput, setSearchInput] = useState("");
     const [search, setSearch] = useState("");
-    const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
     const [selectedQuery, setSelectedQuery] =
       useState<QueryExplorerItem | null>(null);
     const [queryDrawerOpen, setQueryDrawerOpen] = useState(false);
-    const [selectedRequestId, setSelectedRequestId] = useState<string | null>(
-      null,
-    );
-    const [requestDrawerOpen, setRequestDrawerOpen] = useState(false);
 
     const { data, total, isLoading } = useQueryExplorer(
       paginationModel.pageSize,
@@ -793,39 +639,21 @@ const Page = withPageAuthRequired(
           ),
         },
         {
-          field: "plan_iterations",
-          headerName: "Plans",
-          width: 70,
-          sortable: true,
-          align: "center",
-          headerAlign: "center",
-        },
-        {
-          field: "requests",
-          headerName: "Reqs",
-          width: 70,
-          sortable: false,
-          align: "center",
-          headerAlign: "center",
-          renderCell: (params) => params.value?.length || 0,
-        },
-        {
-          field: "flags",
-          headerName: "Flags",
-          width: 120,
+          field: "sql",
+          headerName: "SQL",
+          width: 300,
           sortable: false,
           renderCell: (params) => (
-            <Box sx={{ display: "flex", gap: 0.5 }}>
-              {params.row.had_amendments && (
-                <Edit
-                  fontSize="small"
-                  color="warning"
-                  titleAccess="Had amendments"
-                />
-              )}
-              {params.row.had_replan && (
-                <Loop fontSize="small" color="error" titleAccess="Had replan" />
-              )}
+            <Box
+              sx={{
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                fontFamily: "monospace",
+                fontSize: "0.75rem",
+              }}
+            >
+              {params.value || "-"}
             </Box>
           ),
         },
@@ -854,15 +682,6 @@ const Page = withPageAuthRequired(
                 readOnly
               />
             ) : null,
-        },
-        {
-          field: "total_duration_ms",
-          headerName: "Duration",
-          width: 90,
-          sortable: true,
-          align: "right",
-          headerAlign: "right",
-          renderCell: (params) => formatDuration(params.value),
         },
       ],
       [],
@@ -899,9 +718,6 @@ const Page = withPageAuthRequired(
         >
           <Typography variant="h5" sx={{ fontWeight: 600 }}>
             Query Explorer
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Click to expand, double-click for full journey
           </Typography>
           <Box sx={{ flex: 1 }} />
           <TextField
@@ -954,17 +770,9 @@ const Page = withPageAuthRequired(
             paginationMode="server"
             onPaginationModelChange={setPaginationModel}
             rowCount={total}
-            onRowDoubleClick={handleRowDoubleClick}
-            getDetailPanelContent={({ row }) => (
-              <ExpandedRowContent
-                query={row as QueryExplorerItem}
-                onViewRequestDetails={handleViewRequestDetails}
-              />
-            )}
-            getDetailPanelHeight={() => "auto"}
-            detailPanelExpandedRowIds={Array.from(expandedRows)}
-            onDetailPanelExpandedRowIdsChange={(ids) => {
-              setExpandedRows(new Set(ids.map(String)));
+            onRowClick={(params) => {
+              setSelectedQuery(params.row as QueryExplorerItem);
+              setQueryDrawerOpen(true);
             }}
             sx={{
               height: "100%",
@@ -987,14 +795,6 @@ const Page = withPageAuthRequired(
           query={selectedQuery}
           open={queryDrawerOpen}
           onClose={() => setQueryDrawerOpen(false)}
-          onViewRequestDetails={handleViewRequestDetails}
-        />
-
-        {/* Request Detail Drawer */}
-        <RequestDetailDrawer
-          requestId={selectedRequestId}
-          open={requestDrawerOpen}
-          onClose={() => setRequestDrawerOpen(false)}
         />
       </Box>
     );
