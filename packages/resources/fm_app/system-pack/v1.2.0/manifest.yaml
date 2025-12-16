@@ -35,12 +35,21 @@ slots:
         selected_row_data,
         selected_column_data,
         db_meta_prompt_items,
+        db_meta_domain_model,
+        db_meta_schema,
+        db_meta_instructions,
       ]
     outputs: [query_plan]
     requires:
       mcp:
         - name: db-meta
-          vars: [db_meta_prompt_items]
+          vars:
+            [
+              db_meta_prompt_items,
+              db_meta_domain_model,
+              db_meta_schema,
+              db_meta_instructions,
+            ]
           resources:
             - "db-meta://schema/summary"
         - name: db-ref
@@ -90,6 +99,11 @@ slots:
         selected_row_data,
         selected_column_data,
         db_meta_prompt_items,
+        db_meta_domain_model,
+        db_meta_schema,
+        db_meta_instructions,
+        db_meta_examples,
+        db_meta_sql_dialect,
         # db_ref_prompt_items,
         query_plan, # approved query plan from multistep flow
         plan_summary, # summary from approved plan
@@ -99,7 +113,15 @@ slots:
     requires:
       mcp:
         - name: db-meta
-          vars: [db_meta_prompt_items] # inject into template vars
+          vars:
+            [
+              db_meta_prompt_items,
+              db_meta_domain_model,
+              db_meta_schema,
+              db_meta_instructions,
+              db_meta_examples,
+              db_meta_sql_dialect,
+            ]
           resources:
             - "db-meta://schema/summary" # optional: also save as extras
         - name: db-ref
