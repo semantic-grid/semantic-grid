@@ -22,11 +22,13 @@ Please take into account that now is {{ current_datetime }}.
 
 ---
 
+{% if db_meta_domain_model %}
 ## Domain Model
 
 {{ db_meta_domain_model }}
 
 ---
+{% endif %}
 
 ## Planning Instructions
 
@@ -81,11 +83,13 @@ written for a non-technical user. This will be shown to the user for approval.
 
 ---
 
+{% if db_meta_instructions %}
 ## Database-Specific Instructions
 
 {{ db_meta_instructions }}
 
 ---
+{% endif %}
 
 ## Database Schema Reference
 

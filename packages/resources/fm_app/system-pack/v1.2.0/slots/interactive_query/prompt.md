@@ -23,11 +23,13 @@ Please take into account now is {{ current_datetime }}.
 
 ---
 
+{% if db_meta_domain_model %}
 ## Domain Model
 
 {{ db_meta_domain_model }}
 
 ---
+{% endif %}
 
 ## SQL Generation Rules
 
@@ -138,17 +140,21 @@ The user has approved the following query plan. Generate SQL that implements it.
 
 ---
 
+{% if db_meta_instructions %}
 ## Database-Specific Instructions
 
 {{ db_meta_instructions }}
 
 ---
+{% endif %}
 
+{% if db_meta_sql_dialect %}
 ## SQL Dialect (Trino)
 
 {{ db_meta_sql_dialect }}
 
 ---
+{% endif %}
 
 ## Schema Reference
 
@@ -156,11 +162,13 @@ The user has approved the following query plan. Generate SQL that implements it.
 
 {{ db_ref_prompt_items }}
 
+{% if db_meta_examples %}
 ---
 
 ## Query Examples
 
 {{ db_meta_examples }}
+{% endif %}
 
 ---
 

@@ -85,7 +85,15 @@ class DbMetaAsyncProvider:
 
         # For slots that need flexible template ordering, return individual items
         if slot in ("query_planner", "interactive_query"):
-            vars_dict = {"db_meta_prompt_items": result.combined_text}
+            # Initialize all variables to empty string to avoid undefined errors
+            vars_dict = {
+                "db_meta_prompt_items": result.combined_text,
+                "db_meta_domain_model": "",
+                "db_meta_schema": "",
+                "db_meta_instructions": "",
+                "db_meta_examples": "",
+                "db_meta_sql_dialect": "",
+            }
             for item in result.items:
                 if item.prompt_item_type == PromptItemType.domain_model:
                     vars_dict["db_meta_domain_model"] = item.text
