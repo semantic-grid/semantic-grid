@@ -1,6 +1,7 @@
 # mcp_async_providers.py
 from typing import Any, Dict, List, Optional
 
+from fm_app.api.model import PromptItemType
 from fm_app.mcp_servers.db_meta import (
     db_meta_mcp_analyze_query,
     get_db_meta_database_overview,
@@ -16,8 +17,8 @@ MCP_ITEMS_FULL = [
     "SQLDialect",
     "DomainModel",
 ]
-# Planner needs schema, examples, domain model to understand entity relationships
-MCP_ITEMS_PLANNER = ["DBStruct", "QueryExample", "Instruction", "DomainModel"]
+# Planner: domain model, schema, instructions (no SQL examples - they prime SQL)
+MCP_ITEMS_PLANNER = ["DomainModel", "DBStruct", "Instruction"]
 # With approved plan: skip schema (plan has it), keep examples and instructions
 MCP_ITEMS_WITH_PLAN = ["QueryExample", "Instruction", "SQLDialect"]
 
@@ -81,6 +82,22 @@ class DbMetaAsyncProvider:
             logger=self.logger,
             items=fetch_items,
         )
+
+        # For slots that need flexible template ordering, return individual items
+        if slot in ("query_planner", "interactive_query"):
+            vars_dict = {"db_meta_prompt_items": result.combined_text}
+            for item in result.items:
+                if item.prompt_item_type == PromptItemType.domain_model:
+                    vars_dict["db_meta_domain_model"] = item.text
+                elif item.prompt_item_type == PromptItemType.db_struct:
+                    vars_dict["db_meta_schema"] = item.text
+                elif item.prompt_item_type == PromptItemType.instruction:
+                    vars_dict["db_meta_instructions"] = item.text
+                elif item.prompt_item_type == PromptItemType.query_example:
+                    vars_dict["db_meta_examples"] = item.text
+                elif item.prompt_item_type == PromptItemType.sql_dialect:
+                    vars_dict["db_meta_sql_dialect"] = item.text
+            return vars_dict
 
         return {"db_meta_prompt_items": result.combined_text}
 

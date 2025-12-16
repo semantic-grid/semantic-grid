@@ -162,8 +162,20 @@ async def handle_interactive_query(
 
     # Add query plan context if provided (from multistep flow)
     if query_plan is not None:
-        interactive_query_vars["query_plan"] = query_plan.model_dump_json(indent=2)
+        # Pass individual plan fields for human-readable template rendering
+        interactive_query_vars["query_plan"] = True  # Flag for conditional template
         interactive_query_vars["plan_summary"] = query_plan.plan_summary
+        interactive_query_vars["query_plan_tables"] = query_plan.tables or []
+        interactive_query_vars["query_plan_columns_selected"] = (
+            query_plan.columns_selected or []
+        )
+        interactive_query_vars["query_plan_filters"] = query_plan.filters or []
+        interactive_query_vars["query_plan_aggregations"] = (
+            query_plan.aggregations or []
+        )
+        interactive_query_vars["query_plan_group_by"] = query_plan.group_by or []
+        interactive_query_vars["query_plan_order_by"] = query_plan.order_by or []
+        interactive_query_vars["query_plan_assumptions"] = query_plan.assumptions or []
         # Use relevant_schema from plan instead of full MCP context
         if query_plan.relevant_schema:
             interactive_query_vars["relevant_schema"] = query_plan.relevant_schema
