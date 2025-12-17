@@ -35,6 +35,8 @@
       ]
     },
     "lint": {},
-    "test": {}
+    "test": {
+      "dependsOn": ["setup"]
+    }
   }
 }
