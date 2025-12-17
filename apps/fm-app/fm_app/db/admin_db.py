@@ -558,13 +558,40 @@ async def get_query_explorer_data(
         query_created = q_row["created_at"]
 
         # Find contributing requests:
-        # Requests in same session created before or at query creation time
+        # Only include requests that are part of THIS query's Plan→Query loop
+        # 1. Find the request that directly generated this query (query_id match)
+        # 2. Walk backwards to find planning requests until we hit another query's request
         session_requests = requests_by_session.get(session_id, [])
+
+        # Sort by sequence_number or created_at to ensure proper ordering
+        sorted_requests = sorted(
+            session_requests,
+            key=lambda r: (r.get("sequence_number") or 0, r["created_at"]),
+        )
+
+        # Find the index of the request that generated this query
+        generating_request_idx = None
+        for idx, req in enumerate(sorted_requests):
+            if req.get("query_id") == query_id:
+                generating_request_idx = idx
+                break
+
         contributing = []
-        for req in session_requests:
-            # Request contributes if created before query or directly linked
-            if req["created_at"] <= query_created or req.get("query_id") == query_id:
-                contributing.append(req)
+        if generating_request_idx is not None:
+            # Walk backwards from the generating request
+            # Stop when we hit a request that generated a DIFFERENT query
+            for idx in range(generating_request_idx, -1, -1):
+                req = sorted_requests[idx]
+                other_query_id = req.get("query_id")
+                # Stop if this request generated a different query (not None, not this query)
+                if other_query_id is not None and other_query_id != query_id:
+                    break
+                contributing.insert(0, req)  # Insert at beginning to maintain order
+        else:
+            # Fallback: if no generating request found, include requests up to query creation
+            for req in sorted_requests:
+                if req["created_at"] <= query_created:
+                    contributing.append(req)
 
         # Build request summaries
         request_summaries = []
