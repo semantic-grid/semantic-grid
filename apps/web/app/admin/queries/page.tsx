@@ -1,7 +1,12 @@
 "use client";
 
 import { withPageAuthRequired } from "@auth0/nextjs-auth0/client";
-import { Close, ExpandLess, ExpandMore, Search } from "@mui/icons-material";
+import {
+  Close,
+  ExpandMore,
+  KeyboardArrowRight,
+  Search,
+} from "@mui/icons-material";
 import {
   Box,
   Button,
@@ -83,6 +88,22 @@ const REQUEST_TYPE_COLORS: Record<
   plan_approval: "success",
   plan_amendment: "warning",
   replan: "error",
+};
+
+// Map request types to flow-processing stage names
+const getStageLabel = (requestType: string | null | undefined): string => {
+  switch (requestType) {
+    case "initial":
+      return "Query";
+    case "plan_approval":
+      return "Plan";
+    case "plan_amendment":
+      return "Plan Amendment";
+    case "replan":
+      return "Replan";
+    default:
+      return "Query";
+  }
 };
 
 // Status colors
@@ -184,7 +205,7 @@ const TraceStepRow = ({
         )}
         {hasDetails && (
           <IconButton size="small">
-            {expanded ? <ExpandLess /> : <ExpandMore />}
+            {expanded ? <ExpandMore /> : <KeyboardArrowRight />}
           </IconButton>
         )}
       </Box>
@@ -371,7 +392,7 @@ const TraceSection = ({ requestId }: { requestId: string }) => {
             {formatDuration(trace.summary?.total_duration_ms)}
           </Typography>
           <IconButton size="small">
-            {expanded ? <ExpandLess /> : <ExpandMore />}
+            {expanded ? <ExpandMore /> : <KeyboardArrowRight />}
           </IconButton>
         </Box>
 
@@ -511,7 +532,7 @@ const DataFetchRow = ({
         </Typography>
         {hasDetails && (
           <IconButton size="small">
-            {expanded ? <ExpandLess /> : <ExpandMore />}
+            {expanded ? <ExpandMore /> : <KeyboardArrowRight />}
           </IconButton>
         )}
       </Box>
@@ -677,7 +698,7 @@ const DataFetchesSection = ({
           {formatDuration(totalDuration)}
         </Typography>
         <IconButton size="small">
-          {expanded ? <ExpandLess /> : <ExpandMore />}
+          {expanded ? <ExpandMore /> : <KeyboardArrowRight />}
         </IconButton>
       </Box>
 
@@ -737,7 +758,7 @@ const RequestDetailDrawer = ({
         {/* Request Type & Status */}
         <Box sx={{ display: "flex", gap: 1 }}>
           <Chip
-            label={request.request_type || "initial"}
+            label={getStageLabel(request.request_type)}
             size="small"
             color={REQUEST_TYPE_COLORS[request.request_type || ""] || "default"}
             variant="outlined"
@@ -854,6 +875,7 @@ const RequestTimelineItem = ({
   onViewDetails: () => void;
 }) => {
   const [expanded, setExpanded] = useState(false);
+  const stageLabel = getStageLabel(request.request_type);
 
   return (
     <Box
@@ -890,7 +912,7 @@ const RequestTimelineItem = ({
           {index + 1}
         </Typography>
         <Chip
-          label={request.request_type || "initial"}
+          label={stageLabel}
           size="small"
           color={REQUEST_TYPE_COLORS[request.request_type || ""] || "default"}
           variant="outlined"
@@ -924,7 +946,7 @@ const RequestTimelineItem = ({
           {formatDuration(request.trace_duration_ms)}
         </Typography>
         <IconButton size="small">
-          {expanded ? <ExpandLess /> : <ExpandMore />}
+          {expanded ? <ExpandMore /> : <KeyboardArrowRight />}
         </IconButton>
       </Box>
 
@@ -1190,62 +1212,70 @@ const ExpandedQueryContent = ({
       borderColor: "primary.main",
     }}
   >
-    {query.requests?.map((req) => (
-      <Box
-        key={req.request_id}
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          gap: 1,
-          py: 1,
-          px: 2,
-          borderBottom: "1px solid",
-          borderColor: "divider",
-          "&:hover": { backgroundColor: "background.paper" },
-          cursor: "pointer",
-        }}
-        onClick={() => onRequestClick(req)}
-      >
-        <Typography
-          variant="caption"
-          sx={{ width: 140, color: "text.secondary", flexShrink: 0 }}
-        >
-          {new Date(req.created_at).toLocaleString()}
-        </Typography>
-        <Chip
-          label={req.request_type || "initial"}
-          size="small"
-          color={REQUEST_TYPE_COLORS[req.request_type || ""] || "default"}
-          variant="outlined"
-          sx={{ minWidth: 100 }}
-        />
-        <Typography
-          variant="body2"
+    {query.requests?.map((req) => {
+      const stageLabel = getStageLabel(req.request_type);
+      const isQueryStage = stageLabel === "Query";
+
+      return (
+        <Box
+          key={req.request_id}
           sx={{
-            flex: 1,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
+            display: "flex",
+            alignItems: "center",
+            gap: 1,
+            py: 1,
+            px: 2,
+            borderBottom: "1px solid",
+            borderColor: "divider",
+            "&:hover": { backgroundColor: "background.paper" },
+            cursor: "pointer",
           }}
+          onClick={() => onRequestClick(req)}
         >
-          {req.request_text?.slice(0, 100) || "-"}
-        </Typography>
-        <Chip
-          label={req.status}
-          size="small"
-          color={STATUS_COLORS[req.status] || "default"}
-          variant="outlined"
-        />
-        {req.trace_llm_calls > 0 && (
-          <Typography variant="caption" color="text.secondary">
-            {req.trace_llm_calls} LLM
+          <Typography
+            variant="caption"
+            sx={{ width: 170, color: "text.secondary", flexShrink: 0 }}
+          >
+            {new Date(req.created_at).toLocaleString()}
           </Typography>
-        )}
-        <Typography variant="caption" color="text.secondary">
-          {formatDuration(req.trace_duration_ms)}
-        </Typography>
-      </Box>
-    ))}
+          <Chip
+            label={stageLabel}
+            size="small"
+            color={REQUEST_TYPE_COLORS[req.request_type || ""] || "default"}
+            variant="outlined"
+            sx={{ minWidth: 80 }}
+          />
+          {!isQueryStage && (
+            <Typography
+              variant="body2"
+              sx={{
+                flex: 1,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {req.request_text?.slice(0, 100) || "-"}
+            </Typography>
+          )}
+          {isQueryStage && <Box sx={{ flex: 1 }} />}
+          {req.trace_llm_calls > 0 && (
+            <Typography variant="caption" color="text.secondary">
+              {req.trace_llm_calls} LLM
+            </Typography>
+          )}
+          <Typography variant="caption" color="text.secondary">
+            {formatDuration(req.trace_duration_ms)}
+          </Typography>
+          <Chip
+            label={req.status}
+            size="small"
+            color={STATUS_COLORS[req.status] || "default"}
+            variant="outlined"
+          />
+        </Box>
+      );
+    })}
     {(!query.requests || query.requests.length === 0) && (
       <Typography
         variant="body2"
@@ -1313,7 +1343,7 @@ const Page = withPageAuthRequired(
         {
           field: "created_at",
           headerName: "Date",
-          width: 170,
+          width: 190,
           sortable: true,
           renderCell: (params) =>
             new Date(params.value as string).toLocaleString(),
@@ -1328,8 +1358,8 @@ const Page = withPageAuthRequired(
         {
           field: "original_intent",
           headerName: "Intent",
-          flex: 1,
-          minWidth: 300,
+          flex: 0.3,
+          minWidth: 200,
           sortable: false,
           renderCell: (params) => (
             <Box
@@ -1346,7 +1376,8 @@ const Page = withPageAuthRequired(
         {
           field: "sql",
           headerName: "SQL",
-          width: 300,
+          flex: 0.4,
+          minWidth: 250,
           sortable: false,
           renderCell: (params) => (
             <Box

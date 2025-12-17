@@ -59,3 +59,4 @@ infra/k8s/local
 
 
 .DS_Store
+**/.DS_Store
