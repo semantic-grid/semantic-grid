@@ -334,6 +334,19 @@ class QueryPlan(BaseModel):
             return ", ".join(str(item) for item in v) if v else ""
         return str(v)
 
+    @field_validator("relevant_schema", mode="before")
+    @classmethod
+    def coerce_relevant_schema_to_string(cls, v):
+        """Handle LLM returning a list instead of a string for relevant_schema."""
+        if v is None:
+            return None
+        if isinstance(v, list):
+            # Join list items with double newline separator to preserve structure
+            return "\n\n".join(str(item) for item in v if item is not None)
+        if isinstance(v, str):
+            return v if v.strip() else None
+        return str(v) if v else None
+
     @field_validator("limit", mode="before")
     @classmethod
     def coerce_limit(cls, v):
