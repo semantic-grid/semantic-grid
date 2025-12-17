@@ -1197,6 +1197,14 @@ const QueryDrawer = ({
   );
 };
 
+// Priority order for request types (Plan stages first, then Query)
+const REQUEST_TYPE_ORDER: Record<string, number> = {
+  plan_approval: 1,
+  plan_amendment: 2,
+  replan: 3,
+  initial: 4,
+};
+
 // Expanded request rows in query accordion
 const ExpandedQueryContent = ({
   query,
@@ -1204,89 +1212,100 @@ const ExpandedQueryContent = ({
 }: {
   query: QueryExplorerItem;
   onRequestClick: (request: QueryExplorerRequestSummary) => void;
-}) => (
-  <Box
-    sx={{
-      backgroundColor: "action.hover",
-      borderBottom: "2px solid",
-      borderColor: "primary.main",
-    }}
-  >
-    {query.requests?.map((req) => {
-      const stageLabel = getStageLabel(req.request_type);
-      const isQueryStage = stageLabel === "Query";
+}) => {
+  // Sort requests: Plan stages first, then Query stages
+  const sortedRequests = [...(query.requests || [])].sort((a, b) => {
+    const orderA = REQUEST_TYPE_ORDER[a.request_type || "initial"] || 99;
+    const orderB = REQUEST_TYPE_ORDER[b.request_type || "initial"] || 99;
+    if (orderA !== orderB) return orderA - orderB;
+    // If same type, sort by created_at
+    return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+  });
 
-      return (
-        <Box
-          key={req.request_id}
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            gap: 1,
-            py: 1,
-            px: 2,
-            borderBottom: "1px solid",
-            borderColor: "divider",
-            "&:hover": { backgroundColor: "background.paper" },
-            cursor: "pointer",
-          }}
-          onClick={() => onRequestClick(req)}
-        >
-          <Typography
-            variant="caption"
-            sx={{ width: 170, color: "text.secondary", flexShrink: 0 }}
+  return (
+    <Box
+      sx={{
+        backgroundColor: "action.hover",
+        borderBottom: "2px solid",
+        borderColor: "primary.main",
+      }}
+    >
+      {sortedRequests.map((req) => {
+        const stageLabel = getStageLabel(req.request_type);
+        const isPlanStage = stageLabel === "Plan";
+
+        return (
+          <Box
+            key={req.request_id}
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
+              py: 1,
+              px: 2,
+              borderBottom: "1px solid",
+              borderColor: "divider",
+              "&:hover": { backgroundColor: "background.paper" },
+              cursor: "pointer",
+            }}
+            onClick={() => onRequestClick(req)}
           >
-            {new Date(req.created_at).toLocaleString()}
-          </Typography>
-          <Chip
-            label={stageLabel}
-            size="small"
-            color={REQUEST_TYPE_COLORS[req.request_type || ""] || "default"}
-            variant="outlined"
-            sx={{ minWidth: 80 }}
-          />
-          {!isQueryStage && (
             <Typography
-              variant="body2"
-              sx={{
-                flex: 1,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
+              variant="caption"
+              sx={{ width: 170, color: "text.secondary", flexShrink: 0 }}
             >
-              {req.request_text?.slice(0, 100) || "-"}
+              {new Date(req.created_at).toLocaleString()}
             </Typography>
-          )}
-          {isQueryStage && <Box sx={{ flex: 1 }} />}
-          {req.trace_llm_calls > 0 && (
+            <Chip
+              label={stageLabel}
+              size="small"
+              color={REQUEST_TYPE_COLORS[req.request_type || ""] || "default"}
+              variant="outlined"
+              sx={{ minWidth: 80 }}
+            />
+            {isPlanStage && (
+              <Typography
+                variant="body2"
+                sx={{
+                  flex: 1,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {query.original_intent?.slice(0, 100) || "-"}
+              </Typography>
+            )}
+            {!isPlanStage && <Box sx={{ flex: 1 }} />}
+            {req.trace_llm_calls > 0 && (
+              <Typography variant="caption" color="text.secondary">
+                {req.trace_llm_calls} LLM
+              </Typography>
+            )}
             <Typography variant="caption" color="text.secondary">
-              {req.trace_llm_calls} LLM
+              {formatDuration(req.trace_duration_ms)}
             </Typography>
-          )}
-          <Typography variant="caption" color="text.secondary">
-            {formatDuration(req.trace_duration_ms)}
-          </Typography>
-          <Chip
-            label={req.status}
-            size="small"
-            color={STATUS_COLORS[req.status] || "default"}
-            variant="outlined"
-          />
-        </Box>
-      );
-    })}
-    {(!query.requests || query.requests.length === 0) && (
-      <Typography
-        variant="body2"
-        color="text.secondary"
-        sx={{ p: 2, textAlign: "center" }}
-      >
-        No contributing requests
-      </Typography>
-    )}
-  </Box>
-);
+            <Chip
+              label={req.status}
+              size="small"
+              color={STATUS_COLORS[req.status] || "default"}
+              variant="outlined"
+            />
+          </Box>
+        );
+      })}
+      {sortedRequests.length === 0 && (
+        <Typography
+          variant="body2"
+          color="text.secondary"
+          sx={{ p: 2, textAlign: "center" }}
+        >
+          No contributing requests
+        </Typography>
+      )}
+    </Box>
+  );
+};
 
 const Page = withPageAuthRequired(
   () => {
@@ -1506,6 +1525,8 @@ const Page = withPageAuthRequired(
             pageSizeOptions={[25, 50, 100]}
             slots={{
               footer: CustomFooter,
+              detailPanelExpandIcon: KeyboardArrowRight,
+              detailPanelCollapseIcon: ExpandMore,
             }}
             paginationModel={paginationModel}
             paginationMode="server"
