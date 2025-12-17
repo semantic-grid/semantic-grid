@@ -1215,12 +1215,8 @@ const ExpandedQueryContent = ({
   onRequestClick: (request: QueryExplorerRequestSummary) => void;
   selectedRequestId: string | null;
 }) => {
-  // Sort requests: Plan stages first, then Query stages
+  // Sort requests chronologically (same order as Query Journey drawer)
   const sortedRequests = [...(query.requests || [])].sort((a, b) => {
-    const orderA = REQUEST_TYPE_ORDER[a.request_type || "initial"] || 99;
-    const orderB = REQUEST_TYPE_ORDER[b.request_type || "initial"] || 99;
-    if (orderA !== orderB) return orderA - orderB;
-    // If same type, sort by created_at
     return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
   });
 
