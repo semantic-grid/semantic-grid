@@ -1225,13 +1225,7 @@ const ExpandedQueryContent = ({
   });
 
   return (
-    <Box
-      sx={{
-        backgroundColor: "action.hover",
-        borderBottom: "2px solid",
-        borderColor: "primary.main",
-      }}
-    >
+    <Box>
       {sortedRequests.map((req) => {
         const stageLabel = getStageLabel(req.request_type);
         const isQueryStage = stageLabel === "Query";
@@ -1247,12 +1241,12 @@ const ExpandedQueryContent = ({
               py: 1,
               px: 2,
               borderBottom: "1px solid",
-              borderColor: isSelected ? "primary.main" : "divider",
-              backgroundColor: isSelected ? "action.selected" : "transparent",
+              borderColor: "divider",
+              backgroundColor: isSelected
+                ? "rgba(255, 255, 255, 0.08)"
+                : "transparent",
               "&:hover": {
-                backgroundColor: isSelected
-                  ? "action.selected"
-                  : "background.paper",
+                backgroundColor: "rgba(255, 255, 255, 0.04)",
               },
               cursor: "pointer",
             }}
@@ -1563,6 +1557,9 @@ const Page = withPageAuthRequired(
               },
               "& .MuiDataGrid-row:hover": {
                 backgroundColor: "action.hover",
+              },
+              "& .MuiDataGrid-row--detailPanelExpanded": {
+                backgroundColor: "rgba(255, 255, 255, 0.03)",
               },
               "& .MuiDataGrid-cell": {
                 py: 1,
