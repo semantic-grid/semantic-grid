@@ -1209,9 +1209,11 @@ const REQUEST_TYPE_ORDER: Record<string, number> = {
 const ExpandedQueryContent = ({
   query,
   onRequestClick,
+  selectedRequestId,
 }: {
   query: QueryExplorerItem;
   onRequestClick: (request: QueryExplorerRequestSummary) => void;
+  selectedRequestId: string | null;
 }) => {
   // Sort requests: Plan stages first, then Query stages
   const sortedRequests = [...(query.requests || [])].sort((a, b) => {
@@ -1233,6 +1235,7 @@ const ExpandedQueryContent = ({
       {sortedRequests.map((req) => {
         const stageLabel = getStageLabel(req.request_type);
         const isQueryStage = stageLabel === "Query";
+        const isSelected = req.request_id === selectedRequestId;
 
         return (
           <Box
@@ -1244,8 +1247,13 @@ const ExpandedQueryContent = ({
               py: 1,
               px: 2,
               borderBottom: "1px solid",
-              borderColor: "divider",
-              "&:hover": { backgroundColor: "background.paper" },
+              borderColor: isSelected ? "primary.main" : "divider",
+              backgroundColor: isSelected ? "action.selected" : "transparent",
+              "&:hover": {
+                backgroundColor: isSelected
+                  ? "action.selected"
+                  : "background.paper",
+              },
               cursor: "pointer",
             }}
             onClick={() => onRequestClick(req)}
@@ -1273,7 +1281,7 @@ const ExpandedQueryContent = ({
                   whiteSpace: "nowrap",
                 }}
               >
-                {query.original_intent?.slice(0, 100) || "-"}
+                {req.request_text?.slice(0, 100) || "-"}
               </Typography>
             )}
             {isQueryStage && <Box sx={{ flex: 1 }} />}
@@ -1539,6 +1547,7 @@ const Page = withPageAuthRequired(
               <ExpandedQueryContent
                 query={row as QueryExplorerItem}
                 onRequestClick={handleRequestClick}
+                selectedRequestId={selectedRequest?.request_id || null}
               />
             )}
             getDetailPanelHeight={() => "auto"}
