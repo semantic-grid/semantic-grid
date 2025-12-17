@@ -94,15 +94,15 @@ const REQUEST_TYPE_COLORS: Record<
 const getStageLabel = (requestType: string | null | undefined): string => {
   switch (requestType) {
     case "initial":
-      return "Query";
-    case "plan_approval":
       return "Plan";
+    case "plan_approval":
+      return "Query";
     case "plan_amendment":
       return "Plan Amendment";
     case "replan":
       return "Replan";
     default:
-      return "Query";
+      return "Plan";
   }
 };
 
@@ -1199,10 +1199,10 @@ const QueryDrawer = ({
 
 // Priority order for request types (Plan stages first, then Query)
 const REQUEST_TYPE_ORDER: Record<string, number> = {
-  plan_approval: 1,
-  plan_amendment: 2,
-  replan: 3,
-  initial: 4,
+  initial: 1, // Plan
+  plan_amendment: 2, // Plan Amendment
+  replan: 3, // Replan
+  plan_approval: 4, // Query
 };
 
 // Expanded request rows in query accordion
@@ -1232,7 +1232,7 @@ const ExpandedQueryContent = ({
     >
       {sortedRequests.map((req) => {
         const stageLabel = getStageLabel(req.request_type);
-        const isPlanStage = stageLabel === "Plan";
+        const isQueryStage = stageLabel === "Query";
 
         return (
           <Box
@@ -1263,7 +1263,7 @@ const ExpandedQueryContent = ({
               variant="outlined"
               sx={{ minWidth: 80 }}
             />
-            {isPlanStage && (
+            {!isQueryStage && (
               <Typography
                 variant="body2"
                 sx={{
@@ -1276,7 +1276,7 @@ const ExpandedQueryContent = ({
                 {query.original_intent?.slice(0, 100) || "-"}
               </Typography>
             )}
-            {!isPlanStage && <Box sx={{ flex: 1 }} />}
+            {isQueryStage && <Box sx={{ flex: 1 }} />}
             {req.trace_llm_calls > 0 && (
               <Typography variant="caption" color="text.secondary">
                 {req.trace_llm_calls} LLM
