@@ -19,8 +19,8 @@ MCP_ITEMS_FULL = [
 ]
 # Planner: domain model, schema, instructions (no SQL examples - they prime SQL)
 MCP_ITEMS_PLANNER = ["DomainModel", "DBStruct", "Instruction"]
-# With approved plan: skip schema (plan has it), keep examples and instructions
-MCP_ITEMS_WITH_PLAN = ["QueryExample", "Instruction", "SQLDialect"]
+# With approved plan: skip schema (plan has it), keep examples, instructions, and domain model
+MCP_ITEMS_WITH_PLAN = ["QueryExample", "Instruction", "SQLDialect", "DomainModel"]
 
 
 class DbMetaAsyncProvider:

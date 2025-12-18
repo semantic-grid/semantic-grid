@@ -23,6 +23,7 @@ Please take into account that now is {{ current_datetime }}.
 ---
 
 {% if db_meta_domain_model %}
+
 ## Domain Model
 
 {{ db_meta_domain_model }}
