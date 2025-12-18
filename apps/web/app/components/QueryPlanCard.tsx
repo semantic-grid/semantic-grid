@@ -224,7 +224,7 @@ export const QueryPlanCard = ({
                     key={
                       typeof join === "string"
                         ? join
-                        : `${join.left_table}-${join.right_table}-${join.join_type}`
+                        : `${join.left_table || ""}-${join.right_table || ""}-${join.join_type || ""}`
                     }
                     sx={{ py: 0, px: 0 }}
                   >
@@ -232,7 +232,7 @@ export const QueryPlanCard = ({
                       primary={
                         typeof join === "string"
                           ? join
-                          : `${join.join_type.toUpperCase()} JOIN ${join.right_table} ${join.join_condition}`
+                          : `${(join.join_type || "INNER").toUpperCase()} JOIN ${join.right_table || ""} ${join.join_condition || ""}`
                       }
                       primaryTypographyProps={{ variant: "body2" }}
                     />
