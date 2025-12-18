@@ -1157,6 +1157,14 @@ const QueryDrawer = ({
           </Box>
         </Box>
 
+        {/* Data Fetches */}
+        <Box>
+          <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+            Data Fetches
+          </Typography>
+          <DataFetchesSection dataFetches={query.data_fetches} />
+        </Box>
+
         {/* Rating */}
         {query.rating !== null && query.rating !== undefined && (
           <Box>

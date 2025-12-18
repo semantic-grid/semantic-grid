@@ -550,6 +550,27 @@ async def get_query_explorer_data(
             requests_by_session[sid] = []
         requests_by_session[sid].append(req)
 
+    # Fetch data fetches for all queries
+    query_ids = [row["query_id"] for row in queries_data]
+    data_fetches_by_query: dict = {}
+    if query_ids:
+        data_fetches_sql = text(
+            """
+            SELECT id, query_id, request_id, task_id, requestor, status,
+                   created_at, started_at, completed_at, duration_ms,
+                   query_params, row_count, error, cache_hit
+            FROM data_fetch
+            WHERE query_id = ANY(:query_ids)
+            ORDER BY created_at DESC;
+            """
+        )
+        df_res = await db.execute(data_fetches_sql, params={"query_ids": query_ids})
+        for df_row in df_res.mappings().fetchall():
+            qid = df_row["query_id"]
+            if qid not in data_fetches_by_query:
+                data_fetches_by_query[qid] = []
+            data_fetches_by_query[qid].append(df_row)
+
     # Build QueryExplorerItem for each query
     result = []
     for q_row in queries_data:
@@ -708,6 +729,14 @@ async def get_query_explorer_data(
                 request_rating = req["rating"]
                 break
 
+        # Build data fetch models for this query
+        query_data_fetches = []
+        for df_row in data_fetches_by_query.get(query_id, []):
+            try:
+                query_data_fetches.append(GetDataFetchModel.model_validate(df_row))
+            except ValidationError as e:
+                logging.warning(f"Can't validate DataFetch: {e}")
+
         try:
             item = QueryExplorerItem(
                 query_id=query_id,
@@ -727,6 +756,7 @@ async def get_query_explorer_data(
                 requests=request_summaries,
                 had_replan=had_replan,
                 had_amendments=had_amendments,
+                data_fetches=query_data_fetches,
             )
             result.append(item)
         except ValidationError as e:

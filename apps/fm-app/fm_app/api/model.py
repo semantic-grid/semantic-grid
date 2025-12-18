@@ -860,6 +860,9 @@ class QueryExplorerItem(BaseModel):
     had_replan: bool = False  # True if SQL generation failed and triggered replan
     had_amendments: bool = False  # True if user amended the plan
 
+    # Data fetches for this query
+    data_fetches: list["GetDataFetchModel"] = []
+
 
 class QueryExplorerResponse(BaseModel):
     """Paginated response for query explorer endpoint."""
