@@ -1857,6 +1857,8 @@ async def stream_data_fetch(
                    Only pass this when fetching from a grid session context.
                    Dashboard items and detached /q/:id views should not pass this.
     """
+    if auth_result is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No token")
     user_owner = auth_result.get("sub")
     if user_owner is None:
         raise HTTPException(
