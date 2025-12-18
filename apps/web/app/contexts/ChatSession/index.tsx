@@ -648,7 +648,7 @@ export const ChatSessionProvider = ({
         field: col.column_name || `col_${idx}`,
         headerName: col.column_alias
           ?.replace(/_/g, " ")
-          .replace(/^\w/, (c: any) => c.toUpperCase()),
+          ?.replace(/^\w/, (c: any) => c.toUpperCase()),
         headerDescription: col.column_description,
         width: col.column_alias ? columnWidth(col.column_alias) : 200,
         sortable: false,
