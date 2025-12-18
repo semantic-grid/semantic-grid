@@ -11,6 +11,8 @@ from fm_app.api.model import (
     GetRequestModel,
     GetSessionModel,
     PatchAdminRequestModel,
+    QueryExplorerItem,
+    QueryExplorerRequestSummary,
     RequestStatus,
 )
 
@@ -107,8 +109,20 @@ async def get_all_requests_admin_v2(
     where_conditions = ["r.status = :status"]
     params: dict = {"status": status, "limit": limit, "offset": offset}
 
-    # Only filter for non-null SQL when not looking at Error status
-    if status != RequestStatus.error:
+    # Only filter for non-null SQL when not looking at statuses without SQL yet
+    # - error: may have failed before SQL generation
+    # - feedback_requested: waiting for user approval of query plan
+    # - planning: actively generating query plan
+    # - intent: just analyzed intent
+    # - in_process: early stage before SQL
+    statuses_without_sql = {
+        RequestStatus.error,
+        RequestStatus.feedback_requested,
+        RequestStatus.planning,
+        RequestStatus.intent,
+        RequestStatus.in_process,
+    }
+    if status not in statuses_without_sql:
         where_conditions.append("r.sql is not null")
 
     if search:
@@ -415,3 +429,337 @@ async def get_all_queries_admin(
             raise HTTPException(status_code=500, detail=str("Internal error"))
 
     return AdminQueriesResult(queries=result, total=total)
+
+
+class QueryExplorerResult:
+    """Result container for query explorer with pagination metadata."""
+
+    def __init__(self, queries: list[QueryExplorerItem], total: int):
+        self.queries = queries
+        self.total = total
+
+
+async def get_query_explorer_data(
+    limit: int,
+    offset: int,
+    admin: str,
+    search: str | None,
+    db: AsyncSession,
+) -> QueryExplorerResult:
+    """
+    Get query explorer data: queries with their full journey from intent to result.
+
+    For each query, aggregates:
+    - All contributing requests (from intent to final SQL)
+    - Plan iterations and amendments
+    - SQL generation attempts
+    - Trace summaries (LLM calls, repairs, errors, duration)
+    """
+    logging.debug(
+        "Get query explorer data",
+        extra={"admin": admin, "action": "db::get_query_explorer_data"},
+    )
+
+    # Build WHERE clause for queries
+    where_conditions = ["1=1"]
+    params: dict = {"limit": limit, "offset": offset}
+
+    if search:
+        where_conditions.append(
+            "(q.request ILIKE :search OR q.sql ILIKE :search "
+            "OR q.summary ILIKE :search)"
+        )
+        params["search"] = f"%{search}%"
+
+    where_clause = " AND ".join(where_conditions)
+
+    # Count query
+    count_sql = text(
+        f"""
+        SELECT COUNT(*) as total
+        FROM query q
+        WHERE {where_clause};
+        """
+    )
+    count_res = await db.execute(count_sql, params=params)
+    total = count_res.scalar() or 0
+
+    # Get queries with session info (join through request table)
+    get_queries_sql = text(
+        f"""
+        SELECT q.*, r.session_id, s.user_owner
+        FROM query q
+        LEFT JOIN request r ON r.query_id = q.query_id
+        LEFT JOIN session s ON r.session_id = s.session_id
+        WHERE {where_clause}
+        ORDER BY q.created_at DESC
+        LIMIT :limit OFFSET :offset;
+        """
+    )
+    res = await db.execute(get_queries_sql, params=params)
+    queries_data = res.mappings().fetchall()
+
+    if not queries_data:
+        return QueryExplorerResult(queries=[], total=total)
+
+    # Collect session_ids for batch fetching requests
+    session_ids = list({row["session_id"] for row in queries_data if row["session_id"]})
+
+    # Fetch all requests that contributed to these queries
+    # A request contributes if it's in the same session and:
+    # 1. Its query_id matches (direct link), OR
+    # 2. It was created before/during query creation (intent, planning, etc.)
+    requests_sql = text(
+        """
+        SELECT r.*
+        FROM request r
+        WHERE r.session_id = ANY(:session_ids)
+        ORDER BY r.created_at ASC;
+        """
+    )
+    req_res = await db.execute(requests_sql, params={"session_ids": session_ids})
+    all_requests = req_res.mappings().fetchall()
+
+    # Fetch traces for all these requests
+    request_ids = [row["request_id"] for row in all_requests]
+    traces_by_request: dict = {}
+    if request_ids:
+        traces_sql = text(
+            """
+            SELECT request_id,
+                   COUNT(*) FILTER (WHERE step_type = 'llm_call') as llm_calls,
+                   COUNT(*) FILTER (WHERE step_type = 'repair') as repairs,
+                   COUNT(*) FILTER (WHERE step_type = 'error') as errors,
+                   SUM(duration_ms) as total_duration_ms,
+                   SUM(tokens_in) as total_tokens_in,
+                   SUM(tokens_out) as total_tokens_out
+            FROM request_trace
+            WHERE request_id = ANY(:request_ids)
+            GROUP BY request_id;
+            """
+        )
+        traces_res = await db.execute(traces_sql, params={"request_ids": request_ids})
+        for trace_row in traces_res.mappings().fetchall():
+            traces_by_request[trace_row["request_id"]] = trace_row
+
+    # Group requests by session for efficient lookup
+    requests_by_session: dict = {}
+    for req in all_requests:
+        sid = req["session_id"]
+        if sid not in requests_by_session:
+            requests_by_session[sid] = []
+        requests_by_session[sid].append(req)
+
+    # Fetch data fetches for all queries
+    query_ids = [row["query_id"] for row in queries_data]
+    data_fetches_by_query: dict = {}
+    if query_ids:
+        data_fetches_sql = text(
+            """
+            SELECT id, query_id, request_id, task_id, requestor, status,
+                   created_at, started_at, completed_at, duration_ms,
+                   query_params, row_count, error, cache_hit
+            FROM data_fetch
+            WHERE query_id = ANY(:query_ids)
+            ORDER BY created_at DESC;
+            """
+        )
+        df_res = await db.execute(data_fetches_sql, params={"query_ids": query_ids})
+        for df_row in df_res.mappings().fetchall():
+            qid = df_row["query_id"]
+            if qid not in data_fetches_by_query:
+                data_fetches_by_query[qid] = []
+            data_fetches_by_query[qid].append(df_row)
+
+    # Build QueryExplorerItem for each query
+    result = []
+    for q_row in queries_data:
+        query_id = q_row["query_id"]
+        session_id = q_row["session_id"]
+        query_created = q_row["created_at"]
+
+        # Find contributing requests:
+        # Only include requests that are part of THIS query's Plan→Query loop
+        # 1. Find the request that directly generated this query (query_id match)
+        # 2. Walk backwards to find planning requests until we hit another query's request
+        session_requests = requests_by_session.get(session_id, [])
+
+        # Sort by sequence_number or created_at to ensure proper ordering
+        sorted_requests = sorted(
+            session_requests,
+            key=lambda r: (r.get("sequence_number") or 0, r["created_at"]),
+        )
+
+        # Find the index of the request that generated this query
+        generating_request_idx = None
+        for idx, req in enumerate(sorted_requests):
+            if req.get("query_id") == query_id:
+                generating_request_idx = idx
+                break
+
+        contributing = []
+        if generating_request_idx is not None:
+            # Walk backwards from the generating request
+            # Stop when we hit a request that generated a DIFFERENT query
+            for idx in range(generating_request_idx, -1, -1):
+                req = sorted_requests[idx]
+                other_query_id = req.get("query_id")
+                # Stop if this request generated a different query (not None, not this query)
+                if other_query_id is not None and other_query_id != query_id:
+                    break
+                contributing.insert(0, req)  # Insert at beginning to maintain order
+        else:
+            # Fallback: if no generating request found, include requests up to query creation
+            for req in sorted_requests:
+                if req["created_at"] <= query_created:
+                    contributing.append(req)
+
+        # Build request summaries
+        request_summaries = []
+        original_intent = None
+        plan_iterations = 0
+        total_sql_attempts = 0
+        had_replan = False
+        had_amendments = False
+        total_duration_ms = 0
+        total_tokens_in = 0
+        total_tokens_out = 0
+
+        for req in contributing:
+            req_id = req["request_id"]
+
+            # Determine request type based on request text content
+            request_type = "initial"
+            request_text = req.get("request") or ""
+            structured = req.get("structured_response") or {}
+
+            # Check if this is a plan approval
+            if request_text.startswith("Approved"):
+                request_type = "plan_approval"
+            # Check if this is an amendment
+            elif "amend" in request_text.lower() or "change" in request_text.lower():
+                request_type = "plan_amendment"
+                had_amendments = True
+            # Check if this is a replan (structured_response contains replan_reason)
+            if isinstance(structured, dict) and structured.get("replan_reason"):
+                request_type = "replan"
+                had_replan = True
+
+            # Capture original intent from first request
+            if original_intent is None and req.get("request"):
+                # Skip approval messages for original intent
+                if not request_text.startswith("Approved"):
+                    original_intent = req["request"]
+
+            # Count plan iterations from query_plan in request if available
+            if req.get("query_plan"):
+                plan_iterations += 1
+
+            # Count SQL attempts (based on structured_response or trace)
+            sql_attempts = 0
+            if isinstance(structured, dict):
+                attempts_data = structured.get("sql_attempts")
+                if isinstance(attempts_data, int):
+                    sql_attempts = attempts_data
+            total_sql_attempts += sql_attempts
+
+            # Get trace info
+            trace = traces_by_request.get(req_id, {})
+            has_trace = bool(trace)
+            trace_llm_calls = trace.get("llm_calls", 0) or 0
+            trace_repairs = trace.get("repairs", 0) or 0
+            trace_errors = trace.get("errors", 0) or 0
+            trace_duration = trace.get("total_duration_ms", 0) or 0
+
+            total_duration_ms += trace_duration
+            total_tokens_in += trace.get("total_tokens_in", 0) or 0
+            total_tokens_out += trace.get("total_tokens_out", 0) or 0
+
+            # Build outcome description
+            outcome = None
+            status = req.get("status")
+            if status == "error":
+                outcome = "Error occurred"
+            elif req.get("query_id") == query_id:
+                outcome = "Query generated"
+
+            # Plan tables from query_plan JSONB if available
+            plan_tables = None
+            query_plan = req.get("query_plan")
+            if isinstance(query_plan, dict) and query_plan.get("tables"):
+                tables_data = query_plan["tables"]
+                if isinstance(tables_data, list):
+                    plan_tables = [
+                        t.get("name") if isinstance(t, dict) else str(t)
+                        for t in tables_data
+                    ]
+
+            # Get plan summary from query_plan JSONB
+            plan_summary = None
+            if isinstance(query_plan, dict):
+                plan_summary = query_plan.get("plan_summary")
+
+            try:
+                summary = QueryExplorerRequestSummary(
+                    request_id=req_id,
+                    created_at=req["created_at"],
+                    request_type=request_type,
+                    request_text=req.get("request") or "",
+                    status=RequestStatus(status) if status else RequestStatus.error,
+                    has_plan=bool(query_plan),
+                    plan_summary=plan_summary,
+                    plan_tables=plan_tables,
+                    sql_attempts=sql_attempts,
+                    sql_success=req.get("query_id") == query_id,
+                    outcome=outcome,
+                    has_trace=has_trace,
+                    trace_llm_calls=trace_llm_calls,
+                    trace_repairs=trace_repairs,
+                    trace_errors=trace_errors,
+                    trace_duration_ms=trace_duration,
+                )
+                request_summaries.append(summary)
+            except ValidationError as e:
+                logging.warning(f"Can't validate request summary: {e}")
+
+        # Get rating from contributing requests (rating is on request, not query)
+        request_rating = None
+        for req in contributing:
+            if req.get("rating") is not None:
+                request_rating = req["rating"]
+                break
+
+        # Build data fetch models for this query
+        query_data_fetches = []
+        for df_row in data_fetches_by_query.get(query_id, []):
+            try:
+                query_data_fetches.append(GetDataFetchModel.model_validate(df_row))
+            except ValidationError as e:
+                logging.warning(f"Can't validate DataFetch: {e}")
+
+        try:
+            item = QueryExplorerItem(
+                query_id=query_id,
+                created_at=query_created,
+                summary=q_row.get("summary"),
+                sql=q_row.get("sql"),
+                row_count=q_row.get("row_count"),
+                rating=request_rating,
+                session_id=session_id,
+                user=q_row.get("user_owner"),
+                original_intent=original_intent,
+                plan_iterations=plan_iterations,
+                sql_attempts=total_sql_attempts,
+                total_duration_ms=total_duration_ms,
+                total_tokens_in=total_tokens_in,
+                total_tokens_out=total_tokens_out,
+                requests=request_summaries,
+                had_replan=had_replan,
+                had_amendments=had_amendments,
+                data_fetches=query_data_fetches,
+            )
+            result.append(item)
+        except ValidationError as e:
+            logging.error(f"Can't validate QueryExplorerItem: {e}")
+
+    return QueryExplorerResult(queries=result, total=total)

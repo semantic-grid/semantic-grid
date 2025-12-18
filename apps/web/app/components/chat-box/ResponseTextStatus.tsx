@@ -20,6 +20,9 @@ const PulsingText = styled(Typography)(({ theme }) => ({
 const Status: Record<string, string> = {
   New: "Starting...",
   Intent: "Analyzing intent...",
+  Planning: "Planning query...",
+  FeedbackRequested: "Awaiting approval...",
+  PlanRejected: "Plan rejected. What would you like to do instead?",
   SQL: "Generating query...",
   Retry: "Refining response...",
   DataFetch: "Fetching data...",
@@ -28,7 +31,7 @@ const Status: Record<string, string> = {
   Error: "Error",
 };
 
-const RequestStages = ["Intent", "SQL", "Finalizing"];
+const RequestStages = ["Intent", "Planning", "SQL", "Finalizing"];
 
 const CustomStepIcon = (props: StepIconProps) => (
   <ArrowRight sx={{ fontSize: "small", ml: "5px" }} />
@@ -76,6 +79,21 @@ export const ResponseTextStatus = ({
   if (lastMessage && isLinkedQuerySummarizing) {
     return <PulsingText variant="body2">Summarizing...</PulsingText>;
   }
+
+  // FeedbackRequested - don't show status text, QueryPlanCard handles the UI
+  if (lastMessage && status === "FeedbackRequested") {
+    return null;
+  }
+
+  // PlanRejected - user rejected the plan and can start fresh
+  if (lastMessage && status === "PlanRejected") {
+    return (
+      <Typography variant="body2" color="warning.main">
+        {Status[status]}
+      </Typography>
+    );
+  }
+
   if (
     lastMessage &&
     (status === "Cancelled" || status === "Error" || status === "Done")

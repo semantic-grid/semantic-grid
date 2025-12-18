@@ -12,6 +12,7 @@ from fm_app.db.db import (
     update_request,
     update_request_status,
 )
+from fm_app.tracing import TracingTimer
 from fm_app.workers.interactive_flow.setup import FlowContext, build_prompt_variables
 
 
@@ -23,6 +24,7 @@ async def analyze_intent(ctx: FlowContext) -> IntentAnalysis:
     assembler = ctx.assembler
     db = ctx.db
     flow_step = ctx.flow_step
+    tracer = ctx.tracer
 
     planner_vars = await build_prompt_variables(ctx)
 
@@ -39,11 +41,29 @@ async def analyze_intent(ctx: FlowContext) -> IntentAnalysis:
         "flow_step_num": next(flow_step),
     }
 
-    slot = await assembler.render_async(
-        "planner", variables=planner_vars, req_ctx=mcp_ctx, mcp_caps=db_meta_caps
-    )
+    with TracingTimer() as prompt_timer:
+        slot = await assembler.render_async(
+            "planner", variables=planner_vars, req_ctx=mcp_ctx, mcp_caps=db_meta_caps
+        )
 
     intent_llm_system_prompt = slot.prompt_text
+
+    # Trace prompt assembly
+    if tracer:
+        await tracer.trace_prompt_assembly(
+            slot_name="planner",
+            prompt_hash=slot.lineage.get("content_hash", "")[:16]
+            if slot.lineage
+            else "",
+            duration_ms=prompt_timer.duration_ms,
+            metadata={
+                "slot_lineage": slot.lineage,
+                "mcp_requirements": slot.lineage.get("mcp_lineage")
+                if slot.lineage
+                else None,
+            },
+            prompt_content=intent_llm_system_prompt,
+        )
 
     # Use query-specific history if working on a specific query (via /for_query endpoint)
     # Otherwise use session history for new queries
@@ -85,11 +105,35 @@ async def analyze_intent(ctx: FlowContext) -> IntentAnalysis:
         ai_request=messages,
     )
 
-
     try:
-        llm_response = ai_model.get_structured(
-            messages, IntentAnalysis, "gpt-4.1-2025-04-14"
-        )
+        with TracingTimer() as llm_timer:
+            # Use get_structured_with_usage to get token counts for tracing
+            if hasattr(ai_model, "get_structured_with_usage"):
+                llm_result = ai_model.get_structured_with_usage(
+                    messages, IntentAnalysis, "gpt-4.1-2025-04-14"
+                )
+                llm_response = llm_result.result
+                tokens_in = llm_result.tokens_in
+                tokens_out = llm_result.tokens_out
+            else:
+                llm_response = ai_model.get_structured(
+                    messages, IntentAnalysis, "gpt-4.1-2025-04-14"
+                )
+                tokens_in = None
+                tokens_out = None
+
+        # Trace LLM call
+        if tracer:
+            await tracer.trace_llm_call(
+                model="gpt-4.1-2025-04-14",
+                input_messages=messages,
+                output_raw=llm_response.model_dump_json(),
+                output_parsed=llm_response.model_dump(),
+                tokens_in=tokens_in,
+                tokens_out=tokens_out,
+                duration_ms=llm_timer.duration_ms,
+                metadata={"step": "intent_analysis"},
+            )
     except Exception as e:
         logger.error(
             "Error getting LLM response",
@@ -97,11 +141,13 @@ async def analyze_intent(ctx: FlowContext) -> IntentAnalysis:
             flow_step_num=next(flow_step),
             error=str(e),
         )
+        # Trace error
+        if tracer:
+            await tracer.trace_error(error_message=str(e))
         req.status = RequestStatus.error
         req.err = str(e)
         await update_request_status(RequestStatus.error, req.err, db, req.request_id)
         raise
-
 
     if ai_model.get_name() != "gemini":
         messages.append({"role": "assistant", "content": llm_response})

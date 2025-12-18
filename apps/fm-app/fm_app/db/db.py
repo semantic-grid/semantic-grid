@@ -1,5 +1,6 @@
 import csv
 import json
+import logging
 from io import StringIO
 from typing import Any, Optional
 from uuid import UUID, uuid4
@@ -7,6 +8,8 @@ from uuid import UUID, uuid4
 from clickhouse_driver import Client
 from fastapi import HTTPException
 from pydantic import ValidationError
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 from uuid_extensions import uuid7
@@ -591,6 +594,7 @@ async def update_request(db: AsyncSession, update: UpdateRequestModel):
         rows = json.dumps(update.raw_data_rows) if update.raw_data_rows else None
         refs_json = json.dumps(update.refs) if update.refs else None
         view_json = update.view.model_dump_json() if update.view else None
+        query_plan_json = json.dumps(update.query_plan) if update.query_plan else None
 
         update_sql = text(
             """
@@ -613,7 +617,8 @@ async def update_request(db: AsyncSession, update: UpdateRequestModel):
                 linked_session_id=COALESCE(:linked_session_id, linked_session_id),
                 updated_at = now(),
                 query_id = COALESCE(:query_id, query_id),
-                view = COALESCE(:view_json, view)
+                view = COALESCE(:view_json, view),
+                query_plan = COALESCE(:query_plan, query_plan)
             WHERE request_id=:request_id
         """
         )
@@ -638,6 +643,7 @@ async def update_request(db: AsyncSession, update: UpdateRequestModel):
                 "linked_session_id": update.linked_session_id,
                 "query_id": update.query_id,
                 "view_json": view_json,
+                "query_plan": query_plan_json,
             },
         )
 
@@ -917,14 +923,6 @@ def run_structured_wh_request(request: str, db: Session):
     return {"csv": csv_result, "rows": len(rows)}
 
 
-import logging
-from typing import Optional
-
-from sqlalchemy import text
-from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import Session
-
-
 def count_wh_request(request: str, db: Session) -> Optional[int]:
     try:
         # Strip trailing semicolon if present
@@ -949,6 +947,105 @@ def count_wh_request(request: str, db: Session) -> Optional[int]:
 
 # except SQLAlchemyError as e:
 #     logging.error(f"SQL execution error {e}")
+
+
+async def get_previous_request_with_plan(
+    session_id: UUID, db: AsyncSession
+) -> Optional[GetRequestModel]:
+    """
+    Get the most recent request in the session that has a query_plan.
+    Used for plan_approval flow to retrieve the plan from the previous
+    FeedbackRequested request.
+    """
+    logging.info(
+        "Get previous request with plan",
+        extra={
+            "action": "db::get_previous_request_with_plan",
+            "session_id": str(session_id),
+        },
+    )
+
+    # Debug: check all requests in session to see their query_plan status
+    debug_sql = text(
+        """
+        SELECT request_id, sequence_number, status,
+               CASE WHEN query_plan IS NULL THEN 'NULL'
+                    ELSE 'HAS_PLAN' END as plan_status
+        FROM request
+        WHERE session_id = :session_id
+        ORDER BY sequence_number DESC
+        LIMIT 5;
+        """
+    )
+    debug_res = await db.execute(debug_sql, params={"session_id": session_id})
+    debug_rows = debug_res.mappings().fetchall()
+    logging.info(
+        "Debug: requests in session",
+        extra={
+            "action": "db::get_previous_request_with_plan_debug",
+            "session_id": str(session_id),
+            "requests": [
+                {
+                    "request_id": str(r["request_id"]),
+                    "seq": r["sequence_number"],
+                    "status": r["status"],
+                    "plan_status": r["plan_status"],
+                }
+                for r in debug_rows
+            ],
+        },
+    )
+
+    get_prev_request_sql = text(
+        """
+        SELECT *
+        FROM request
+        WHERE session_id = :session_id
+          AND query_plan IS NOT NULL
+        ORDER BY sequence_number DESC
+        LIMIT 1;
+        """
+    )
+    res = await db.execute(get_prev_request_sql, params={"session_id": session_id})
+    row = res.mappings().fetchone()
+    if not row:
+        logging.warning(
+            "No request with query_plan found",
+            extra={
+                "action": "db::get_previous_request_with_plan",
+                "session_id": str(session_id),
+            },
+        )
+        return None
+
+    # Convert row to dict for processing
+    data = dict(row)
+
+    # Parse query_plan JSON if it's a string
+    if data.get("query_plan") and isinstance(data["query_plan"], str):
+        try:
+            data["query_plan"] = json.loads(data["query_plan"])
+        except json.JSONDecodeError as e:
+            logging.error(f"Failed to parse query_plan JSON: {e}")
+            data["query_plan"] = None
+
+    logging.info(
+        "Found request with query_plan",
+        extra={
+            "action": "db::get_previous_request_with_plan",
+            "session_id": str(session_id),
+            "request_id": str(data.get("request_id")),
+            "has_query_plan": data.get("query_plan") is not None,
+        },
+    )
+
+    try:
+        result = GetRequestModel.model_validate(data)
+    except ValidationError as e:
+        logging.error(f"Can't validate Request object from DB error: {e}")
+        return None
+
+    return result
 
 
 async def get_history(

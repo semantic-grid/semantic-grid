@@ -3,7 +3,7 @@ from enum import Enum
 from typing import Any, Optional, Union
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 ### General Models
 
@@ -18,6 +18,10 @@ class Refs(BaseModel):
 class RequestStatus(str, Enum):
     new = "New"
     intent = "Intent"
+    planning = "Planning"  # Transient: query plan is being generated
+    feedback_requested = (
+        "FeedbackRequested"  # Terminal: awaiting user approval/feedback
+    )
     sql = "SQL"
     data = "DataFetch"
     retry = "Retry"
@@ -39,6 +43,8 @@ class InteractiveRequestType(str, Enum):
     linked_query = "linked_query"
     manual_query = "manual_query"
     discovery = "discovery"
+    plan_approval = "plan_approval"  # User approving a query plan
+    plan_amendment = "plan_amendment"  # User requesting changes to a query plan
     # chart_request = "chart_request"
 
 
@@ -88,6 +94,19 @@ class DBType(str, Enum):
 class Version(int, Enum):
     static = 1
     interactive = 2
+
+
+class PlanningMode(str, Enum):
+    """Controls when the planner step is used in interactive flow.
+
+    - never: Skip planning, go directly to SQL generation (original behavior)
+    - intent_based: LLM decides based on query complexity (default)
+    - always: Always run planning step before SQL generation
+    """
+
+    never = "never"
+    intent_based = "intent_based"
+    always = "always"
 
 
 class Column(BaseModel):
@@ -156,6 +175,10 @@ class StructuredResponse(BaseModel):
     refs: Optional[Refs] = None
     linked_session_id: Optional[UUID] = None
     description: Optional[str] = None
+    # Query plan for multistep flow (populated when status=Planning)
+    query_plan: Optional["QueryPlan"] = None
+    # Reason for re-planning (when query generation failed and new plan is presented)
+    replan_reason: Optional[str] = None
 
 
 class IntentAnalysis(BaseModel):
@@ -163,6 +186,317 @@ class IntentAnalysis(BaseModel):
     intent: Optional[str] = None
     summary: Optional[str] = None
     response: Optional[str] = None
+    # If True, query planner step will generate a plan for user approval
+    requires_plan_approval: bool = False
+
+
+### Query Plan Models (for multistep flow)
+
+
+class QueryPlanJoin(BaseModel):
+    """Describes a join between two tables in the query plan."""
+
+    left_table: Optional[str] = None
+    right_table: Optional[str] = None
+    join_type: Optional[str] = Field(
+        default=None, alias="type"
+    )  # "inner", "left", "right", "full", "cross"
+    join_condition: Optional[str] = Field(
+        default=None, alias="condition"
+    )  # human-readable, e.g., "on user_id"
+
+    model_config = {"populate_by_name": True, "extra": "allow"}
+
+
+class QueryPlanFilter(BaseModel):
+    """Describes a filter/WHERE condition in the query plan."""
+
+    column: Optional[str] = None
+    operator: Optional[str] = (
+        None  # "=", ">", "<", ">=", "<=", "!=", "like", "in", "between"
+    )
+    value: Optional[str] = None  # human-readable value representation
+    source: str = "inferred"  # "user_specified", "default", "inferred"
+
+    model_config = {"extra": "allow"}
+
+
+class QueryPlanAggregation(BaseModel):
+    """Describes an aggregation in the query plan."""
+
+    function: Optional[str] = (
+        None  # "count", "sum", "avg", "min", "max", "count_distinct"
+    )
+    column: Optional[str] = None  # column being aggregated, or "*" for count(*)
+    alias: Optional[str] = None  # result column name
+    description: Optional[str] = None  # human-readable description as fallback
+
+    model_config = {"extra": "allow"}
+
+
+class QueryPlan(BaseModel):
+    """
+    Human-readable query plan for user approval before SQL generation.
+
+    This captures the LLM's understanding of what the query will do,
+    allowing users to verify intent before SQL is generated.
+    """
+
+    model_config = {"extra": "allow"}
+
+    # Tables involved
+    tables: list[str] = []
+    primary_table: str = ""
+
+    # Relationships
+    # Accept either structured objects or simple strings for flexibility
+    joins: list[Union[QueryPlanJoin, str]] = []
+
+    # Data selection
+    columns_selected: list[str] = []  # columns to return (human-readable)
+    # Accept either structured objects or simple strings for flexibility
+    filters: list[Union[QueryPlanFilter, str]] = []
+
+    # Aggregations and grouping
+    # Accept either structured objects or simple strings for flexibility
+    aggregations: list[Union[QueryPlanAggregation, str]] = []
+    group_by: list[str] = []
+
+    # Ordering and limits
+    order_by: list[str] = []  # e.g., ["volume descending", "date ascending"]
+    limit: Optional[Union[int, str]] = None  # Accept string explanations from LLM
+
+    # Assumptions and defaults applied
+    assumptions: list[str] = []  # e.g., "Assuming 'recent' means last 7 days"
+    default_params: list[str] = []  # e.g., "Using default limit of 1000 rows"
+
+    # Human-readable summary
+    plan_summary: str = ""  # 2-3 sentence explanation of what the query will do
+
+    # Complexity indicators (for transparency)
+    estimated_complexity: str = "moderate"  # "simple", "moderate", "complex"
+    reason_for_approval: Optional[str] = None  # why this query needs approval
+
+    # Schema context for SQL generation (extracted during planning)
+    relevant_schema: Optional[str] = None  # Schema subset for tables in this plan
+
+    # Columns actually referenced (for validation against schema)
+    # LLM must list actual column names from schema, not user's conceptual names
+    columns_referenced: list[str] = []  # e.g., ["event_timestamp", "nas_identifier"]
+
+    @field_validator(
+        "tables",
+        "columns_selected",
+        "columns_referenced",
+        "group_by",
+        "order_by",
+        "assumptions",
+        "default_params",
+        mode="before",
+    )
+    @classmethod
+    def coerce_string_to_list(cls, v):
+        """Handle LLM returning a string instead of a list."""
+        if v is None:
+            return []
+        if isinstance(v, str):
+            # If it's a non-empty string, wrap it in a list
+            return [v] if v.strip() else []
+        if isinstance(v, list):
+            # Filter out any non-string items and convert to strings
+            return [str(item) for item in v if item is not None]
+        return []
+
+    @field_validator("joins", "filters", "aggregations", mode="before")
+    @classmethod
+    def coerce_complex_to_list(cls, v):
+        """Handle LLM returning a string instead of a list for complex fields."""
+        if v is None:
+            return []
+        if isinstance(v, str):
+            # If it's a non-empty string, wrap it in a list
+            return [v] if v.strip() else []
+        if isinstance(v, list):
+            return v
+        if isinstance(v, dict):
+            # Single object, wrap in list
+            return [v]
+        return []
+
+    @field_validator("primary_table", "plan_summary", mode="before")
+    @classmethod
+    def coerce_to_string(cls, v):
+        """Handle LLM returning non-string values for string fields."""
+        if v is None:
+            return ""
+        if isinstance(v, list):
+            # If list, join elements or return empty
+            return ", ".join(str(item) for item in v) if v else ""
+        return str(v)
+
+    @field_validator("relevant_schema", mode="before")
+    @classmethod
+    def coerce_relevant_schema_to_string(cls, v):
+        """Handle LLM returning a list instead of a string for relevant_schema."""
+        if v is None:
+            return None
+        if isinstance(v, list):
+            # Join list items with double newline separator to preserve structure
+            return "\n\n".join(str(item) for item in v if item is not None)
+        if isinstance(v, str):
+            return v if v.strip() else None
+        return str(v) if v else None
+
+    @field_validator("limit", mode="before")
+    @classmethod
+    def coerce_limit(cls, v):
+        """Handle LLM returning empty list or other unexpected values for limit."""
+        if v is None:
+            return None
+        if isinstance(v, list):
+            return None if len(v) == 0 else str(v)
+        if isinstance(v, (int, str)):
+            return v
+        return str(v)
+
+    @field_validator("estimated_complexity", mode="before")
+    @classmethod
+    def coerce_complexity(cls, v):
+        """Ensure complexity is a valid string, default to 'moderate'."""
+        if v is None or (isinstance(v, list) and len(v) == 0):
+            return "moderate"
+        if isinstance(v, list):
+            return str(v[0]) if v else "moderate"
+        valid_values = {"simple", "moderate", "complex"}
+        str_v = str(v).lower()
+        return str_v if str_v in valid_values else "moderate"
+
+
+### Query Plan DB Models (for first-class query plan storage)
+
+
+class CreateQueryPlanModel(BaseModel):
+    """Model for creating a new query plan record in the database."""
+
+    session_id: UUID
+    request_id: UUID
+    parent_id: Optional[UUID] = None  # Previous plan iteration
+    original_intent: str
+    amendment_feedback: Optional[str] = None  # User feedback that triggered this plan
+
+    # Plan content (from QueryPlan)
+    tables: list[str] = []
+    primary_table: str = ""
+    joins: list[Any] = []
+    columns_selected: list[str] = []
+    columns_referenced: list[str] = []  # Actual column names for validation
+    filters: list[Any] = []
+    aggregations: list[Any] = []
+    group_by: list[str] = []
+    order_by: list[str] = []
+    plan_limit: Optional[str] = None
+    assumptions: list[str] = []
+    default_params: list[str] = []
+    plan_summary: str
+    estimated_complexity: str = "moderate"
+    reason_for_approval: Optional[str] = None
+    relevant_schema: Optional[str] = None
+
+    @classmethod
+    def from_query_plan(
+        cls,
+        plan: "QueryPlan",
+        session_id: UUID,
+        request_id: UUID,
+        original_intent: str,
+        parent_id: Optional[UUID] = None,
+        amendment_feedback: Optional[str] = None,
+    ) -> "CreateQueryPlanModel":
+        """Create a DB model from a QueryPlan."""
+        return cls(
+            session_id=session_id,
+            request_id=request_id,
+            parent_id=parent_id,
+            original_intent=original_intent,
+            amendment_feedback=amendment_feedback,
+            tables=plan.tables,
+            primary_table=plan.primary_table,
+            joins=plan.joins,
+            columns_selected=plan.columns_selected,
+            columns_referenced=plan.columns_referenced,
+            filters=plan.filters,
+            aggregations=plan.aggregations,
+            group_by=plan.group_by,
+            order_by=plan.order_by,
+            plan_limit=str(plan.limit) if plan.limit else None,
+            assumptions=plan.assumptions,
+            default_params=plan.default_params,
+            plan_summary=plan.plan_summary,
+            estimated_complexity=plan.estimated_complexity,
+            reason_for_approval=plan.reason_for_approval,
+            relevant_schema=plan.relevant_schema,
+        )
+
+
+class GetQueryPlanModel(BaseModel):
+    """Model for reading a query plan record from the database."""
+
+    plan_id: UUID
+    session_id: UUID
+    request_id: UUID
+    parent_id: Optional[UUID] = None
+    original_intent: str
+    amendment_feedback: Optional[str] = None
+
+    # Plan content
+    tables: list[str] = []
+    primary_table: str = ""
+    joins: list[Any] = []
+    columns_selected: list[str] = []
+    columns_referenced: list[str] = []
+    filters: list[Any] = []
+    aggregations: list[Any] = []
+    group_by: list[str] = []
+    order_by: list[str] = []
+    plan_limit: Optional[str] = None
+    assumptions: list[str] = []
+    default_params: list[str] = []
+    plan_summary: str
+    estimated_complexity: str = "moderate"
+    reason_for_approval: Optional[str] = None
+    relevant_schema: Optional[str] = None
+
+    # Timestamps
+    created_at: datetime
+    updated_at: datetime
+
+    def to_query_plan(self) -> "QueryPlan":
+        """Convert DB model back to QueryPlan for API responses."""
+        return QueryPlan(
+            tables=self.tables,
+            primary_table=self.primary_table,
+            joins=self.joins,
+            columns_selected=self.columns_selected,
+            columns_referenced=self.columns_referenced,
+            filters=self.filters,
+            aggregations=self.aggregations,
+            group_by=self.group_by,
+            order_by=self.order_by,
+            limit=self.plan_limit,
+            assumptions=self.assumptions,
+            default_params=self.default_params,
+            plan_summary=self.plan_summary,
+            estimated_complexity=self.estimated_complexity,
+            reason_for_approval=self.reason_for_approval,
+            relevant_schema=self.relevant_schema,
+        )
+
+
+class QueryPlanChainModel(BaseModel):
+    """Model for returning a chain of query plans (amendment history)."""
+
+    plans: list[GetQueryPlanModel]
+    total_iterations: int
 
 
 class PromptItemType(str, Enum):
@@ -173,6 +507,9 @@ class PromptItemType(str, Enum):
     instruction = "Instruction"
     data_sample = "DataSample"
     slot_schema = "SlotSchema"
+    sql_dialect = "SQLDialect"
+    domain_model = "DomainModel"
+    assembled_prompt = "AssembledPrompt"  # Full assembled prompt from slot
 
 
 class GetPromptModel(BaseModel):
@@ -318,6 +655,8 @@ class GetRequestModel(BaseModel):
     view: Optional[View] = None
     # data fetches for this request's query (populated in admin endpoints)
     data_fetches: Optional[list["GetDataFetchModel"]] = None
+    # query plan for multi-step flow (populated when status=FeedbackRequested)
+    query_plan: Optional["QueryPlan"] = None
     # admin fields
     is_test: Optional[bool] = None
     is_fixed: Optional[bool] = None
@@ -375,6 +714,7 @@ class UpdateRequestModel(BaseModel):
     linked_session_id: Optional[UUID] = None
     query_id: Optional[UUID] = None
     view: Optional[View] = None
+    query_plan: Optional[dict[str, Any]] = None  # JSON serialized QueryPlan
 
 
 ## Data Query Models
@@ -455,6 +795,79 @@ class AdminQueriesResponse(BaseModel):
     """Paginated response for admin queries endpoint."""
 
     queries: list[GetQueryModel]
+    total: int
+    limit: int
+    offset: int
+
+
+### Query Explorer Models (for admin observability)
+
+
+class QueryExplorerRequestSummary(BaseModel):
+    """Summary of a request that contributed to a query."""
+
+    request_id: UUID
+    created_at: datetime
+    request_type: Optional[str] = None  # initial, plan_approval, plan_amendment, replan
+    request_text: str  # Original request text
+    status: RequestStatus
+    # Plan info (if this request generated a plan)
+    has_plan: bool = False
+    plan_summary: Optional[str] = None
+    plan_tables: Optional[list[str]] = None
+    # SQL attempts (if this request generated SQL)
+    sql_attempts: int = 0
+    sql_success: bool = False
+    # Outcome description
+    outcome: Optional[str] = None  # e.g., "Plan v1 generated", "SQL failed → replan"
+    # Trace summary
+    has_trace: bool = False
+    trace_llm_calls: int = 0
+    trace_repairs: int = 0
+    trace_errors: int = 0
+    trace_duration_ms: int = 0
+
+
+class QueryExplorerItem(BaseModel):
+    """A query with its full journey from intent to result."""
+
+    # Query info
+    query_id: UUID
+    created_at: datetime
+    summary: Optional[str] = None
+    sql: Optional[str] = None
+    row_count: Optional[int] = None
+    rating: Optional[int] = None
+
+    # Session/user info
+    session_id: UUID
+    user: Optional[str] = None
+
+    # The original intent that started this query journey
+    original_intent: Optional[str] = None
+
+    # Aggregated metrics
+    plan_iterations: int = 0  # How many plans were generated
+    sql_attempts: int = 0  # Total SQL generation attempts across all requests
+    total_duration_ms: int = 0  # From first request to query creation
+    total_tokens_in: int = 0
+    total_tokens_out: int = 0
+
+    # Contributing requests (for expansion)
+    requests: list[QueryExplorerRequestSummary] = []
+
+    # Status flags
+    had_replan: bool = False  # True if SQL generation failed and triggered replan
+    had_amendments: bool = False  # True if user amended the plan
+
+    # Data fetches for this query
+    data_fetches: list["GetDataFetchModel"] = []
+
+
+class QueryExplorerResponse(BaseModel):
+    """Paginated response for query explorer endpoint."""
+
+    queries: list[QueryExplorerItem]
     total: int
     limit: int
     offset: int

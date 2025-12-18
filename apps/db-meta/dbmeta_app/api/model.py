@@ -11,6 +11,7 @@ class PromptItemType(str, Enum):
     instruction = "Instruction"
     data_description = "DataDescription"
     sql_dialect = "SQLDialect"
+    domain_model = "DomainModel"
 
 
 class GetPromptModel(BaseModel):
@@ -55,3 +56,27 @@ class PromptsSetModel(BaseModel):
     prompt_items: list[PromptItem]
     source: str
     version: Optional[str] = None
+
+
+class ValidatePlanRequest(BaseModel):
+    """Request model for validating query plan tables and columns."""
+
+    tables: list[str]
+    columns_referenced: list[str]
+    db: Optional[str] = None
+
+
+class ValidationError(BaseModel):
+    """Single validation error."""
+
+    error_type: str  # "missing_table" or "missing_column"
+    name: str  # The table or column name that's missing
+    suggestion: Optional[str] = None  # Suggested alternative if found
+
+
+class ValidatePlanResult(BaseModel):
+    """Result of plan validation."""
+
+    valid: bool
+    errors: list[ValidationError] = []
+    available_tables: Optional[list[str]] = None  # Only included if there are errors

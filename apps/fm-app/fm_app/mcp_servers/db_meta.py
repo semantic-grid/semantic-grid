@@ -114,7 +114,7 @@ async def get_db_meta_mcp_prompt_items_v2(
 
     # Default items if not specified
     if items is None:
-        items = ["DBStruct", "QueryExample", "Instruction", "SQLDialect"]
+        items = ["DBStruct", "QueryExample", "Instruction", "SQLDialect", "DomainModel"]
 
     client = Client(f"""{settings.dbmeta}sse""")
     async with client:
@@ -207,6 +207,100 @@ async def db_meta_mcp_analyze_query(
             raise e
 
     return json.loads(prompts[0].text)
+
+
+@dataclass
+class PlanValidationError:
+    """Single validation error from plan validation."""
+
+    error_type: str  # "missing_table" or "missing_column"
+    name: str  # The table or column name that's missing
+    suggestion: Optional[str] = None  # Suggested alternative if found
+
+
+@dataclass
+class PlanValidationResult:
+    """Result of plan validation against schema."""
+
+    valid: bool
+    errors: list[PlanValidationError]
+    available_tables: Optional[list[str]] = None
+
+
+async def validate_query_plan(
+    req: McpServerRequest,
+    tables: list[str],
+    columns_referenced: list[str],
+    flow_step_num: int,
+    settings,
+    logger,
+) -> PlanValidationResult:
+    """
+    Validate that tables and columns from a query plan exist in the database schema.
+
+    Args:
+        req: MCP server request context
+        tables: List of table names from the plan
+        columns_referenced: List of column names referenced in the plan
+        flow_step_num: Current flow step number for logging
+        settings: Application settings
+        logger: Logger instance
+
+    Returns:
+        PlanValidationResult with validation status, errors, and suggestions
+    """
+    db = get_db_name(req)
+    client = Client(f"""{settings.dbmeta}sse""")
+
+    async with client:
+        try:
+            result = await client.call_tool(
+                "validate_plan",
+                {
+                    "req": {
+                        "tables": tables,
+                        "columns_referenced": columns_referenced,
+                        "db": db,
+                    }
+                },
+            )
+
+            # Parse the response
+            response_data = json.loads(result[0].text)
+
+            errors = [
+                PlanValidationError(
+                    error_type=e.get("error_type", ""),
+                    name=e.get("name", ""),
+                    suggestion=e.get("suggestion"),
+                )
+                for e in response_data.get("errors", [])
+            ]
+
+            validation_result = PlanValidationResult(
+                valid=response_data.get("valid", False),
+                errors=errors,
+                available_tables=response_data.get("available_tables"),
+            )
+
+            logger.info(
+                "Plan validation completed",
+                flow_stage="plan_validation",
+                flow_step_num=flow_step_num,
+                valid=validation_result.valid,
+                error_count=len(errors),
+            )
+
+            return validation_result
+
+        except Exception as e:
+            logger.error(
+                "Error validating plan against schema",
+                flow_stage="error",
+                flow_step_num=flow_step_num,
+                error=str(e),
+            )
+            raise e
 
 
 async def get_db_meta_database_overview(

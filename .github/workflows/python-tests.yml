@@ -4,13 +4,13 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - 'apps/fm-app/**'
-      - 'apps/db-meta/**'
+      - "apps/fm-app/**"
+      - "apps/db-meta/**"
   push:
     branches: [main]
     paths:
-      - 'apps/fm-app/**'
-      - 'apps/db-meta/**'
+      - "apps/fm-app/**"
+      - "apps/db-meta/**"
 
 jobs:
   test-fm-app:
@@ -26,7 +26,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.13'
+          python-version: "3.13"
 
       - name: Install uv
         run: |
@@ -58,7 +58,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.13'
+          python-version: "3.13"
 
       - name: Install uv
         run: |
@@ -68,8 +68,8 @@ jobs:
       - name: Install dependencies
         run: uv sync --locked
 
-      - name: Run driver normalization tests
-        run: uv run python tests/test_driver_normalization.py
+      - name: Run all tests
+        run: uv run python -m pytest tests/ -v
 
       - name: Run linter
         run: uv run ruff check .

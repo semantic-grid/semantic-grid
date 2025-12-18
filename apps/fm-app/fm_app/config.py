@@ -66,8 +66,11 @@ class Settings(BaseSettings):
     guest_auth_issuer: str
     client_id: str = "apegpt"
     env: str = "prod"
-    system_version: str = "v1.0.0"
+    system_version: str = "v1.2.0"
     packs_resources_dir: str = "/app/packages"
+
+    # Interactive flow planning mode: never, intent_based, always
+    planning_mode: str = "intent_based"
 
     # Redis configuration
     redis_host: str = "localhost"

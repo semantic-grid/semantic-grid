@@ -1378,3 +1378,82 @@ def query_preflight(query: str) -> PreflightResult:
             # validation of bad queries
             cache.set("explain", error_result.model_dump(), 60, query)
             return error_result
+
+
+def validate_plan_against_schema(
+    tables: list[str],
+    columns_referenced: list[str],
+) -> dict:
+    """
+    Validate that tables and columns from a query plan exist in the schema.
+
+    Args:
+        tables: List of table names from the plan
+        columns_referenced: List of column names referenced in the plan
+
+    Returns:
+        dict with 'valid' boolean, 'errors' list, and optionally 'available_tables'
+    """
+    from difflib import get_close_matches
+
+    settings = get_settings()
+    engine = get_db()
+
+    # Get structured schema (uses caching internally)
+    structured_schema = get_structured_schema(engine, settings, with_examples=False)
+
+    errors = []
+    available_tables = list(structured_schema.keys())
+
+    # Build a set of all available columns across all tables
+    # Format: {column_name: [table1, table2, ...]} for suggestions
+    all_columns: dict[str, list[str]] = {}
+    for table_name, table_data in structured_schema.items():
+        for col in table_data.get("columns", []):
+            col_name = col.get("name", "")
+            if col_name:
+                if col_name not in all_columns:
+                    all_columns[col_name] = []
+                all_columns[col_name].append(table_name)
+
+    # Validate tables
+    for table in tables:
+        if table not in structured_schema:
+            # Try to find a close match for suggestion
+            close_matches = get_close_matches(table, available_tables, n=1, cutoff=0.6)
+            suggestion = close_matches[0] if close_matches else None
+            errors.append(
+                {
+                    "error_type": "missing_table",
+                    "name": table,
+                    "suggestion": suggestion,
+                }
+            )
+
+    # Validate columns
+    all_column_names = set(all_columns.keys())
+    for column in columns_referenced:
+        if column not in all_column_names:
+            # Try to find a close match for suggestion
+            close_matches = get_close_matches(
+                column, list(all_column_names), n=1, cutoff=0.6
+            )
+            suggestion = close_matches[0] if close_matches else None
+            errors.append(
+                {
+                    "error_type": "missing_column",
+                    "name": column,
+                    "suggestion": suggestion,
+                }
+            )
+
+    result = {
+        "valid": len(errors) == 0,
+        "errors": errors,
+    }
+
+    # Include available tables only if there are errors (for context)
+    if errors:
+        result["available_tables"] = available_tables
+
+    return result

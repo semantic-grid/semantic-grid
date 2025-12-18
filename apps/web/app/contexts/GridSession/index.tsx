@@ -31,7 +31,6 @@ import { AppContext } from "@/app/contexts/App";
 import { useData } from "@/app/contexts/DataContext";
 import { useSessionContext } from "@/app/contexts/SessionStatus";
 import { isSolanaAddress, isSolanaSignature } from "@/app/helpers/cell";
-
 import { useAppUser } from "@/app/hooks/useAppUser";
 import { useUserSession } from "@/app/hooks/useUserSession";
 import type {
@@ -118,6 +117,8 @@ export interface ChatSessionContextType {
   onFetchData: (withNotification?: boolean) => void;
   query: any;
   hasCachedData: boolean;
+  approvePlan: () => void;
+  rejectPlan: () => void;
 }
 
 export const getDecision = async (
@@ -250,43 +251,51 @@ const withNewMessage =
   ];
 
 const withDoneMessage = (status: TResponseResult) => (ss: TChatSection[]) =>
-  ss.map((s, idx, allS) => ({
-    ...s,
-    query: status.query || s.query,
-    status: idx < allS.length - 1 ? s.status : status.status,
-    chat:
-      // eslint-disable-next-line no-nested-ternary
-      idx < allS.length - 1 || status.response === undefined
-        ? s.chat
-        : s.chat
-          ? [...s.chat.slice(0, s.chat.length - 1), status.response || ""]
-          : [status.response || ""],
-    messages:
-      // eslint-disable-next-line no-nested-ternary
-      idx < allS.length - 1
-        ? s.messages
-        : s.messages
-          ? [
-              ...s.messages.slice(0, s.messages.length - 1),
-              {
-                uid: status.request_id || "pending",
-                text:
-                  s.messages[s.messages.length - 1]?.text ||
-                  status.response ||
-                  "",
-                isBot: true,
-                status: status.status,
-              },
-            ]
-          : [
-              {
-                uid: status.request_id || "pending",
-                text: status.response || "",
-                isBot: true,
-                status: status.status,
-              },
-            ],
-  }));
+  ss.map((s, idx, allS) => {
+    // For error status, use err field; otherwise use response
+    const messageText =
+      status.status === "Error"
+        ? status.err || "An error occurred"
+        : s.messages?.[s.messages.length - 1]?.text || status.response || "";
+
+    return {
+      ...s,
+      query: status.query || s.query,
+      query_plan: status.query_plan || s.query_plan,
+      status: idx < allS.length - 1 ? s.status : status.status,
+      chat:
+        // eslint-disable-next-line no-nested-ternary
+        idx < allS.length - 1 || status.response === undefined
+          ? s.chat
+          : s.chat
+            ? [...s.chat.slice(0, s.chat.length - 1), status.response || ""]
+            : [status.response || ""],
+      messages:
+        // eslint-disable-next-line no-nested-ternary
+        idx < allS.length - 1
+          ? s.messages
+          : s.messages
+            ? [
+                ...s.messages.slice(0, s.messages.length - 1),
+                {
+                  uid: status.request_id || "pending",
+                  text: messageText,
+                  isBot: true,
+                  status: status.status,
+                  isError: status.status === "Error",
+                },
+              ]
+            : [
+                {
+                  uid: status.request_id || "pending",
+                  text: messageText,
+                  isBot: true,
+                  status: status.status,
+                  isError: status.status === "Error",
+                },
+              ],
+    };
+  });
 
 const withPendingMessage =
   (status: TResponseResult, text: string | undefined) => (ss: TChatSection[]) =>
@@ -511,6 +520,7 @@ export const GridSessionProvider = ({
               linkedSession: apeResponse?.structuredResponse?.linked_session_id,
               query: apeResponse.query,
               view: apeResponse.view,
+              query_plan: apeResponse?.query_plan,
             });
           } else {
             // If no matching column, add to general section
@@ -531,6 +541,7 @@ export const GridSessionProvider = ({
               linkedSession: apeResponse?.structuredResponse?.linked_session_id,
               query: apeResponse?.query,
               view: apeResponse?.view,
+              query_plan: apeResponse?.query_plan,
             });
           }
           return acc;
@@ -573,6 +584,7 @@ export const GridSessionProvider = ({
           linkedSession: botMsg?.structuredResponse?.linked_session_id,
           query: botMsg?.query,
           view: botMsg?.view,
+          query_plan: botMsg?.query_plan,
         };
       });
 
@@ -822,6 +834,15 @@ export const GridSessionProvider = ({
   }, [context]);
 
   const requestType = () => {
+    // Check if we're in FeedbackRequested or PlanRejected state - user is providing plan amendment
+    const lastSection = sects[sects.length - 1];
+    if (
+      lastSection?.status === "FeedbackRequested" ||
+      lastSection?.status === "PlanRejected"
+    ) {
+      return "plan_amendment";
+    }
+
     switch (selectedAction) {
       case "submit":
         return "interactive_query";
@@ -842,6 +863,7 @@ export const GridSessionProvider = ({
       latestUpdate?.status !== "Done" &&
       latestUpdate?.status !== "Error" &&
       latestUpdate?.status !== "Canceled" &&
+      latestUpdate?.status !== "FeedbackRequested" &&
       !pending
     ) {
       setPending(true);
@@ -860,13 +882,33 @@ export const GridSessionProvider = ({
       );
     }
 
-    if (latestUpdate?.status && latestUpdate?.status !== "Done") {
+    if (
+      latestUpdate?.status &&
+      latestUpdate?.status !== "Done" &&
+      latestUpdate?.status !== "FeedbackRequested"
+    ) {
       setSects(
         withPendingMessage(
           { status: latestUpdate.status } as TResponseResult,
           undefined,
         ),
       );
+    }
+
+    // FeedbackRequested is a terminal-like state - stop polling, show response
+    if (latestUpdate?.status === "FeedbackRequested") {
+      mutate()
+        .then(() =>
+          fetch(
+            `/api/apegpt/message?sessionId=${sessionId}&seqNum=${latestUpdate.sequence_number}`,
+          ),
+        )
+        .then((r) => r.json())
+        .then((status: TResponseResult) => {
+          setSects(withDoneMessage(status));
+        })
+        .then(() => setPending(false))
+        .then(() => scrollToBottom());
     }
 
     if (
@@ -909,10 +951,11 @@ export const GridSessionProvider = ({
   // MAIN EFFECT == HANDLE USER QUERY SUBMISSION AND RESPONSE POLLING
   useEffect(() => {
     if (prompt) {
+      const reqType = requestType();
       setPending(true);
       createRequest({
         request: prompt,
-        requestType: requestType(),
+        requestType: reqType,
         flow: "Interactive",
         model: model.value,
         db: "V2",
@@ -1047,6 +1090,55 @@ export const GridSessionProvider = ({
     cancelFetch(queryId);
   }, [queryId, cancelFetch]);
 
+  // Approve query plan - submit plan_approval request
+  const approvePlan = useCallback(() => {
+    setPending(true);
+    createRequest({
+      request: "Approved - proceed with SQL generation",
+      requestType: "plan_approval",
+      flow: "Interactive",
+      model: model.value,
+      db: "V2",
+      sessionId,
+      refs,
+      queryId: query?.query_id,
+    }).then((request) => {
+      console.log("plan approval request", request);
+      setSects(withNewMessage(request as any, "Plan approved"));
+      return request;
+    });
+  }, [sessionId, refs, query?.query_id, model.value]);
+
+  // Reject query plan - mark as rejected and add a new message asking what to do
+  const rejectPlan = useCallback(() => {
+    // Update the last section's status to PlanRejected and add rejection message
+    setSects((prevSects) =>
+      prevSects.map((s, idx, allS): TChatSection => {
+        if (idx === allS.length - 1 && s.messages && s.messages.length > 0) {
+          const lastMessage = s.messages[s.messages.length - 1];
+          const updatedMessages: TChatMessage[] = [
+            ...s.messages.slice(0, -1),
+            { ...lastMessage, status: "PlanRejected" } as TChatMessage,
+            {
+              uid: crypto.randomUUID(),
+              isBot: true,
+              text: "Plan rejected. What would you like to do instead?",
+              status: "PlanRejected",
+            },
+          ];
+          return {
+            ...s,
+            status: "PlanRejected",
+            messages: updatedMessages,
+          };
+        }
+        return s;
+      }),
+    );
+    setPending(false);
+    setPromptVal(""); // Clear any pending input
+  }, []);
+
   return (
     <Index.Provider
       value={{
@@ -1097,6 +1189,8 @@ export const GridSessionProvider = ({
         onFetchData,
         query,
         hasCachedData,
+        approvePlan,
+        rejectPlan,
       }}
     >
       {children}

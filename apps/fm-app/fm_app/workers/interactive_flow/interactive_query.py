@@ -21,18 +21,23 @@ Key features:
 - Stores rich metadata including columns, explanations, and row counts
 - Supports conversational queries that reference previous queries in the session
 - Validates that metadata columns exactly match SQL result columns
+- On max retries: signals orchestrator to re-plan (requires user approval)
 
 This flow is optimized for interactive data exploration where users iteratively
 refine queries and build on previous results.
 """
 
 import re
+from dataclasses import dataclass
+from typing import Optional
+from uuid import UUID
 
 from fm_app.api.model import (
     CreateQueryModel,
     IntentAnalysis,
     McpServerRequest,
     QueryMetadata,
+    QueryPlan,
     RequestStatus,
     StructuredResponse,
     UpdateRequestModel,
@@ -48,14 +53,40 @@ from fm_app.db.db import (
     update_request_status,
     update_session_name,
 )
+from fm_app.db.query_plan_db import update_query_plan_id
 from fm_app.mcp_servers.db_meta import db_meta_mcp_analyze_query
 from fm_app.tracing import TracingTimer
 from fm_app.validators import MetadataValidator
 from fm_app.workers.interactive_flow.setup import FlowContext, build_prompt_variables
 
 
-async def handle_interactive_query(ctx: FlowContext, intent: IntentAnalysis) -> None:
-    """Handle interactive query flow with SQL generation and repair loop."""
+@dataclass
+class QueryResult:
+    """Result of interactive query generation."""
+
+    success: bool
+    needs_replan: bool = False
+    errors: Optional[list[dict]] = None
+
+
+async def handle_interactive_query(
+    ctx: FlowContext,
+    intent: IntentAnalysis,
+    query_plan: Optional[QueryPlan] = None,
+    plan_id: Optional[UUID] = None,
+) -> QueryResult:
+    """
+    Handle interactive query flow with SQL generation and repair loop.
+
+    Args:
+        ctx: Flow context with shared state
+        intent: Intent analysis result
+        query_plan: Optional approved query plan (if multistep flow)
+        plan_id: Optional plan ID to link the resulting query to
+
+    Returns:
+        QueryResult with success status and optional re-plan signal
+    """
     req = ctx.req
     logger = ctx.logger
     settings = ctx.settings
@@ -129,6 +160,34 @@ async def handle_interactive_query(ctx: FlowContext, intent: IntentAnalysis) -> 
 
     interactive_query_vars = await build_prompt_variables(ctx)
 
+    # Add query plan context if provided (from multistep flow)
+    if query_plan is not None:
+        # Pass individual plan fields for human-readable template rendering
+        interactive_query_vars["query_plan"] = True  # Flag for conditional template
+        interactive_query_vars["plan_summary"] = query_plan.plan_summary
+        interactive_query_vars["query_plan_tables"] = query_plan.tables or []
+        interactive_query_vars["query_plan_columns_selected"] = (
+            query_plan.columns_selected or []
+        )
+        interactive_query_vars["query_plan_filters"] = query_plan.filters or []
+        interactive_query_vars["query_plan_aggregations"] = (
+            query_plan.aggregations or []
+        )
+        interactive_query_vars["query_plan_group_by"] = query_plan.group_by or []
+        interactive_query_vars["query_plan_order_by"] = query_plan.order_by or []
+        interactive_query_vars["query_plan_assumptions"] = query_plan.assumptions or []
+        # Use relevant_schema from plan instead of full MCP context
+        if query_plan.relevant_schema:
+            interactive_query_vars["relevant_schema"] = query_plan.relevant_schema
+        logger.info(
+            "Using approved query plan",
+            flow_stage="query_plan_context",
+            flow_step_num=next(flow_step),
+            plan_summary=query_plan.plan_summary,
+            tables=query_plan.tables,
+            has_relevant_schema=bool(query_plan.relevant_schema),
+        )
+
     db_meta_caps = {}
     mcp_ctx = {
         "req": McpServerRequest(
@@ -140,6 +199,8 @@ async def handle_interactive_query(ctx: FlowContext, intent: IntentAnalysis) -> 
             flow=req.flow,
         ),
         "flow_step_num": next(flow_step),
+        # Signal to MCP provider to skip schema fetch if plan provides it
+        "has_query_plan": query_plan is not None and bool(query_plan.relevant_schema),
     }
 
     with TracingTimer() as prompt_timer:
@@ -166,6 +227,7 @@ async def handle_interactive_query(ctx: FlowContext, intent: IntentAnalysis) -> 
                 if slot.lineage
                 else None,
             },
+            prompt_content=query_llm_system_prompt,
         )
 
     if ai_model.get_name() != "gemini":
@@ -197,7 +259,18 @@ async def handle_interactive_query(ctx: FlowContext, intent: IntentAnalysis) -> 
 
         try:
             with TracingTimer() as llm_timer:
-                llm_response = ai_model.get_structured(messages, QueryMetadata)
+                # Use get_structured_with_usage to get token counts for tracing
+                if hasattr(ai_model, "get_structured_with_usage"):
+                    llm_result = ai_model.get_structured_with_usage(
+                        messages, QueryMetadata
+                    )
+                    llm_response = llm_result.result
+                    tokens_in = llm_result.tokens_in
+                    tokens_out = llm_result.tokens_out
+                else:
+                    llm_response = ai_model.get_structured(messages, QueryMetadata)
+                    tokens_in = None
+                    tokens_out = None
 
             # Trace LLM call
             if tracer:
@@ -206,8 +279,8 @@ async def handle_interactive_query(ctx: FlowContext, intent: IntentAnalysis) -> 
                     input_messages=messages,
                     output_raw=llm_response.model_dump_json(),
                     output_parsed=llm_response.model_dump(),
-                    tokens_in=None,  # TODO: get from model response if available
-                    tokens_out=None,
+                    tokens_in=tokens_in,
+                    tokens_out=tokens_out,
                     duration_ms=llm_timer.duration_ms,
                     metadata={"attempt": attempt},
                 )
@@ -232,7 +305,7 @@ async def handle_interactive_query(ctx: FlowContext, intent: IntentAnalysis) -> 
             )
             if tracer:
                 await tracer.finalize()
-            return
+            return QueryResult(success=False)
 
         if ai_model.get_name() != "gemini":
             messages.append(
@@ -322,12 +395,15 @@ async def handle_interactive_query(ctx: FlowContext, intent: IntentAnalysis) -> 
                     flow_stage="metadata_repair",
                     flow_step_num=next(flow_step),
                 )
-                # Trace repair attempt
+                # Trace repair attempt with prompt content
                 if tracer:
                     await tracer.trace_repair(
                         repair_attempt=attempt,
                         error_message=errors_list,
-                        metadata={"repair_type": "metadata_validation"},
+                        metadata={
+                            "repair_type": "metadata_validation",
+                            "repair_prompt": validation_error_msg[:1000],
+                        },
                     )
                 attempt += 1
                 continue
@@ -416,6 +492,19 @@ async def handle_interactive_query(ctx: FlowContext, intent: IntentAnalysis) -> 
                                     "content": validation_error_msg,
                                 }
                             )
+
+                            # Trace repair attempt for unqualified tables
+                            if tracer:
+                                unqualified_err = ", ".join(actual_unqualified)
+                                err_msg = f"Unqualified tables: {unqualified_err}"
+                                await tracer.trace_repair(
+                                    repair_attempt=attempt,
+                                    error_message=err_msg,
+                                    metadata={
+                                        "repair_type": "unqualified_tables",
+                                        "repair_prompt": validation_error_msg[:1000],
+                                    },
+                                )
 
                             attempt += 1
                             continue
@@ -565,21 +654,34 @@ async def handle_interactive_query(ctx: FlowContext, intent: IntentAnalysis) -> 
                 )
                 attempt += 1
 
+                repair_prompt = f"""
+                    We have got DB exception: {error_message}\n.
+                    Please regenerate SQL to fix the issue.
+                    Remember instructions from original prompt!.
+
+                    IMPORTANT: Keep the 'result' field exactly as you
+                    wrote it originally. The result should describe what
+                    the query accomplishes for the user, NOT what you
+                    fixed. Do NOT mention fixes or repairs in result.
+                """
+
                 messages.append(
                     {
                         "role": "system",
-                        "content": f"""
-                            We have got DB exception: {error_message}\n.
-                            Please regenerate SQL to fix the issue.
-                            Remember instructions from original prompt!.
-
-                            IMPORTANT: Keep the 'result' field exactly as you
-                            wrote it originally. The result should describe what
-                            the query accomplishes for the user, NOT what you
-                            fixed. Do NOT mention fixes or repairs in result.
-                        """,
+                        "content": repair_prompt,
                     }
                 )
+
+                # Trace repair attempt for db_exception
+                if tracer:
+                    await tracer.trace_repair(
+                        repair_attempt=attempt - 1,
+                        error_message=error_message.strip()[:500],
+                        metadata={
+                            "repair_type": "db_exception",
+                            "repair_prompt": repair_prompt[:1000],
+                        },
+                    )
                 continue
 
             # Smart row count: skip if query is too expensive based on EXPLAIN estimates
@@ -703,6 +805,24 @@ async def handle_interactive_query(ctx: FlowContext, intent: IntentAnalysis) -> 
                 ),
             )
 
+            # Link query to the plan that produced it (if plan_id provided)
+            if plan_id is not None:
+                try:
+                    await update_query_plan_id(db, new_query_stored.query_id, plan_id)
+                    logger.info(
+                        "Linked query to plan",
+                        flow_stage="link_query_to_plan",
+                        flow_step_num=next(flow_step),
+                        query_id=str(new_query_stored.query_id),
+                        plan_id=str(plan_id),
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "Failed to link query to plan",
+                        flow_stage="link_query_to_plan_error",
+                        error=str(e),
+                    )
+
         elif new_metadata.get("result") is not None:
             req.response = new_metadata.get("result")
 
@@ -734,7 +854,7 @@ async def handle_interactive_query(ctx: FlowContext, intent: IntentAnalysis) -> 
                     error_type="no_sql_output",
                 )
                 await tracer.finalize()
-            return
+            return QueryResult(success=False)
 
         # Complete the flow
         logger.info(
@@ -772,7 +892,7 @@ async def handle_interactive_query(ctx: FlowContext, intent: IntentAnalysis) -> 
         if tracer:
             await tracer.finalize()
 
-        return
+        return QueryResult(success=True)
 
     # If we reach here, exhausted all attempts
     # Build detailed error message with all retry errors
@@ -808,3 +928,7 @@ async def handle_interactive_query(ctx: FlowContext, intent: IntentAnalysis) -> 
 
     req.status = RequestStatus.error
     req.err = detailed_error
+
+    # Signal that re-planning is needed - orchestrator will handle this
+    # by generating a new plan with the error context and returning to user
+    return QueryResult(success=False, needs_replan=True, errors=retry_errors)

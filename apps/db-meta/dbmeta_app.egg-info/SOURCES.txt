@@ -21,9 +21,11 @@ dbmeta_app/prompt_assembler/prompt_packs.py
 dbmeta_app/prompt_items/__init__.py
 dbmeta_app/prompt_items/data_sample.py
 dbmeta_app/prompt_items/db_struct.py
+dbmeta_app/prompt_items/domain_model.py
 dbmeta_app/prompt_items/prompt_instructions.py
 dbmeta_app/prompt_items/query_examples.py
 dbmeta_app/prompt_items/sql_dialect.py
+dbmeta_app/prompt_items/utils.py
 dbmeta_app/test/__init__.py
 dbmeta_app/test/main.py
 dbmeta_app/vector_db/__init__.py
@@ -31,4 +33,5 @@ dbmeta_app/vector_db/milvus.py
 dbmeta_app/wh_db/__init__.py
 dbmeta_app/wh_db/db.py
 tests/test_driver_normalization.py
+tests/test_mcp_tools.py
 tests/test_prompt_assembly.py

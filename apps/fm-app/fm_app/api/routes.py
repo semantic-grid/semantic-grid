@@ -45,6 +45,7 @@ from fm_app.api.model import (
     DBType,
     FlowType,
     GetDataResponse,
+    GetPromptVersionModel,
     GetQueryModel,
     GetRequestModel,
     GetRequestTraceModel,
@@ -54,6 +55,7 @@ from fm_app.api.model import (
     PatchAdminRequestModel,
     PatchSessionModel,
     PromptItemType,
+    QueryExplorerResponse,
     RequestStatus,
     UpdateRequestStatusModel,
     Version,
@@ -64,6 +66,7 @@ from fm_app.db.admin_db import (
     get_all_queries_admin,
     get_all_requests_admin_v2,
     get_all_sessions_admin,
+    get_query_explorer_data,
     update_request_admin,
 )
 from fm_app.db.data_fetch_db import create_data_fetch
@@ -1266,6 +1269,49 @@ async def admin_get_all_queries(
     )
 
 
+@api_router.get("/admin/query-explorer")
+async def admin_get_query_explorer(
+    db: AsyncSession = Depends(get_db),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    search: Optional[str] = Query(
+        None, description="Search in request, SQL, or summary"
+    ),
+    auth_result: dict = Security(auth.verify, scopes=["admin:requests"]),
+) -> QueryExplorerResponse:
+    """
+    Get query explorer data: queries with their full journey from intent to result.
+
+    For each query, returns:
+    - Query details (SQL, summary, row_count, rating)
+    - Original intent that started the journey
+    - All contributing requests with plan info and trace summaries
+    - Aggregated metrics (plan iterations, SQL attempts, duration, tokens)
+    - Flags for amendments and replans
+
+    Supports expandable rows in the frontend to show request-level details.
+    """
+    if auth_result is None or auth_result.get("sub") is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Not an admin"
+        )
+    admin = auth_result.get("sub")
+
+    result = await get_query_explorer_data(
+        limit=limit,
+        offset=offset,
+        admin=admin,
+        search=search,
+        db=db,
+    )
+    return QueryExplorerResponse(
+        queries=result.queries,
+        total=result.total,
+        limit=limit,
+        offset=offset,
+    )
+
+
 @api_router.get("/admin/traces")
 async def admin_get_all_traces(
     db: AsyncSession = Depends(get_db),
@@ -1357,6 +1403,32 @@ async def admin_get_all_prompt_versions(
         limit=limit,
         offset=offset,
     )
+
+
+@api_router.get("/admin/prompt-versions/{version_id}")
+async def admin_get_prompt_version(
+    version_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    auth_result: dict = Security(auth.verify, scopes=["admin:requests"]),
+) -> GetPromptVersionModel:
+    """
+    Get a specific prompt version by ID.
+    Returns full prompt content and metadata.
+    """
+    if auth_result is None or auth_result.get("sub") is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Not an admin"
+        )
+
+    from fm_app.db.trace_db import get_prompt_version_by_id
+
+    version = await get_prompt_version_by_id(db=db, version_id=version_id)
+    if version is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Prompt version not found",
+        )
+    return version
 
 
 @api_router.post("/chart")

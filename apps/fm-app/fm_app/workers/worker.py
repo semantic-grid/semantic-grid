@@ -402,11 +402,17 @@ async def _wrk_add_request(args):
                     flow_step_num=10000,
                 )
 
-                status = (
-                    RequestStatus.done
-                    if request.status != RequestStatus.error
-                    else RequestStatus.error
-                )
+                # Preserve terminal statuses that shouldn't be overwritten to 'done'
+                # - feedback_requested: waiting for user approval of query plan
+                # - error: request failed
+                terminal_statuses = {
+                    RequestStatus.feedback_requested,
+                    RequestStatus.error,
+                }
+                if request.status in terminal_statuses:
+                    status = request.status
+                else:
+                    status = RequestStatus.done
                 structured_response = request.structured_response
                 if structured_response is None:
                     await update_request(
@@ -480,6 +486,11 @@ async def _wrk_add_request(args):
                                 else None
                             ),
                             linked_session_id=structured_response.linked_session_id,
+                            query_plan=(
+                                structured_response.query_plan.model_dump()
+                                if structured_response.query_plan
+                                else None
+                            ),
                         ),
                     )
             # await db.close()

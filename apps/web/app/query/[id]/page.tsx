@@ -98,7 +98,8 @@ const getChatMessages = async (id: string) => {
           !m.status ||
           (m.status !== "Done" &&
             m.status !== "Error" &&
-            m.status !== "Cancelled"),
+            m.status !== "Cancelled" &&
+            m.status !== "FeedbackRequested"),
       ),
   };
 };
