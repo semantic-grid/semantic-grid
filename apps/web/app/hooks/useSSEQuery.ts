@@ -13,9 +13,22 @@ type SSEQueryState = {
 
 type SSEEventData =
   | { event: "started"; status: "started"; task_id: string; query_id: string }
-  | { event: "count"; status: "counting_complete"; query_id: string; total_rows: number }
+  | {
+      event: "count";
+      status: "counting_complete";
+      query_id: string;
+      total_rows: number;
+    }
   | { event: "progress"; status: "running"; elapsed: number }
-  | { event: "data"; status: "success"; query_id: string; rows: any[]; total_rows: number; limit: number; offset: number }
+  | {
+      event: "data";
+      status: "success";
+      query_id: string;
+      rows: any[];
+      total_rows: number;
+      limit: number;
+      offset: number;
+    }
   | { event: "error"; status: "error"; error: string };
 
 export const useSSEQuery = ({
@@ -72,6 +85,15 @@ export const useSSEQuery = ({
 
     const url = `/api/apegpt/data/sse/${id}?${params.toString()}`;
     const eventSource = new EventSource(url);
+
+    eventSource.addEventListener("auth_error", (e) => {
+      const data = JSON.parse(e.data);
+      console.log("SSE auth error, redirecting to login");
+      eventSource.close();
+      if (data.redirect) {
+        window.location.href = data.redirect;
+      }
+    });
 
     eventSource.addEventListener("started", (e) => {
       const data = JSON.parse(e.data);

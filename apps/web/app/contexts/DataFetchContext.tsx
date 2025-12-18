@@ -89,6 +89,16 @@ export const DataFetchProvider = ({ children }: { children: ReactNode }) => {
     (url: string, fetchState: FetchState) => {
       const eventSource = new EventSource(url);
 
+      eventSource.addEventListener("auth_error", (e) => {
+        const data = JSON.parse(e.data);
+        console.log("[DataFetchContext] Auth error, redirecting to login");
+        eventSource.close();
+        // Redirect to login
+        if (data.redirect) {
+          window.location.href = data.redirect;
+        }
+      });
+
       eventSource.addEventListener("reconnected", (e) => {
         const data = JSON.parse(e.data);
         fetchState.status = "fetching";

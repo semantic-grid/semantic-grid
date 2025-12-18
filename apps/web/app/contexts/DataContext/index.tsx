@@ -438,6 +438,15 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       const eventSource = new EventSource(url);
       fetchState.eventSource = eventSource;
 
+      eventSource.addEventListener("auth_error", (e) => {
+        const data = JSON.parse(e.data);
+        console.log("[DataContext] Auth error, redirecting to login");
+        eventSource.close();
+        if (data.redirect) {
+          window.location.href = data.redirect;
+        }
+      });
+
       eventSource.addEventListener("connected", (e) => {
         console.log("[DataContext] SSE Connected:", e.data);
         fetchState.status = "fetching";

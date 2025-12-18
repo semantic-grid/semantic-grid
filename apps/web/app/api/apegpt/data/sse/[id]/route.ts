@@ -22,9 +22,14 @@ export const GET = async (
     }
     if (!token?.accessToken) {
       console.error("[SSE Data Proxy] No token available");
-      return new Response(JSON.stringify({ error: "Not authenticated" }), {
-        status: 401,
-        headers: { "Content-Type": "application/json" },
+      // Return SSE-formatted error so frontend can detect auth failure
+      const sseError = `event: auth_error\ndata: ${JSON.stringify({ error: "Not authenticated", redirect: "/api/auth/login" })}\n\n`;
+      return new Response(sseError, {
+        status: 200, // SSE needs 200 to deliver the message
+        headers: {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+        },
       });
     }
 
@@ -46,6 +51,17 @@ export const GET = async (
 
     if (!upstream.ok) {
       const error = await upstream.text();
+      // Handle 401 from backend with SSE auth_error event
+      if (upstream.status === 401) {
+        const sseError = `event: auth_error\ndata: ${JSON.stringify({ error: "Session expired", redirect: "/api/auth/login" })}\n\n`;
+        return new Response(sseError, {
+          status: 200,
+          headers: {
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+          },
+        });
+      }
       return new Response(error, {
         status: upstream.status,
         headers: { "Content-Type": "application/json" },
