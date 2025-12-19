@@ -841,6 +841,11 @@ def wrk_fetch_data(self, args):
             )
             update_data_fetch_status("timed_out", error=timeout_error)
 
+            # Clear running task tracker so retries start fresh
+            from fm_app.cache.task_tracker import clear_running_task
+
+            run_async(clear_running_task(query_id))
+
             return {
                 "status": "error",
                 "query_id": query_id,
@@ -855,6 +860,11 @@ def wrk_fetch_data(self, args):
 
         # Update data_fetch tracking - general error
         update_data_fetch_status("error", error=str(e))
+
+        # Clear running task tracker so retries start fresh
+        from fm_app.cache.task_tracker import clear_running_task
+
+        run_async(clear_running_task(query_id))
 
         return {
             "status": "error",
