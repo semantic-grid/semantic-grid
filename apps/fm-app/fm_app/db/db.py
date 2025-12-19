@@ -1048,6 +1048,84 @@ async def get_previous_request_with_plan(
     return result
 
 
+async def get_previous_request(
+    db: AsyncSession, session_id: UUID, current_request_id: UUID
+) -> Optional[GetRequestModel]:
+    """
+    Get the request immediately before the current one in the session.
+
+    Used for clarification_response flow to retrieve the previous request
+    that asked the clarification question.
+
+    Args:
+        db: Database session
+        session_id: Session ID
+        current_request_id: Current request ID
+
+    Returns:
+        The previous request, or None if not found
+    """
+    logging.info(
+        "Get previous request",
+        extra={
+            "action": "db::get_previous_request",
+            "session_id": str(session_id),
+            "current_request_id": str(current_request_id),
+        },
+    )
+
+    # Get sequence number of current request, then get the one before it
+    get_prev_sql = text(
+        """
+        SELECT r.*
+        FROM request r
+        WHERE r.session_id = :session_id
+          AND r.sequence_number = (
+              SELECT sequence_number - 1
+              FROM request
+              WHERE request_id = :current_request_id
+          )
+        LIMIT 1;
+        """
+    )
+    res = await db.execute(
+        get_prev_sql,
+        params={"session_id": session_id, "current_request_id": current_request_id},
+    )
+    row = res.mappings().fetchone()
+
+    if not row:
+        logging.warning(
+            "No previous request found",
+            extra={
+                "action": "db::get_previous_request",
+                "session_id": str(session_id),
+                "current_request_id": str(current_request_id),
+            },
+        )
+        return None
+
+    data = dict(row)
+
+    logging.info(
+        "Found previous request",
+        extra={
+            "action": "db::get_previous_request",
+            "session_id": str(session_id),
+            "current_request_id": str(current_request_id),
+            "previous_request_id": str(data.get("request_id")),
+        },
+    )
+
+    try:
+        result = GetRequestModel.model_validate(data)
+    except ValidationError as e:
+        logging.error(f"Can't validate previous Request object from DB error: {e}")
+        return None
+
+    return result
+
+
 async def get_history(
     db: AsyncSession, session_id: UUID, include_responses: bool = False
 ):

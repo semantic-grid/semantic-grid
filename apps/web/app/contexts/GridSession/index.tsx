@@ -119,6 +119,7 @@ export interface ChatSessionContextType {
   hasCachedData: boolean;
   approvePlan: () => void;
   rejectPlan: () => void;
+  respondToClarification: (response: string) => void;
 }
 
 export const getDecision = async (
@@ -262,6 +263,8 @@ const withDoneMessage = (status: TResponseResult) => (ss: TChatSection[]) =>
       ...s,
       query: status.query || s.query,
       query_plan: status.query_plan || s.query_plan,
+      response_type: status.response_type || s.response_type,
+      clarification: status.clarification || s.clarification,
       status: idx < allS.length - 1 ? s.status : status.status,
       chat:
         // eslint-disable-next-line no-nested-ternary
@@ -521,6 +524,8 @@ export const GridSessionProvider = ({
               query: apeResponse.query,
               view: apeResponse.view,
               query_plan: apeResponse?.query_plan,
+              response_type: apeResponse?.response_type,
+              clarification: apeResponse?.clarification,
             });
           } else {
             // If no matching column, add to general section
@@ -542,6 +547,8 @@ export const GridSessionProvider = ({
               query: apeResponse?.query,
               view: apeResponse?.view,
               query_plan: apeResponse?.query_plan,
+              response_type: apeResponse?.response_type,
+              clarification: apeResponse?.clarification,
             });
           }
           return acc;
@@ -585,6 +592,8 @@ export const GridSessionProvider = ({
           query: botMsg?.query,
           view: botMsg?.view,
           query_plan: botMsg?.query_plan,
+          response_type: botMsg?.response_type,
+          clarification: botMsg?.clarification,
         };
       });
 
@@ -1139,6 +1148,28 @@ export const GridSessionProvider = ({
     setPromptVal(""); // Clear any pending input
   }, []);
 
+  // Respond to clarification question from agent
+  const respondToClarification = useCallback(
+    (response: string) => {
+      setPending(true);
+      createRequest({
+        request: response,
+        requestType: "clarification_response",
+        flow: "Interactive",
+        model: model.value,
+        db: "V2",
+        sessionId,
+        refs,
+        queryId: query?.query_id,
+      }).then((request) => {
+        console.log("clarification response request", request);
+        setSects(withNewMessage(request as any, response));
+        return request;
+      });
+    },
+    [sessionId, refs, query?.query_id, model.value],
+  );
+
   return (
     <Index.Provider
       value={{
@@ -1191,6 +1222,7 @@ export const GridSessionProvider = ({
         hasCachedData,
         approvePlan,
         rejectPlan,
+        respondToClarification,
       }}
     >
       {children}

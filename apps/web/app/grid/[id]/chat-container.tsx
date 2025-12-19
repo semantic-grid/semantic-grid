@@ -21,6 +21,7 @@ import React, {
 
 import { ResponseTextMessage } from "@/app/components/chat-box/ResponseTextMessage";
 import { ResponseTextStatus } from "@/app/components/chat-box/ResponseTextStatus";
+import { ClarificationPrompt } from "@/app/components/ClarificationPrompt";
 import CopyQueryUrl from "@/app/components/CopyQueryUrl";
 import { QueryFeedback } from "@/app/components/QueryFeedback";
 import { QueryPlanCard } from "@/app/components/QueryPlanCard";
@@ -86,6 +87,7 @@ export const ChatContainer = ({
     setSelectionModel,
     approvePlan,
     rejectPlan,
+    respondToClarification,
   } = useGridSession();
   const inputRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
@@ -430,6 +432,23 @@ export const ChatContainer = ({
                                   disabled={idx !== sects.length - 1}
                                 />
                               )}
+                              {/* Show ClarificationPrompt when section has clarification */}
+                              {section.clarification &&
+                                i === arr.length - 1 && (
+                                  <ClarificationPrompt
+                                    question={section.clarification.question}
+                                    options={section.clarification.options}
+                                    context={section.clarification.context}
+                                    allowFreeform={
+                                      section.clarification.allow_freeform ??
+                                      true
+                                    }
+                                    onResponse={respondToClarification}
+                                    disabled={
+                                      pending || idx !== sects.length - 1
+                                    }
+                                  />
+                                )}
                             </Box>
                           )}
                           {i % 2 !== 0 &&

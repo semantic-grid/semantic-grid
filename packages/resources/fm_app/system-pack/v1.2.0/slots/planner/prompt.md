@@ -12,6 +12,7 @@ Possible choices for the next steps are (Enum values):
 - **data_analysis**
 - **general_chat**
 - **disambiguation**
+- **clarification**
 
 ### linked_session
 
@@ -44,6 +45,39 @@ If the question is not related to the domain, politely suggest that the user ask
 
 Choose **disambiguation** if user request is ambiguous and requires further clarification.
 
+### clarification
+
+Choose **clarification** when you need specific information from the user before you can 
+proceed with query generation. Unlike **disambiguation** (which returns a text response), 
+**clarification** returns a structured question with optional multiple-choice options.
+
+Use **clarification** when:
+- A critical parameter is missing that you cannot reasonably assume (time range, entity type, threshold)
+- Multiple valid interpretations exist and the difference significantly impacts results
+- The scope is unclear and choosing wrong would waste user's time ("all users" vs "active users only")
+
+Do NOT use **clarification** for:
+- Minor ambiguities where a reasonable default exists (prefer assumptions in the plan)
+- Simple yes/no confirmations (let plan approval handle those)
+- Questions you can answer by stating assumptions
+
+When choosing **clarification**, you MUST provide:
+- **clarification_needed**: set to `true`
+- **clarification_question**: a clear, specific question
+- **clarification_options**: 2-5 concrete choices (when applicable, otherwise omit)
+- **clarification_context**: brief explanation of why you're asking (helps user understand impact)
+
+Example clarification output:
+```json
+{
+  "request_type": "clarification",
+  "clarification_needed": true,
+  "clarification_question": "Which time period should I analyze?",
+  "clarification_options": ["Last 7 days", "Last 30 days", "Last quarter", "Year to date"],
+  "clarification_context": "The time window significantly affects the trend analysis results."
+}
+```
+
 ---
 
 Important: always analyse **Selected Row Data** or **Selected Column Data** (if available),
@@ -66,6 +100,12 @@ as understood by you.
 If request_type is *general_chat* or *disambiguation*,
 set the **response** field to a human-readable response to the user request,
 or a question to the user to clarify the request.
+
+If request_type is *clarification*:
+- Set **clarification_needed** to `true`
+- Set **clarification_question** to a clear, specific question
+- Optionally set **clarification_options** to a list of 2-5 choices
+- Optionally set **clarification_context** to explain why you're asking
 
 ---
 

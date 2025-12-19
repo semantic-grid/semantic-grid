@@ -16,6 +16,10 @@ from fm_app.api.model import (
 )
 from fm_app.config import get_settings
 from fm_app.db.db import update_request_status
+from fm_app.workers.interactive_flow.clarification import (
+    handle_clarification_request,
+    handle_clarification_response,
+)
 from fm_app.workers.interactive_flow.data_analysis import handle_data_analysis
 from fm_app.workers.interactive_flow.discovery import handle_discovery
 from fm_app.workers.interactive_flow.general_response import handle_general_response
@@ -27,7 +31,7 @@ from fm_app.workers.interactive_flow.interactive_query import (
 from fm_app.workers.interactive_flow.linked_query import handle_linked_query
 from fm_app.workers.interactive_flow.manual_query import handle_manual_query
 from fm_app.workers.interactive_flow.query_planner import generate_query_plan
-from fm_app.workers.interactive_flow.setup import initialize_flow
+from fm_app.workers.interactive_flow.setup import FlowContext, initialize_flow
 
 
 async def _handle_replan_on_failure(
@@ -97,6 +101,7 @@ async def _handle_replan_on_failure(
         req.structured_response = StructuredResponse()
     req.structured_response.query_plan = new_plan
     req.structured_response.intent = intent.intent
+    req.structured_response.response_type = "plan_approval"
     req.structured_response.replan_reason = (
         "The previous plan could not be executed successfully. "
         "Please review the revised plan."
@@ -114,6 +119,121 @@ async def _handle_replan_on_failure(
     )
 
     return req
+
+
+async def _route_by_intent(ctx: FlowContext, intent: IntentAnalysis) -> WorkerRequest:
+    """
+    Route request based on analyzed intent.
+
+    This helper is used both by the main interactive_flow and by
+    handle_clarification_response after re-analyzing intent.
+
+    Args:
+        ctx: Flow context
+        intent: Analyzed intent
+
+    Returns:
+        WorkerRequest with appropriate status and response
+    """
+    req = ctx.req
+    db = ctx.db
+
+    # Handle clarification requests
+    if (
+        intent.clarification_needed
+        or intent.request_type == InteractiveRequestType.clarification
+    ):
+        return await handle_clarification_request(ctx, intent)
+
+    # Route based on analyzed intent
+    if intent.request_type in (
+        InteractiveRequestType.linked_session,
+        InteractiveRequestType.interactive_query,
+    ):
+        # Always generate a plan for lineage/analytics
+        # Then decide whether to wait for user approval or auto-approve
+        settings = get_settings()
+        planning_mode = PlanningMode(settings.planning_mode)
+
+        # Generate plan for every query (ensures plan_id lineage)
+        try:
+            query_plan, plan_id = await generate_query_plan(ctx, intent.intent)
+        except Exception as e:
+            ctx.logger.error(
+                "Query planning failed",
+                flow_stage="error_query_plan",
+                error=str(e),
+                error_type=type(e).__name__,
+            )
+            # Fall back to query without plan on planning failure
+            _ = await handle_interactive_query(ctx, intent)
+            return req
+
+        # Determine if we need user approval or can auto-approve
+        requires_user_approval = False
+        if planning_mode == PlanningMode.always:
+            requires_user_approval = True
+        elif planning_mode == PlanningMode.intent_based:
+            is_simple = (
+                not intent.requires_plan_approval
+                or query_plan.estimated_complexity == "simple"
+            )
+            requires_user_approval = not is_simple
+
+        ctx.logger.info(
+            "Planning decision",
+            flow_stage="planning_decision",
+            planning_mode=str(planning_mode),
+            intent_requires_approval=intent.requires_plan_approval,
+            plan_complexity=query_plan.estimated_complexity,
+            requires_user_approval=requires_user_approval,
+            plan_id=str(plan_id) if plan_id else None,
+        )
+
+        if requires_user_approval:
+            if req.structured_response is None:
+                req.structured_response = StructuredResponse()
+            req.structured_response.query_plan = query_plan
+            req.structured_response.intent = intent.intent
+            req.structured_response.response_type = "plan_approval"
+            req.status = RequestStatus.feedback_requested
+            await update_request_status(
+                RequestStatus.feedback_requested, None, db, req.request_id
+            )
+            return req
+
+        # Auto-approve: proceed directly to SQL generation
+        ctx.logger.info(
+            "Auto-approving plan",
+            flow_stage="plan_auto_approve",
+            plan_id=str(plan_id) if plan_id else None,
+            plan_summary=query_plan.plan_summary[:100] if query_plan else None,
+        )
+        query_result = await handle_interactive_query(
+            ctx, intent, query_plan=query_plan, plan_id=plan_id
+        )
+
+        if query_result.needs_replan:
+            return await _handle_replan_on_failure(
+                ctx, req, intent, query_result, original_plan_id=plan_id
+            )
+        return req
+
+    elif intent.request_type == InteractiveRequestType.data_analysis:
+        await handle_data_analysis(ctx)
+        return req
+
+    elif intent.request_type in (
+        InteractiveRequestType.general_chat,
+        InteractiveRequestType.disambiguation,
+    ):
+        await handle_general_response(ctx, intent)
+        return req
+
+    else:
+        # Unsupported request type
+        await handle_general_response(ctx, intent)
+        return req
 
 
 async def interactive_flow(
@@ -227,6 +347,10 @@ async def interactive_flow(
                 )
         return req
 
+    elif req.request_type == InteractiveRequestType.clarification_response:
+        # User responded to a clarification question
+        return await handle_clarification_response(ctx)
+
     elif req.request_type == InteractiveRequestType.plan_amendment:
         # User requested changes to the plan - re-run planning with their feedback
         from fm_app.db.db import get_previous_request_with_plan
@@ -278,6 +402,7 @@ async def interactive_flow(
             req.structured_response = StructuredResponse()
         req.structured_response.query_plan = query_plan
         req.structured_response.intent = combined_intent
+        req.structured_response.response_type = "plan_approval"
         req.status = RequestStatus.feedback_requested
         await update_request_status(
             RequestStatus.feedback_requested, None, ctx.db, req.request_id
@@ -291,6 +416,13 @@ async def interactive_flow(
         except Exception:
             # Error already logged and status updated in analyze_intent
             return req
+
+        # Handle clarification requests from intent analysis
+        if (
+            intent.clarification_needed
+            or intent.request_type == InteractiveRequestType.clarification
+        ):
+            return await handle_clarification_request(ctx, intent)
 
         # Route based on analyzed intent
         if intent.request_type in (
@@ -348,6 +480,7 @@ async def interactive_flow(
                     req.structured_response = StructuredResponse()
                 req.structured_response.query_plan = query_plan
                 req.structured_response.intent = intent.intent
+                req.structured_response.response_type = "plan_approval"
                 req.status = RequestStatus.feedback_requested
                 await update_request_status(
                     RequestStatus.feedback_requested, None, db, req.request_id

@@ -45,6 +45,10 @@ class InteractiveRequestType(str, Enum):
     discovery = "discovery"
     plan_approval = "plan_approval"  # User approving a query plan
     plan_amendment = "plan_amendment"  # User requesting changes to a query plan
+    clarification = "clarification"  # Agent asking a clarifying question
+    clarification_response = (
+        "clarification_response"  # User responding to clarification
+    )
     # chart_request = "chart_request"
 
 
@@ -160,6 +164,15 @@ class QueryMetadata(BaseModel):
     estimated_size_gb: Optional[float] = None
 
 
+class ClarificationData(BaseModel):
+    """Structured clarification question for frontend display."""
+
+    question: str  # The clarifying question to ask the user
+    options: Optional[list[str]] = None  # Multiple choice options (if applicable)
+    context: Optional[str] = None  # Why we're asking (helps user understand)
+    allow_freeform: bool = True  # Allow typed response vs only predefined options
+
+
 class StructuredResponse(BaseModel):
     intent: Optional[str] = None
     assumptions: Optional[str] = None
@@ -179,6 +192,11 @@ class StructuredResponse(BaseModel):
     query_plan: Optional["QueryPlan"] = None
     # Reason for re-planning (when query generation failed and new plan is presented)
     replan_reason: Optional[str] = None
+    # Response type discriminator for "ask user" patterns
+    # Values: None/"query" (default), "plan_approval", "clarification", etc.
+    response_type: Optional[str] = None
+    # Clarification data (populated when response_type="clarification")
+    clarification: Optional[ClarificationData] = None
 
 
 class IntentAnalysis(BaseModel):
@@ -188,6 +206,11 @@ class IntentAnalysis(BaseModel):
     response: Optional[str] = None
     # If True, query planner step will generate a plan for user approval
     requires_plan_approval: bool = False
+    # Clarification support - when LLM needs more info before proceeding
+    clarification_needed: bool = False
+    clarification_question: Optional[str] = None
+    clarification_options: Optional[list[str]] = None  # Multiple choice options
+    clarification_context: Optional[str] = None  # Why we're asking
 
 
 ### Query Plan Models (for multistep flow)

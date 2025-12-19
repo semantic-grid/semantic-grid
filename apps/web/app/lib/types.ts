@@ -18,6 +18,14 @@ export type TQueryStatusResp = {
   data?: any;
 };
 
+// Clarification data for agent questions
+export type TClarificationData = {
+  question: string;
+  options?: string[];
+  context?: string;
+  allow_freeform?: boolean;
+};
+
 export type TResponseResult = {
   session_id: string; // UUID of the session
   request_id: string; // UUID of the request
@@ -44,6 +52,9 @@ export type TResponseResult = {
   query?: TQuery; // Optional query object
   view?: TView; // Optional view object
   query_plan?: TQueryPlan; // Query plan for multi-step flow (when status=FeedbackRequested)
+  // Response type discriminator for "ask user" patterns
+  response_type?: string; // "plan_approval", "clarification", etc.
+  clarification?: TClarificationData; // Clarification data (when response_type="clarification")
 };
 
 export type TColumn = {
@@ -185,6 +196,9 @@ export type TChatMessage = {
   query?: TQuery;
   view?: TView;
   query_plan?: TQueryPlan; // Query plan for multi-step flow
+  // Response type discriminator for "ask user" patterns
+  response_type?: string; // "plan_approval", "clarification", etc.
+  clarification?: TClarificationData; // Clarification data (when response_type="clarification")
 };
 
 export type TChatSection = {
@@ -199,6 +213,9 @@ export type TChatSection = {
   query?: TQuery; // Optional query object
   view?: TView; // Optional view object
   query_plan?: TQueryPlan; // Query plan for multi-step flow
+  // Response type discriminator for "ask user" patterns
+  response_type?: string; // "plan_approval", "clarification", etc.
+  clarification?: TClarificationData; // Clarification data (when response_type="clarification")
 };
 
 export type TChat = {
