@@ -215,4 +215,5 @@ async def build_prompt_variables(ctx: FlowContext) -> dict:
         "selected_row_data": rows_instruction,
         "selected_column_data": column_instruction,
         "current_datetime": datetime.now().replace(microsecond=0),
+        "relevant_schema": None,  # Set by interactive_query when query_plan has schema
     }
