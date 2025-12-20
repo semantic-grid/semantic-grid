@@ -253,6 +253,7 @@ const withNewMessage =
 
 const withDoneMessage = (status: TResponseResult) => (ss: TChatSection[]) =>
   ss.map((s, idx, allS) => {
+    const isLastSection = idx === allS.length - 1;
     // For error status, use err field; otherwise use response
     const messageText =
       status.status === "Error"
@@ -261,12 +262,19 @@ const withDoneMessage = (status: TResponseResult) => (ss: TChatSection[]) =>
 
     return {
       ...s,
-      query: status.query || s.query,
-      query_plan: status.query_plan || s.query_plan,
-      response_type: status.response_type || s.response_type,
-      payload: status.payload || s.payload,
-      clarification: status.clarification || s.clarification,
-      status: idx < allS.length - 1 ? s.status : status.status,
+      // Only update these fields for the last section (the active request)
+      query: isLastSection ? status.query || s.query : s.query,
+      query_plan: isLastSection
+        ? status.query_plan || s.query_plan
+        : s.query_plan,
+      response_type: isLastSection
+        ? status.response_type || s.response_type
+        : s.response_type,
+      payload: isLastSection ? status.payload || s.payload : s.payload,
+      clarification: isLastSection
+        ? status.clarification || s.clarification
+        : s.clarification,
+      status: isLastSection ? status.status : s.status,
       chat:
         // eslint-disable-next-line no-nested-ternary
         idx < allS.length - 1 || status.response === undefined

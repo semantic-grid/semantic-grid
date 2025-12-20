@@ -465,10 +465,6 @@ export const ChatContainer = ({
                                           context={
                                             (clarification as any)?.context
                                           }
-                                          allowFreeform={
-                                            (clarification as any)
-                                              ?.allow_freeform ?? true
-                                          }
                                           onResponse={respondToClarification}
                                           disabled={
                                             pending || idx !== sects.length - 1

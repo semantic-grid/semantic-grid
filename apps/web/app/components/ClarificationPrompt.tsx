@@ -1,20 +1,11 @@
 "use client";
 
-import {
-  Box,
-  Button,
-  Chip,
-  Stack,
-  TextField,
-  Typography,
-} from "@mui/material";
-import { useState } from "react";
+import { Box, Chip, Stack, Typography } from "@mui/material";
 
 interface ClarificationPromptProps {
   question: string;
   options?: string[];
   context?: string;
-  allowFreeform?: boolean;
   onResponse: (response: string) => void;
   disabled?: boolean;
 }
@@ -29,41 +20,19 @@ export const ClarificationPrompt = ({
   question,
   options,
   context,
-  allowFreeform = true,
   onResponse,
   disabled = false,
 }: ClarificationPromptProps) => {
-  const [customResponse, setCustomResponse] = useState("");
-
   const handleOptionClick = (option: string) => {
     if (!disabled) {
       onResponse(option);
     }
   };
 
-  const handleCustomSubmit = () => {
-    if (!disabled && customResponse.trim()) {
-      onResponse(customResponse.trim());
-      setCustomResponse("");
-    }
-  };
-
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleCustomSubmit();
-    }
-  };
-
   return (
     <Box
       sx={{
-        p: 2,
-        bgcolor: "action.hover",
-        borderRadius: 1,
         my: 1,
-        border: "1px solid",
-        borderColor: "divider",
       }}
     >
       {/* Context - why we're asking */}
@@ -103,38 +72,6 @@ export const ClarificationPrompt = ({
               }}
             />
           ))}
-        </Stack>
-      )}
-
-      {/* Freeform text input */}
-      {allowFreeform && (
-        <Stack direction="row" spacing={1}>
-          <TextField
-            size="small"
-            fullWidth
-            placeholder={
-              options && options.length > 0
-                ? "Or type your own response..."
-                : "Type your response..."
-            }
-            value={customResponse}
-            onChange={(e) => setCustomResponse(e.target.value)}
-            onKeyPress={handleKeyPress}
-            disabled={disabled}
-            sx={{
-              "& .MuiOutlinedInput-root": {
-                bgcolor: "background.paper",
-              },
-            }}
-          />
-          <Button
-            variant="contained"
-            onClick={handleCustomSubmit}
-            disabled={disabled || !customResponse.trim()}
-            sx={{ minWidth: 80 }}
-          >
-            Send
-          </Button>
         </Stack>
       )}
     </Box>
