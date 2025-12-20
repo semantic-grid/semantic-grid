@@ -917,3 +917,153 @@ AskUserPrompt (unified wrapper)
 4. **Backward compatible**: Missing `response_type` falls back to legacy behavior
 5. **Frontend delegation**: Unified wrapper component delegates to specialized renderers
 6. **Gradual adoption**: Add types incrementally as features require them
+
+---
+
+## Clarification Strategy: When to Ask vs When to Assume
+
+The key challenge is balancing between asking too many questions (inert) and making too many assumptions (risky). This section defines a structured approach based on QueryPlan fields.
+
+### QueryPlan Field → Clarification Mapping
+
+| QueryPlan Field | Required? | Clarification Trigger | Example Question |
+|-----------------|-----------|----------------------|------------------|
+| `primary_table` | **MUST** | Can't identify which table | "Which data do you want to see: hotspots, sessions, or subscribers?" |
+| `tables` | **MUST** | Multiple valid interpretations | "Should I include related data from [X] as well?" |
+| `columns_selected` | CAN assume | Only if user says "specific columns" but doesn't specify | (rare - usually assume all relevant) |
+| `filters` | CAN assume | Ambiguous filter value | "Filter by which status: active, inactive, or all?" |
+| `aggregations` | CAN assume | "analyze/compare" but unclear metric | "Compare by what metric: count, revenue, or duration?" |
+| `group_by` | CAN assume | "breakdown" but unclear dimension | "Group by: day, week, or month?" |
+| `time_range` | CAN assume | Default to reasonable window | (don't ask - assume last 30 days) |
+| `order_by` | CAN assume | Just pick sensible default | (never ask) |
+
+### Assumption Risk Classification
+
+**High Risk Assumptions** (prefer clarification):
+- Wrong table = wasted query, confusing results
+- Wrong entity type = completely wrong data
+- Ambiguous filter with no schema match = query will fail
+
+**Medium Risk Assumptions** (prefer plan approval with stated assumption):
+- Time range = can refine after seeing results
+- Aggregation type = user can see and adjust
+- Grouping dimension = visible in output
+
+**Low Risk Assumptions** (just do it):
+- Sort order = trivial to change
+- Column selection = can add/remove later
+- Limit = pagination handles it
+
+### Decision Matrix
+
+```
+                    Schema Match
+                    High        Medium      Low/None
+                ┌───────────┬───────────┬───────────┐
+         Clear  │ interactive│ plan_     │ clarific- │
+Intent          │ _query     │ approval  │ ation     │
+                │ (just do)  │ (assume)  │ (ask)     │
+                ├───────────┼───────────┼───────────┤
+         Vague  │ plan_     │ clarific- │ clarific- │
+                │ approval  │ ation     │ ation     │
+                │ (assume)  │ (ask)     │ (ask)     │
+                └───────────┴───────────┴───────────┘
+```
+
+### Confidence-Based Routing Logic
+
+```python
+class QueryPlanAssessment(BaseModel):
+    """Assessment of whether a query plan can be built."""
+    can_build_plan: bool
+    confidence: float  # 0.0 to 1.0
+    missing_required: list[str]  # ["primary_table", "filter_value"]
+    assumptions: list[str]       # Low-risk assumptions made
+    high_risk_assumptions: list[str]  # Assumptions that could waste user's time
+    
+    # Clarification details (if needed)
+    clarification_needed: bool
+    clarification_field: str | None  # Which field needs clarification
+    clarification_question: str | None
+    clarification_options: list[str] | None
+
+# Routing logic
+def route_request(assessment: QueryPlanAssessment) -> str:
+    if assessment.missing_required:
+        # Can't proceed without required fields
+        return "clarification"
+    
+    if assessment.high_risk_assumptions:
+        # Has risky assumptions - ask first
+        return "clarification"
+    
+    if assessment.confidence > 0.8:
+        # High confidence - just do it
+        return "interactive_query"
+    
+    if assessment.confidence > 0.5:
+        # Medium confidence - show plan with assumptions
+        return "plan_approval"
+    
+    # Low confidence - ask
+    return "clarification"
+```
+
+### One Question Rule
+
+When clarification is needed:
+1. **Ask only ONE question** per clarification turn
+2. **Prioritize by impact**: Ask about highest-risk ambiguity first
+3. **Batch related choices**: If asking about entity, include all entity options
+4. **Provide context**: Explain why the question matters
+
+Priority order for clarification:
+1. `primary_table` - Which data/entity
+2. `filters` with high-risk ambiguity - Which specific values
+3. `aggregations` - Which metric (only if explicitly requested analysis)
+
+### Examples
+
+**Scenario 1: "show me user activity"**
+- `primary_table`: Could be sessions, events, logins → HIGH RISK
+- Action: `clarification` - "Which user activity: login sessions, page views, or API calls?"
+
+**Scenario 2: "filter by status"**
+- `primary_table`: Unknown → HIGH RISK
+- `filters`: "status" mentioned but no column match → HIGH RISK
+- Action: `clarification` - "Which data would you like to filter: hotspots, sessions, or subscribers?"
+
+**Scenario 3: "show wifi sessions from last week"**
+- `primary_table`: wifi_sessions → CLEAR MATCH
+- `time_range`: "last week" → CLEAR
+- Action: `interactive_query` (high confidence, just do it)
+
+**Scenario 4: "analyze top performers"**
+- `primary_table`: Could be hotspots, users → MEDIUM RISK
+- `aggregations`: "top" by what metric? → MEDIUM RISK
+- `time_range`: Not specified → LOW RISK (assume last 30 days)
+- Action: `plan_approval` with assumptions stated
+
+### Implementation in Planner Prompt
+
+The planner should output a `plan_confidence` assessment:
+
+```json
+{
+  "request_type": "interactive_query",
+  "requires_plan_approval": true,
+  "plan_confidence": {
+    "score": 0.6,
+    "missing_required": [],
+    "assumptions": [
+      "Assuming 'top' means by session count",
+      "Assuming time range is last 30 days"
+    ],
+    "high_risk_assumptions": [
+      "Assuming 'performers' refers to hotspots, not users"
+    ]
+  }
+}
+```
+
+If `high_risk_assumptions` is non-empty and `score < 0.7`, route to clarification instead of plan approval.

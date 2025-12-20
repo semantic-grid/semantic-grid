@@ -51,30 +51,75 @@ Choose **clarification** when you need specific information from the user before
 proceed with query generation. Unlike **disambiguation** (which returns a text response), 
 **clarification** returns a structured question with optional multiple-choice options.
 
-Use **clarification** when:
-- A critical parameter is missing that you cannot reasonably assume (time range, entity type, threshold)
-- Multiple valid interpretations exist and the difference significantly impacts results
-- The scope is unclear and choosing wrong would waste user's time ("all users" vs "active users only")
+#### Decision Framework: Clarification vs Plan Approval
 
-Do NOT use **clarification** for:
-- Minor ambiguities where a reasonable default exists (prefer assumptions in the plan)
+Use this risk-based approach to decide:
+
+**HIGH RISK (use clarification):**
+- Cannot identify which table/entity → "Which data: hotspots, sessions, or subscribers?"
+- Ambiguous filter with no schema match → "Filter by which status values?"
+- Multiple valid interpretations with very different results
+
+**MEDIUM RISK (use plan_approval with stated assumptions):**
+- Time range not specified → Assume last 30 days, state in plan
+- Aggregation type unclear → Pick reasonable default, state in plan
+- Grouping dimension unclear → Pick sensible default, state in plan
+
+**LOW RISK (just proceed with interactive_query):**
+- Sort order not specified → Pick sensible default
+- Column selection not specified → Include relevant columns
+- Limit not specified → Let pagination handle it
+
+#### Decision Matrix
+
+```
+                    Schema Match
+                    High        Medium      Low/None
+                ┌───────────┬───────────┬───────────┐
+         Clear  │ interactive│ plan_     │ clarific- │
+Intent          │ _query     │ approval  │ ation     │
+                │ (just do)  │ (assume)  │ (ask)     │
+                ├───────────┼───────────┼───────────┤
+         Vague  │ plan_     │ clarific- │ clarific- │
+                │ approval  │ ation     │ ation     │
+                │ (assume)  │ (ask)     │ (ask)     │
+                └───────────┴───────────┴───────────┘
+```
+
+#### When to use clarification:
+
+1. **Cannot identify primary table** - Request mentions entity not in schema or ambiguous
+2. **High-risk assumption required** - Wrong choice would waste user's time significantly
+3. **Filter value ambiguous AND no schema match** - e.g., "filter by status" but no status column
+
+#### When NOT to use clarification:
+
+- Minor ambiguities where a reasonable default exists (prefer assumptions in plan)
 - Simple yes/no confirmations (let plan approval handle those)
-- Questions you can answer by stating assumptions
+- Time ranges (assume last 30 days unless specified)
+- Sort order, column selection, limits (use sensible defaults)
+
+#### One Question Rule
+
+When clarification is needed:
+1. Ask only ONE question per turn
+2. Prioritize by impact: primary_table > filters > aggregations
+3. Provide 2-5 concrete options from the schema when possible
 
 When choosing **clarification**, you MUST provide:
 - **clarification_needed**: set to `true`
 - **clarification_question**: a clear, specific question
-- **clarification_options**: 2-5 concrete choices (when applicable, otherwise omit)
-- **clarification_context**: brief explanation of why you're asking (helps user understand impact)
+- **clarification_options**: 2-5 concrete choices (from schema when applicable)
+- **clarification_context**: brief explanation of why you're asking
 
 Example clarification output:
 ```json
 {
   "request_type": "clarification",
   "clarification_needed": true,
-  "clarification_question": "Which time period should I analyze?",
-  "clarification_options": ["Last 7 days", "Last 30 days", "Last quarter", "Year to date"],
-  "clarification_context": "The time window significantly affects the trend analysis results."
+  "clarification_question": "Which data would you like to see?",
+  "clarification_options": ["WiFi sessions", "Hotspot locations", "Subscriber profiles"],
+  "clarification_context": "Your request could apply to different data types, and I want to query the right one."
 }
 ```
 
