@@ -264,6 +264,7 @@ const withDoneMessage = (status: TResponseResult) => (ss: TChatSection[]) =>
       query: status.query || s.query,
       query_plan: status.query_plan || s.query_plan,
       response_type: status.response_type || s.response_type,
+      payload: status.payload || s.payload,
       clarification: status.clarification || s.clarification,
       status: idx < allS.length - 1 ? s.status : status.status,
       chat:
@@ -525,6 +526,7 @@ export const GridSessionProvider = ({
               view: apeResponse.view,
               query_plan: apeResponse?.query_plan,
               response_type: apeResponse?.response_type,
+              payload: apeResponse?.payload,
               clarification: apeResponse?.clarification,
             });
           } else {
@@ -548,6 +550,7 @@ export const GridSessionProvider = ({
               view: apeResponse?.view,
               query_plan: apeResponse?.query_plan,
               response_type: apeResponse?.response_type,
+              payload: apeResponse?.payload,
               clarification: apeResponse?.clarification,
             });
           }
@@ -593,6 +596,7 @@ export const GridSessionProvider = ({
           view: botMsg?.view,
           query_plan: botMsg?.query_plan,
           response_type: botMsg?.response_type,
+          payload: botMsg?.payload,
           clarification: botMsg?.clarification,
         };
       });
