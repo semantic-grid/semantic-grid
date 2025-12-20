@@ -463,6 +463,22 @@ async def _wrk_add_request(args):
                     #    )
                     #    print("spawned linked task", task_id)
 
+                    # Build response_type and payload from structured_response
+                    response_type = structured_response.response_type
+                    payload = None
+
+                    if (
+                        response_type == "clarification"
+                        and structured_response.clarification
+                    ):
+                        payload = structured_response.clarification.model_dump()
+                    elif (
+                        response_type == "plan_approval"
+                        and structured_response.query_plan
+                    ):
+                        payload = structured_response.query_plan.model_dump()
+                    # For other types, payload can be built as needed
+
                     await update_request(
                         db=db,
                         update=UpdateRequestModel(
@@ -491,6 +507,8 @@ async def _wrk_add_request(args):
                                 if structured_response.query_plan
                                 else None
                             ),
+                            response_type=response_type,
+                            payload=payload,
                         ),
                     )
             # await db.close()

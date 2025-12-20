@@ -64,10 +64,362 @@ Request → Intent Analysis → Query Planner → QueryPlan
 | **Payload** | Complex QueryPlan | Simple question + options |
 | **Frontend** | QueryPlanCard with accordions | ClarificationPrompt with chips |
 
-**Decision:** Keep them as separate response types but introduce a unified `response_type` discriminator field. This:
+**Decision:** Keep them as separate response types but introduce a unified `response_type` + `payload` storage pattern. This:
 - Preserves existing plan approval UX (no changes needed)
 - Enables new clarification UX with different component
 - Establishes pattern for future "ask user" scenarios (checkpoints, verification)
+- Avoids column explosion as new response types are added
+
+---
+
+## Storage Architecture: `response_type` + `payload`
+
+### The Problem with Separate Columns
+
+The naive approach adds a new column for each response type:
+
+```sql
+-- Phase 1
+ALTER TABLE request ADD COLUMN response_type TEXT;
+ALTER TABLE request ADD COLUMN clarification JSONB;
+ALTER TABLE request ADD COLUMN query_plan JSONB;  -- already exists
+
+-- Phase 3
+ALTER TABLE request ADD COLUMN multi_step_plan JSONB;
+
+-- Phase 5
+ALTER TABLE request ADD COLUMN error_recovery JSONB;
+ALTER TABLE request ADD COLUMN branch_selection JSONB;
+
+-- Phase 6
+ALTER TABLE request ADD COLUMN checkpoint JSONB;
+ALTER TABLE request ADD COLUMN verification JSONB;
+-- ... column explosion
+```
+
+### The Solution: Two Columns
+
+```sql
+ALTER TABLE request ADD COLUMN response_type TEXT;
+ALTER TABLE request ADD COLUMN payload JSONB;
+```
+
+- `response_type`: Discriminator string (`"query"`, `"plan_approval"`, `"clarification"`, etc.)
+- `payload`: Type-specific data (shape varies by `response_type`)
+
+### API Normalization Layer
+
+The API normalizes both legacy (separate columns) and new (payload) storage into a consistent response shape:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                         DATABASE                            │
+├─────────────────────────────────────────────────────────────┤
+│ Old requests (legacy storage):                              │
+│   response_type = NULL                                      │
+│   payload = NULL                                            │
+│   query_plan = {...}  ← data in legacy column               │
+│   sql = "SELECT..."                                         │
+│   intent = "..."                                            │
+│                                                             │
+│ New requests (unified storage):                             │
+│   response_type = "clarification"                           │
+│   payload = {"question": "...", "options": [...]}           │
+│   query_plan = NULL   ← legacy columns empty                │
+│   sql = NULL                                                │
+└─────────────────────────────────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    API LAYER (normalizes)                   │
+├─────────────────────────────────────────────────────────────┤
+│ def build_response(row) -> GetRequestModel:                 │
+│     # New format: use response_type + payload directly      │
+│     if row.response_type and row.payload:                   │
+│         return GetRequestModel(                             │
+│             response_type=row.response_type,                │
+│             payload=row.payload,                            │
+│             ...core_fields...                               │
+│         )                                                   │
+│                                                             │
+│     # Legacy format: infer from structured columns          │
+│     response_type, payload = infer_from_legacy(row)         │
+│     return GetRequestModel(                                 │
+│         response_type=response_type,                        │
+│         payload=payload,                                    │
+│         ...core_fields...                                   │
+│     )                                                       │
+└─────────────────────────────────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│              FRONTEND (consistent shape)                    │
+├─────────────────────────────────────────────────────────────┤
+│ switch (response.response_type) {                           │
+│   case "query": ...                                         │
+│   case "plan_approval": ...                                 │
+│   case "clarification": ...                                 │
+│ }                                                           │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Example Return Shapes
+
+#### Legacy: Query Response (inferred from structured columns)
+
+**Database row:**
+```json
+{
+  "request_id": "abc-123",
+  "status": "Done",
+  "response_type": null,
+  "payload": null,
+  "sql": "SELECT * FROM wifi_sessions LIMIT 100",
+  "intent": "Show wifi sessions",
+  "query_plan": null,
+  "query_id": "def-456"
+}
+```
+
+**API Response:**
+```json
+{
+  "request_id": "abc-123",
+  "status": "Done",
+  "response_type": "query",
+  "payload": {
+    "sql": "SELECT * FROM wifi_sessions LIMIT 100",
+    "intent": "Show wifi sessions",
+    "query_id": "def-456"
+  }
+}
+```
+
+#### Legacy: Plan Approval (inferred from query_plan column)
+
+**Database row:**
+```json
+{
+  "request_id": "abc-123",
+  "status": "FeedbackRequested",
+  "response_type": null,
+  "payload": null,
+  "query_plan": {
+    "tables": ["wifi_sessions"],
+    "primary_table": "wifi_sessions",
+    "plan_summary": "Query wifi sessions from last 7 days",
+    "assumptions": ["Assuming 'recent' means last 7 days"]
+  }
+}
+```
+
+**API Response:**
+```json
+{
+  "request_id": "abc-123",
+  "status": "FeedbackRequested",
+  "response_type": "plan_approval",
+  "payload": {
+    "tables": ["wifi_sessions"],
+    "primary_table": "wifi_sessions",
+    "plan_summary": "Query wifi sessions from last 7 days",
+    "assumptions": ["Assuming 'recent' means last 7 days"]
+  }
+}
+```
+
+#### New: Clarification (stored in payload)
+
+**Database row:**
+```json
+{
+  "request_id": "abc-123",
+  "status": "FeedbackRequested",
+  "response_type": "clarification",
+  "payload": {
+    "question": "Which type of activity would you like to see?",
+    "options": ["Login sessions", "Page views", "API calls"],
+    "context": "Multiple activity types are available",
+    "allow_freeform": true
+  },
+  "query_plan": null,
+  "sql": null
+}
+```
+
+**API Response:**
+```json
+{
+  "request_id": "abc-123",
+  "status": "FeedbackRequested",
+  "response_type": "clarification",
+  "payload": {
+    "question": "Which type of activity would you like to see?",
+    "options": ["Login sessions", "Page views", "API calls"],
+    "context": "Multiple activity types are available",
+    "allow_freeform": true
+  }
+}
+```
+
+#### New: Chat Response (stored in payload)
+
+**Database row:**
+```json
+{
+  "request_id": "abc-123",
+  "status": "Done",
+  "response_type": "chat",
+  "payload": {
+    "message": "Hello! I can help you explore your data. What would you like to know?"
+  }
+}
+```
+
+**API Response:**
+```json
+{
+  "request_id": "abc-123",
+  "status": "Done",
+  "response_type": "chat",
+  "payload": {
+    "message": "Hello! I can help you explore your data. What would you like to know?"
+  }
+}
+```
+
+#### Future: Checkpoint (Phase 6)
+
+**Database row:**
+```json
+{
+  "request_id": "abc-123",
+  "status": "FeedbackRequested",
+  "response_type": "checkpoint",
+  "payload": {
+    "message": "I found 3 anomalies in the data. Would you like me to dig deeper?",
+    "intermediate_result": {
+      "anomalies": [
+        {"entity": "hotspot-A", "metric": "session_count", "deviation": "-45%"},
+        {"entity": "hotspot-B", "metric": "session_count", "deviation": "-38%"},
+        {"entity": "hotspot-C", "metric": "session_count", "deviation": "+120%"}
+      ]
+    },
+    "options": [
+      {"id": "continue", "label": "Dig deeper"},
+      {"id": "done", "label": "This is enough"},
+      {"id": "pivot", "label": "Let me refine the question"}
+    ]
+  }
+}
+```
+
+#### Future: Error Recovery (Phase 5)
+
+**Database row:**
+```json
+{
+  "request_id": "abc-123",
+  "status": "FeedbackRequested",
+  "response_type": "error_recovery",
+  "payload": {
+    "message": "The query timed out after 2 minutes. Would you like me to try a different approach?",
+    "error_details": {
+      "error_type": "timeout",
+      "query_duration_ms": 120000,
+      "estimated_rows": 50000000
+    },
+    "options": [
+      {"id": "retry_smaller", "label": "Try with smaller time range"},
+      {"id": "add_filters", "label": "Add more filters"},
+      {"id": "cancel", "label": "Cancel"}
+    ]
+  }
+}
+```
+
+### Payload Schema by Response Type
+
+| `response_type` | Payload Schema | Phase |
+|-----------------|----------------|-------|
+| `query` | `{sql, intent, query_id, summary, columns, ...}` | Legacy |
+| `plan_approval` | `QueryPlan` object | Legacy/Phase 1 |
+| `clarification` | `{question, options?, context?, allow_freeform}` | Phase 1 |
+| `chat` | `{message}` | Phase 1 |
+| `error` | `{error, recoverable, details?}` | Phase 1 |
+| `multi_step_plan_approval` | `MultiStepPlan` object | Phase 3 |
+| `error_recovery` | `{message, error_details, options}` | Phase 5 |
+| `branch_selection` | `{message, branches, context}` | Phase 5 |
+| `checkpoint` | `{message, intermediate_result, options}` | Phase 6 |
+| `verification` | `{message, result_summary, options}` | Phase 6 |
+
+### Legacy Inference Logic
+
+```python
+def infer_from_legacy(row) -> tuple[str, dict]:
+    """Infer response_type and payload from legacy structured columns."""
+    
+    # Error response
+    if row.err:
+        return "error", {
+            "error": row.err,
+            "recoverable": row.status != RequestStatus.error
+        }
+    
+    # Plan approval (has query_plan, awaiting feedback)
+    if row.query_plan and row.status == RequestStatus.feedback_requested:
+        return "plan_approval", row.query_plan
+    
+    # Query response (has SQL and/or query)
+    if row.sql or row.query_id:
+        return "query", {
+            "sql": row.sql,
+            "intent": row.intent,
+            "query_id": str(row.query_id) if row.query_id else None,
+            "summary": row.response,
+            "intro": row.intro,
+            "outro": row.outro,
+        }
+    
+    # Chat response (text only, no query)
+    if row.response:
+        return "chat", {
+            "message": row.response
+        }
+    
+    # Default: unknown/empty
+    return None, None
+```
+
+### Database Migration
+
+```python
+"""add_response_type_payload_columns
+
+Revision ID: l1a2b3c4d5e2
+Revises: k1a2b3c4d5e1
+"""
+
+def upgrade() -> None:
+    op.execute("""
+        -- Response type discriminator
+        ALTER TABLE request ADD COLUMN IF NOT EXISTS response_type TEXT;
+        
+        -- Type-specific payload (shape varies by response_type)
+        ALTER TABLE request ADD COLUMN IF NOT EXISTS payload JSONB;
+        
+        -- Index for filtering by response type
+        CREATE INDEX IF NOT EXISTS idx_request_response_type 
+        ON request(response_type) WHERE response_type IS NOT NULL;
+    """)
+
+def downgrade() -> None:
+    op.execute("""
+        DROP INDEX IF EXISTS idx_request_response_type;
+        ALTER TABLE request DROP COLUMN IF EXISTS payload;
+        ALTER TABLE request DROP COLUMN IF EXISTS response_type;
+    """)
+```
 
 ---
 

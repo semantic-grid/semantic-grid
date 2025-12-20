@@ -41,9 +41,17 @@ export const responseToBotMessage = (r: TResponseResult) =>
     rating: r.rating,
     query: r.query,
     view: r.view,
-    query_plan: r.query_plan,
-    response_type: r.response_type,
-    clarification: r.clarification,
+    // Use new unified response_type + payload pattern
+    response_type:
+      r.response_type || (r as any).structured_response?.response_type,
+    payload: r.payload || (r as any).structured_response?.payload,
+    // Legacy fields for backward compatibility
+    query_plan:
+      r.query_plan ||
+      (r as any).payload ||
+      (r as any).structured_response?.query_plan,
+    clarification:
+      (r as any).payload || (r as any).structured_response?.clarification,
     isPending:
       !r.status ||
       (r.status !== "Error" &&
@@ -120,9 +128,19 @@ export const responseToSuccessBotMessage = (result: TResponseResult) =>
     status: result.status || "Done",
     query: result.query,
     view: result.view,
-    query_plan: result.query_plan,
-    response_type: result.response_type,
-    clarification: result.clarification,
+    // Use new unified response_type + payload pattern
+    response_type:
+      result.response_type ||
+      (result as any).structured_response?.response_type,
+    payload: result.payload || (result as any).structured_response?.payload,
+    // Legacy fields for backward compatibility
+    query_plan:
+      result.query_plan ||
+      (result as any).payload ||
+      (result as any).structured_response?.query_plan,
+    clarification:
+      (result as any).payload ||
+      (result as any).structured_response?.clarification,
     structuredResponse: {
       request: result.request,
       sql: result.sql,

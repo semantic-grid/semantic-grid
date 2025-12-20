@@ -678,8 +678,15 @@ class GetRequestModel(BaseModel):
     view: Optional[View] = None
     # data fetches for this request's query (populated in admin endpoints)
     data_fetches: Optional[list["GetDataFetchModel"]] = None
-    # query plan for multi-step flow (populated when status=FeedbackRequested)
+    # query plan for multi-step flow - LEGACY (populated when status=FeedbackRequested)
+    # New code should use response_type + payload instead
     query_plan: Optional["QueryPlan"] = None
+    # response type discriminator for unified response handling
+    response_type: Optional[str] = (
+        None  # "query", "plan_approval", "clarification", "chat", "error"
+    )
+    # type-specific payload (shape varies by response_type)
+    payload: Optional[dict[str, Any]] = None
     # admin fields
     is_test: Optional[bool] = None
     is_fixed: Optional[bool] = None
@@ -737,7 +744,13 @@ class UpdateRequestModel(BaseModel):
     linked_session_id: Optional[UUID] = None
     query_id: Optional[UUID] = None
     view: Optional[View] = None
-    query_plan: Optional[dict[str, Any]] = None  # JSON serialized QueryPlan
+    query_plan: Optional[dict[str, Any]] = None  # JSON serialized QueryPlan (legacy)
+    # Response type discriminator for unified response handling
+    response_type: Optional[str] = (
+        None  # "query", "plan_approval", "clarification", "chat", "error"
+    )
+    # Type-specific payload (shape varies by response_type)
+    payload: Optional[dict[str, Any]] = None
 
 
 ## Data Query Models

@@ -422,33 +422,66 @@ export const ChatContainer = ({
                                   Boolean(section.query)
                                 }
                               />
-                              {/* Show QueryPlanCard when section has a plan */}
-                              {section.query_plan && i === arr.length - 1 && (
-                                <QueryPlanCard
-                                  plan={section.query_plan}
-                                  onApprove={approvePlan}
-                                  onReject={rejectPlan}
-                                  isLoading={pending}
-                                  disabled={idx !== sects.length - 1}
-                                />
-                              )}
-                              {/* Show ClarificationPrompt when section has clarification */}
-                              {section.clarification &&
-                                i === arr.length - 1 && (
-                                  <ClarificationPrompt
-                                    question={section.clarification.question}
-                                    options={section.clarification.options}
-                                    context={section.clarification.context}
-                                    allowFreeform={
-                                      section.clarification.allow_freeform ??
-                                      true
+                              {/* Render based on response_type (unified pattern) */}
+                              {i === arr.length - 1 &&
+                                (() => {
+                                  // Use response_type discriminator, with fallback for legacy data
+                                  const responseType =
+                                    section.response_type ||
+                                    (section.query_plan
+                                      ? "plan_approval"
+                                      : section.clarification
+                                        ? "clarification"
+                                        : null);
+
+                                  switch (responseType) {
+                                    case "plan_approval": {
+                                      // Use payload or fall back to legacy query_plan
+                                      const plan =
+                                        section.payload || section.query_plan;
+                                      return plan ? (
+                                        <QueryPlanCard
+                                          plan={plan as any}
+                                          onApprove={approvePlan}
+                                          onReject={rejectPlan}
+                                          isLoading={pending}
+                                          disabled={idx !== sects.length - 1}
+                                        />
+                                      ) : null;
                                     }
-                                    onResponse={respondToClarification}
-                                    disabled={
-                                      pending || idx !== sects.length - 1
+                                    case "clarification": {
+                                      // Use payload or fall back to legacy clarification
+                                      const clarification =
+                                        section.payload ||
+                                        section.clarification;
+                                      return clarification ? (
+                                        <ClarificationPrompt
+                                          question={
+                                            (clarification as any)?.question
+                                          }
+                                          options={
+                                            (clarification as any)?.options
+                                          }
+                                          context={
+                                            (clarification as any)?.context
+                                          }
+                                          allowFreeform={
+                                            (clarification as any)
+                                              ?.allow_freeform ?? true
+                                          }
+                                          onResponse={respondToClarification}
+                                          disabled={
+                                            pending || idx !== sects.length - 1
+                                          }
+                                        />
+                                      ) : null;
                                     }
-                                  />
-                                )}
+                                    // Future: case "checkpoint": ...
+                                    // Future: case "verification": ...
+                                    default:
+                                      return null;
+                                  }
+                                })()}
                             </Box>
                           )}
                           {i % 2 !== 0 &&
