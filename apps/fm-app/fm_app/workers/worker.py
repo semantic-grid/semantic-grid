@@ -526,7 +526,9 @@ async def _wrk_add_request(args):
         async for db in get_db():
             request.status = RequestStatus.error
             logger.error(
-                f"Unhandled Exception: {e}", request=request.model_dump(), exc_info=True
+                f"Unhandled Exception: {e}",
+                request=request.model_dump(mode="json"),
+                exc_info=True,
             )
             request.err = "Unhandled exception, check logs"
             await update_request_failure(err=str(e), status=RequestStatus.error, db=db)
