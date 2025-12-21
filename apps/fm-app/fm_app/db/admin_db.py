@@ -628,18 +628,27 @@ async def get_query_explorer_data(
         for req in contributing:
             req_id = req["request_id"]
 
-            # Determine request type based on request text content
-            request_type = "initial"
+            # Use response_type from DB if available, otherwise infer from text
+            request_type = req.get("response_type") or "initial"
             request_text = req.get("request") or ""
             structured = req.get("structured_response") or {}
 
-            # Check if this is a plan approval
-            if request_text.startswith("Approved"):
-                request_type = "plan_approval"
-            # Check if this is an amendment
-            elif "amend" in request_text.lower() or "change" in request_text.lower():
-                request_type = "plan_amendment"
+            # If no response_type in DB, infer from text content (legacy)
+            if request_type == "initial":
+                # Check if this is a plan approval
+                if request_text.startswith("Approved"):
+                    request_type = "plan_approval"
+                # Check if this is an amendment
+                elif (
+                    "amend" in request_text.lower() or "change" in request_text.lower()
+                ):
+                    request_type = "plan_amendment"
+                    had_amendments = True
+
+            # Track amendments
+            if request_type == "plan_amendment":
                 had_amendments = True
+
             # Check if this is a replan (structured_response contains replan_reason)
             if isinstance(structured, dict) and structured.get("replan_reason"):
                 request_type = "replan"

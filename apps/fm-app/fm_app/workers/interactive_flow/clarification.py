@@ -52,6 +52,9 @@ async def handle_clarification_request(
     req.structured_response.clarification = clarification
     req.structured_response.intent = intent.intent
 
+    # Set the response text to the clarification question for display
+    req.response = clarification.question
+
     # Set status to await user response
     req.status = RequestStatus.feedback_requested
     await update_request_status(

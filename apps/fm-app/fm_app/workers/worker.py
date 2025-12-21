@@ -479,6 +479,15 @@ async def _wrk_add_request(args):
                         payload = structured_response.query_plan.model_dump()
                     # For other types, payload can be built as needed
 
+                    logger.info(
+                        "Updating request with response_type and payload",
+                        flow_stage="update_request_response_type",
+                        response_type=response_type,
+                        has_payload=payload is not None,
+                        has_clarification=structured_response.clarification is not None,
+                        request_id=str(request.request_id),
+                    )
+
                     await update_request(
                         db=db,
                         update=UpdateRequestModel(

@@ -855,8 +855,17 @@ export const GridSessionProvider = ({
   }, [context]);
 
   const requestType = () => {
-    // Check if we're in FeedbackRequested or PlanRejected state - user is providing plan amendment
     const lastSection = sects[sects.length - 1];
+
+    // Check if we're responding to a clarification question
+    if (
+      lastSection?.status === "FeedbackRequested" &&
+      lastSection?.response_type === "clarification"
+    ) {
+      return "clarification_response";
+    }
+
+    // Check if we're in FeedbackRequested or PlanRejected state - user is providing plan amendment
     if (
       lastSection?.status === "FeedbackRequested" ||
       lastSection?.status === "PlanRejected"
