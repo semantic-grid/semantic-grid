@@ -293,7 +293,8 @@ async def add_request(
     request_id = uuid7()
     task_id = str(uuid7())
     status = RequestStatus.new if not add_req.query_id else RequestStatus.done
-    refs_dict = add_req.refs.model_dump() if add_req.refs else None
+    # Use mode="json" to convert UUID to string for JSON serialization
+    refs_dict = add_req.refs.model_dump(mode="json") if add_req.refs else None
     add_req_sql = text(
         """
         INSERT
