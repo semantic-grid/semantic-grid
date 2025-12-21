@@ -1,6 +1,6 @@
 "use client";
 
-import { Box, Chip, Stack, Typography } from "@mui/material";
+import { Box, Button, Stack, Typography } from "@mui/material";
 
 interface ClarificationPromptProps {
   question: string;
@@ -11,10 +11,9 @@ interface ClarificationPromptProps {
 }
 
 /**
- * ClarificationPrompt displays a question from the agent with optional
- * multiple-choice options. Users can select an option or type a custom response.
- *
- * This is part of the "ask user" pattern for agent-user interaction.
+ * ClarificationPrompt displays a clarifying question from the agent.
+ * Options are shown as text buttons matching the QueryPlanCard style.
+ * Users can click an option or type a response in the main input.
  */
 export const ClarificationPrompt = ({
   question,
@@ -30,47 +29,33 @@ export const ClarificationPrompt = ({
   };
 
   return (
-    <Box
-      sx={{
-        my: 1,
-      }}
-    >
+    <Box sx={{ my: 1 }}>
       {/* Context - why we're asking */}
       {context && (
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          sx={{ mb: 1, display: "block", fontStyle: "italic" }}
-        >
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
           {context}
         </Typography>
       )}
 
       {/* The question */}
-      <Typography variant="body1" sx={{ mb: 2, fontWeight: 500 }}>
+      <Typography variant="body2" sx={{ mb: 2 }}>
         {question}
       </Typography>
 
-      {/* Multiple choice options */}
+      {/* Multiple choice options - styled like QueryPlanCard buttons */}
       {options && options.length > 0 && (
-        <Stack
-          direction="row"
-          spacing={1}
-          sx={{ mb: 2, flexWrap: "wrap", gap: 1 }}
-        >
+        <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: 1 }}>
           {options.map((option) => (
-            <Chip
+            <Button
               key={option}
-              label={option}
-              onClick={() => handleOptionClick(option)}
-              clickable={!disabled}
-              color="primary"
               variant="outlined"
-              sx={{
-                cursor: disabled ? "default" : "pointer",
-                opacity: disabled ? 0.6 : 1,
-              }}
-            />
+              size="small"
+              onClick={() => handleOptionClick(option)}
+              disabled={disabled}
+              sx={{ textTransform: "none" }}
+            >
+              {option}
+            </Button>
           ))}
         </Stack>
       )}

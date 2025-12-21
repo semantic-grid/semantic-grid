@@ -403,11 +403,14 @@ export const ChatContainer = ({
                                 },
                               }}
                             >
-                              <ResponseTextMessage
-                                text={msg.text}
-                                status={section.status}
-                                linkedSession={section.linkedSession}
-                              />
+                              {/* Hide response text for clarification - the ClarificationPrompt shows the question */}
+                              {section.response_type !== "clarification" && (
+                                <ResponseTextMessage
+                                  text={msg.text}
+                                  status={section.status}
+                                  linkedSession={section.linkedSession}
+                                />
+                              )}
                               <ResponseTextStatus
                                 status={section.status}
                                 rowCount={metadata?.row_count}
