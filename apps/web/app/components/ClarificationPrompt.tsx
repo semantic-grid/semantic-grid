@@ -42,7 +42,7 @@ export const ClarificationPrompt = ({
         {question}
       </Typography>
 
-      {/* Multiple choice options - styled like QueryPlanCard buttons */}
+      {/* Multiple choice options - rounded with orange active, gray disabled */}
       {options && options.length > 0 && (
         <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: 1 }}>
           {options.map((option) => (
@@ -52,7 +52,24 @@ export const ClarificationPrompt = ({
               size="small"
               onClick={() => handleOptionClick(option)}
               disabled={disabled}
-              sx={{ textTransform: "none" }}
+              sx={{
+                textTransform: "none",
+                borderRadius: "16px",
+                // Active state: primary orange
+                ...(!disabled && {
+                  borderColor: "primary.main",
+                  color: "primary.main",
+                  "&:hover": {
+                    borderColor: "primary.dark",
+                    backgroundColor: "rgba(255, 152, 0, 0.08)",
+                  },
+                }),
+                // Disabled state: gray text and border
+                ...(disabled && {
+                  borderColor: "text.disabled",
+                  color: "text.disabled",
+                }),
+              }}
             >
               {option}
             </Button>
