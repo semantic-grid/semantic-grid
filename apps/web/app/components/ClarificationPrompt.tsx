@@ -64,10 +64,14 @@ export const ClarificationPrompt = ({
                     backgroundColor: "rgba(255, 152, 0, 0.08)",
                   },
                 }),
-                // Disabled state: gray text and border
+                // Disabled state: explicit gray for both text and border
                 ...(disabled && {
-                  borderColor: "text.disabled",
-                  color: "text.disabled",
+                  borderColor: "rgba(255, 255, 255, 0.3)",
+                  color: "rgba(255, 255, 255, 0.3)",
+                  "&.Mui-disabled": {
+                    borderColor: "rgba(255, 255, 255, 0.3)",
+                    color: "rgba(255, 255, 255, 0.3)",
+                  },
                 }),
               }}
             >
