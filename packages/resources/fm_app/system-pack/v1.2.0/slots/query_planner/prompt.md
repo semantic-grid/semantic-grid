@@ -22,6 +22,23 @@ Please take into account that now is {{ current_datetime }}.
 
 ---
 
+{% if query_metadata %}
+## Existing Query Context
+
+{{ query_metadata }}
+
+{% if parent_query_plan %}
+{{ parent_query_plan }}
+{% endif %}
+
+**IMPORTANT**: When modifying an existing query, use the SQL and structure above as your
+starting point. Make minimal changes to achieve the user's requested modification.
+Do NOT redesign the query from scratch - preserve working patterns, table references,
+and column names that are already validated.
+{% endif %}
+
+---
+
 {% if db_meta_domain_model %}
 
 ## Domain Model

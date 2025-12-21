@@ -803,6 +803,8 @@ export const GridSessionProvider = ({
 
   const refs = useMemo(
     () => ({
+      // Include parent query_id so backend can reference existing SQL when modifying
+      parent: query?.query_id || undefined,
       cols:
         activeColumn &&
         activeColumn.field !== "__add_column__" &&
