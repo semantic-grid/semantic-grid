@@ -31,7 +31,7 @@ async def main():
             status=response.status,
             flow=user_request.flow,
         )
-        wrk_arg = wrk_req.model_dump()
+        wrk_arg = wrk_req.model_dump(mode="json")
         task = wrk_add_request.apply_async(args=[wrk_arg], task_id=task_id)
         logging.info("Send task", extra={"action": "send_task", "task_id": task})
 

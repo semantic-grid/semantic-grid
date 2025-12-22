@@ -52,7 +52,7 @@ async def add_new_session(
             "session_id": session_id,
             "parent": session.parent,
             "refs": (
-                json.dumps(session.refs.model_dump(), default=str)
+                json.dumps(session.refs.model_dump(mode="json"))
                 if session.refs
                 else None
             ),

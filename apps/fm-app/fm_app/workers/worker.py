@@ -390,14 +390,14 @@ async def _wrk_add_request(args):
             if request.status == RequestStatus.error:
                 logger.error(
                     "Error in flow",
-                    request=request.model_dump(),
+                    request=request.model_dump(mode="json"),
                     flow_stage="error_in_flow",
                     flow_step_num=10000,
                 )
             else:
                 logger.info(
                     "Done with request",
-                    request=request.model_dump(),
+                    request=request.model_dump(mode="json"),
                     flow_stage="done_with_request",
                     flow_step_num=10000,
                 )
@@ -506,7 +506,7 @@ async def _wrk_add_request(args):
                             chart=structured_response.chart,
                             chart_url=structured_response.chart_url,
                             refs=(
-                                structured_response.refs.model_dump()
+                                structured_response.refs.model_dump(mode="json")
                                 if structured_response.refs
                                 else None
                             ),

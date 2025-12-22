@@ -677,7 +677,7 @@ async def create_request(
         db=user_request.db,
         refs=user_request.refs,
     )
-    wrk_arg = wrk_req.model_dump()
+    wrk_arg = wrk_req.model_dump(mode="json")
     task = wrk_add_request.apply_async(args=[wrk_arg], task_id=task_id)
     logging.info("Send task", extra={"action": "send_task", "task_id": task})
 
@@ -721,7 +721,7 @@ async def create_request_for_query(
         refs=user_request.refs,
         query=query,
     )
-    wrk_arg = wrk_req.model_dump()
+    wrk_arg = wrk_req.model_dump(mode="json")
     task = wrk_add_request.apply_async(args=[wrk_arg], task_id=task_id)
     logging.info("Send task", extra={"action": "send_task", "task_id": task})
 
@@ -834,7 +834,7 @@ async def create_request_from_query(
         query=query,
     )
 
-    wrk_arg = wrk_req.model_dump()
+    wrk_arg = wrk_req.model_dump(mode="json")
     task = wrk_add_request.apply_async(args=[wrk_arg], task_id=task_id)
     logging.info(
         "Send task for request from query",
@@ -945,7 +945,7 @@ async def create_request_from_sql(
         query=None,
     )
 
-    wrk_arg = wrk_req.model_dump()
+    wrk_arg = wrk_req.model_dump(mode="json")
     task = wrk_add_request.apply_async(args=[wrk_arg], task_id=task_id)
     logging.info(
         "Send task for request from SQL",
@@ -1010,7 +1010,7 @@ async def create_linked_session_request(
             db=linked_request.db,
             refs=linked_request.refs,
         )
-        wrk_arg = wrk_req.model_dump()
+        wrk_arg = wrk_req.model_dump(mode="json")
         task = wrk_add_request.apply_async(args=[wrk_arg], task_id=task_id)
         logging.info("Send task", extra={"action": "send_task", "task_id": task})
         response.session = session_response
