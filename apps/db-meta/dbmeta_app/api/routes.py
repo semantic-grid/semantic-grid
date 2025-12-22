@@ -7,6 +7,8 @@ from fastmcp import FastMCP
 from dbmeta_app.api.model import (
     GetPromptItemsRequestV2,
     GetPromptModel,
+    GetTableDetailsRequest,
+    GetTableDetailsResponse,
     PromptItemType,
     PromptsSetModel,
     TestSqlModel,
@@ -227,3 +229,39 @@ async def validate_plan(req: ValidatePlanRequest) -> ValidatePlanResult:
         columns_referenced=req.columns_referenced,
     )
     return ValidatePlanResult(**result)
+
+
+@mcp.tool()
+async def get_table_details(req: GetTableDetailsRequest) -> GetTableDetailsResponse:
+    """
+    Get detailed metadata for specific tables including relationships and statistics.
+
+    This tool provides granular, on-demand schema exploration for selected tables.
+    Use this after query planning to get rich metadata for tables you'll query.
+
+    Includes (based on 'include' parameter):
+    - relationships: Primary keys and foreign key constraints
+    - cardinality: Approximate distinct value counts per column
+    - low_cardinality_values: Actual values for columns with few distinct values
+    - ranges: Min/max values for numeric and date columns
+    - indexes: Index information
+
+    Args:
+        req: Request with:
+            - tables: List of fully qualified table names (e.g., "schema.table")
+            - db: Optional database profile ("wh", "wh_new", "wh_v2")
+            - include: List of detail types to fetch
+            - cardinality_threshold: Max distinct values for "low cardinality"
+            - sample_size: Rows to sample for statistics
+
+    Returns:
+        GetTableDetailsResponse with:
+            - tables: List of TableDetails with columns, relationships, and stats
+            - content_hash: SHA256 hash for lineage tracking
+            - metadata: Request parameters and profile info
+    """
+    from dbmeta_app.prompt_items.table_details import (
+        get_table_details as get_table_details_impl,
+    )
+
+    return get_table_details_impl(req)

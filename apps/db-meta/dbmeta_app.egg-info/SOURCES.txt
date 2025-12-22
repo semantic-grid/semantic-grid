@@ -25,6 +25,7 @@ dbmeta_app/prompt_items/domain_model.py
 dbmeta_app/prompt_items/prompt_instructions.py
 dbmeta_app/prompt_items/query_examples.py
 dbmeta_app/prompt_items/sql_dialect.py
+dbmeta_app/prompt_items/table_details.py
 dbmeta_app/prompt_items/utils.py
 dbmeta_app/test/__init__.py
 dbmeta_app/test/main.py

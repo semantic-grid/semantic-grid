@@ -303,6 +303,259 @@ async def validate_query_plan(
             raise e
 
 
+@dataclass
+class ColumnDetailsResult:
+    """Detailed column information including statistics."""
+
+    name: str
+    type: str
+    nullable: bool
+    description: Optional[str] = None
+    example: Optional[str] = None
+    is_primary_key: bool = False
+    is_foreign_key: bool = False
+    distinct_count: Optional[int] = None
+    is_low_cardinality: Optional[bool] = None
+    distinct_values: Optional[list[str]] = None
+    min_value: Optional[str] = None
+    max_value: Optional[str] = None
+
+
+@dataclass
+class ForeignKeyResult:
+    """Foreign key relationship information."""
+
+    columns: list[str]
+    referred_table: str
+    referred_columns: list[str]
+    constraint_name: Optional[str] = None
+
+
+@dataclass
+class TableDetailsResult:
+    """Detailed metadata for a single table."""
+
+    table_name: str
+    description: Optional[str] = None
+    row_count_estimate: Optional[int] = None
+    primary_key: Optional[list[str]] = None
+    foreign_keys: list[ForeignKeyResult] = None
+    columns: list[ColumnDetailsResult] = None
+
+
+@dataclass
+class GetTableDetailsResult:
+    """Result from get_table_details MCP call."""
+
+    tables: list[TableDetailsResult]
+    content_hash: str
+    metadata: dict[str, Any]
+
+
+async def get_table_details_mcp(
+    req: McpServerRequest,
+    tables: list[str],
+    flow_step_num: int,
+    settings,
+    logger,
+    include: Optional[list[str]] = None,
+    cardinality_threshold: int = 100,
+    sample_size: int = 10000,
+) -> GetTableDetailsResult:
+    """
+    Get detailed metadata for specific tables including relationships and stats.
+
+    This function provides granular, on-demand schema exploration for selected
+    tables. Use this after query planning to get rich metadata for SQL generation.
+
+    Args:
+        req: MCP server request context
+        tables: List of fully qualified table names (e.g., "schema.table")
+        flow_step_num: Current flow step number for logging
+        settings: Application settings
+        logger: Logger instance
+        include: List of detail types to fetch. Options:
+            - "relationships": PK-FK constraints
+            - "cardinality": Distinct value counts
+            - "low_cardinality_values": Actual values for low-card columns
+            - "ranges": Min/max for numeric/date columns
+            - "indexes": Index information
+        cardinality_threshold: Max distinct values for "low cardinality"
+        sample_size: Rows to sample for statistics
+
+    Returns:
+        GetTableDetailsResult with detailed table metadata and lineage info
+    """
+    db = get_db_name(req)
+
+    # Default include options
+    if include is None:
+        include = ["relationships", "cardinality", "ranges"]
+
+    client = Client(f"""{settings.dbmeta}sse""")
+
+    async with client:
+        try:
+            result = await client.call_tool(
+                "get_table_details",
+                {
+                    "req": {
+                        "db": db,
+                        "tables": tables,
+                        "include": include,
+                        "cardinality_threshold": cardinality_threshold,
+                        "sample_size": sample_size,
+                    }
+                },
+            )
+
+            # Parse the response
+            response_data = json.loads(result[0].text)
+
+            # Parse tables
+            tables_result = []
+            for table_data in response_data.get("tables", []):
+                # Parse foreign keys
+                fks = [
+                    ForeignKeyResult(
+                        columns=fk.get("columns", []),
+                        referred_table=fk.get("referred_table", ""),
+                        referred_columns=fk.get("referred_columns", []),
+                        constraint_name=fk.get("constraint_name"),
+                    )
+                    for fk in table_data.get("foreign_keys", [])
+                ]
+
+                # Parse columns
+                cols = [
+                    ColumnDetailsResult(
+                        name=col.get("name", ""),
+                        type=col.get("type", ""),
+                        nullable=col.get("nullable", True),
+                        description=col.get("description"),
+                        example=col.get("example"),
+                        is_primary_key=col.get("is_primary_key", False),
+                        is_foreign_key=col.get("is_foreign_key", False),
+                        distinct_count=col.get("distinct_count"),
+                        is_low_cardinality=col.get("is_low_cardinality"),
+                        distinct_values=col.get("distinct_values"),
+                        min_value=col.get("min_value"),
+                        max_value=col.get("max_value"),
+                    )
+                    for col in table_data.get("columns", [])
+                ]
+
+                tables_result.append(
+                    TableDetailsResult(
+                        table_name=table_data.get("table_name", ""),
+                        description=table_data.get("description"),
+                        row_count_estimate=table_data.get("row_count_estimate"),
+                        primary_key=table_data.get("primary_key"),
+                        foreign_keys=fks,
+                        columns=cols,
+                    )
+                )
+
+            details_result = GetTableDetailsResult(
+                tables=tables_result,
+                content_hash=response_data.get("content_hash", ""),
+                metadata=response_data.get("metadata", {}),
+            )
+
+            logger.info(
+                "Got table details",
+                flow_stage="table_details",
+                flow_step_num=flow_step_num,
+                tables_requested=tables,
+                tables_found=len(tables_result),
+                include=include,
+            )
+
+            return details_result
+
+        except Exception as e:
+            logger.error(
+                "Error getting table details",
+                flow_stage="error",
+                flow_step_num=flow_step_num,
+                tables=tables,
+                error=str(e),
+            )
+            raise e
+
+
+def format_table_details_for_prompt(result: GetTableDetailsResult) -> str:
+    """
+    Format table details into a human-readable string for LLM prompts.
+
+    This renders the table details in a format suitable for inclusion
+    in SQL generation prompts.
+
+    Args:
+        result: GetTableDetailsResult from get_table_details_mcp
+
+    Returns:
+        Formatted string with table relationships and statistics
+    """
+    if not result.tables:
+        return ""
+
+    lines = ["## Table Relationships & Statistics\n"]
+
+    for table in result.tables:
+        lines.append(f"### {table.table_name}")
+
+        if table.description:
+            lines.append(f"_{table.description}_\n")
+
+        if table.row_count_estimate:
+            lines.append(f"- **Estimated rows**: {table.row_count_estimate:,}")
+
+        if table.primary_key:
+            lines.append(f"- **Primary key**: {', '.join(table.primary_key)}")
+
+        if table.foreign_keys:
+            lines.append("- **Foreign keys**:")
+            for fk in table.foreign_keys:
+                fk_cols = ", ".join(fk.columns)
+                ref_cols = ", ".join(fk.referred_columns)
+                lines.append(f"  - {fk_cols} → {fk.referred_table}({ref_cols})")
+
+        # Column statistics
+        stats_cols = [
+            c
+            for c in (table.columns or [])
+            if c.distinct_count or c.min_value or c.distinct_values
+        ]
+
+        if stats_cols:
+            lines.append("- **Column statistics**:")
+            for col in stats_cols:
+                stat_parts = []
+
+                if col.distinct_count is not None:
+                    stat_parts.append(f"~{col.distinct_count:,} distinct")
+
+                if col.is_low_cardinality and col.distinct_values:
+                    values_preview = col.distinct_values[:5]
+                    if len(col.distinct_values) > 5:
+                        values_str = ", ".join(f"'{v}'" for v in values_preview)
+                        values_str += f", ... (+{len(col.distinct_values) - 5} more)"
+                    else:
+                        values_str = ", ".join(f"'{v}'" for v in values_preview)
+                    stat_parts.append(f"values: [{values_str}]")
+
+                if col.min_value is not None and col.max_value is not None:
+                    stat_parts.append(f"range: {col.min_value} to {col.max_value}")
+
+                if stat_parts:
+                    lines.append(f"  - **{col.name}**: {'; '.join(stat_parts)}")
+
+        lines.append("")  # Empty line between tables
+
+    return "\n".join(lines)
+
+
 async def get_db_meta_database_overview(
     req: McpServerRequest, flow_step_num, settings, logger
 ):
