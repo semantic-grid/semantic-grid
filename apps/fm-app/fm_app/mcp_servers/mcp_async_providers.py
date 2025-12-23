@@ -17,8 +17,10 @@ MCP_ITEMS_FULL = [
     "SQLDialect",
     "DomainModel",
 ]
-# Planner: domain model, schema, instructions (no SQL examples - they prime SQL)
-MCP_ITEMS_PLANNER = ["DomainModel", "DBStruct", "Instruction"]
+# Planner: domain model and instructions only (no schema - planner works at semantic level)
+# The planner selects tables based on domain knowledge, not column details.
+# Full schema is fetched after plan approval for SQL generation.
+MCP_ITEMS_PLANNER = ["DomainModel", "Instruction"]
 # With approved plan: skip schema (plan has it), keep examples, instructions, and domain model
 MCP_ITEMS_WITH_PLAN = ["QueryExample", "Instruction", "SQLDialect", "DomainModel"]
 

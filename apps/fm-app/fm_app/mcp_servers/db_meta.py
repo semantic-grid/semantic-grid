@@ -489,18 +489,19 @@ def format_table_details_for_prompt(result: GetTableDetailsResult) -> str:
     Format table details into a human-readable string for LLM prompts.
 
     This renders the table details in a format suitable for inclusion
-    in SQL generation prompts.
+    in SQL generation prompts. Includes FULL column schema (names, types,
+    descriptions) so the SQL generator knows the exact column names.
 
     Args:
         result: GetTableDetailsResult from get_table_details_mcp
 
     Returns:
-        Formatted string with table relationships and statistics
+        Formatted string with full schema and statistics
     """
     if not result.tables:
         return ""
 
-    lines = ["## Table Relationships & Statistics\n"]
+    lines = ["## Table Schema Details\n"]
 
     for table in result.tables:
         lines.append(f"### {table.table_name}")
@@ -521,35 +522,32 @@ def format_table_details_for_prompt(result: GetTableDetailsResult) -> str:
                 ref_cols = ", ".join(fk.referred_columns)
                 lines.append(f"  - {fk_cols} → {fk.referred_table}({ref_cols})")
 
-        # Column statistics
-        stats_cols = [
-            c
-            for c in (table.columns or [])
-            if c.distinct_count or c.min_value or c.distinct_values
-        ]
+        # Full column schema - CRITICAL for SQL generation
+        if table.columns:
+            lines.append("\n**Columns:**")
+            for col in table.columns:
+                # Build column line: name (type) - description
+                col_line = f"- **{col.name}** ({col.type})"
+                if col.description:
+                    col_line += f" - {col.description}"
 
-        if stats_cols:
-            lines.append("- **Column statistics**:")
-            for col in stats_cols:
+                # Add stats inline if available
                 stat_parts = []
-
-                if col.distinct_count is not None:
-                    stat_parts.append(f"~{col.distinct_count:,} distinct")
-
                 if col.is_low_cardinality and col.distinct_values:
                     values_preview = col.distinct_values[:5]
                     if len(col.distinct_values) > 5:
                         values_str = ", ".join(f"'{v}'" for v in values_preview)
-                        values_str += f", ... (+{len(col.distinct_values) - 5} more)"
+                        values_str += ", ..."
                     else:
                         values_str = ", ".join(f"'{v}'" for v in values_preview)
                     stat_parts.append(f"values: [{values_str}]")
-
-                if col.min_value is not None and col.max_value is not None:
+                elif col.min_value is not None and col.max_value is not None:
                     stat_parts.append(f"range: {col.min_value} to {col.max_value}")
 
                 if stat_parts:
-                    lines.append(f"  - **{col.name}**: {'; '.join(stat_parts)}")
+                    col_line += f" [{'; '.join(stat_parts)}]"
+
+                lines.append(col_line)
 
         lines.append("")  # Empty line between tables
 
