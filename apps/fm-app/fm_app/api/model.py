@@ -265,36 +265,51 @@ class QueryPlan(BaseModel):
     allowing users to verify intent before SQL is generated.
     """
 
-    model_config = {"extra": "allow"}
+    # Allow both lowercase (code) and PascalCase (LLM output) field names
+    model_config = {"extra": "allow", "populate_by_name": True}
 
     # Tables involved
-    tables: list[str] = []
-    primary_table: str = ""
+    tables: list[str] = Field(default=[], alias="Tables")
+    primary_table: str = Field(default="", alias="PrimaryTable")
 
     # Relationships
     # Accept either structured objects or simple strings for flexibility
-    joins: list[Union[QueryPlanJoin, str]] = []
+    joins: list[Union[QueryPlanJoin, str]] = Field(default=[], alias="Joins")
 
     # Data selection
-    columns_selected: list[str] = []  # columns to return (human-readable)
+    columns_selected: list[str] = Field(
+        default=[], alias="ColumnsSelected"
+    )  # columns to return (human-readable)
     # Accept either structured objects or simple strings for flexibility
-    filters: list[Union[QueryPlanFilter, str]] = []
+    filters: list[Union[QueryPlanFilter, str]] = Field(default=[], alias="Filters")
 
     # Aggregations and grouping
     # Accept either structured objects or simple strings for flexibility
-    aggregations: list[Union[QueryPlanAggregation, str]] = []
-    group_by: list[str] = []
+    aggregations: list[Union[QueryPlanAggregation, str]] = Field(
+        default=[], alias="Aggregations"
+    )
+    group_by: list[str] = Field(default=[], alias="Grouping")
 
     # Ordering and limits
-    order_by: list[str] = []  # e.g., ["volume descending", "date ascending"]
-    limit: Optional[Union[int, str]] = None  # Accept string explanations from LLM
+    order_by: list[str] = Field(
+        default=[], alias="Ordering"
+    )  # e.g., ["volume descending", "date ascending"]
+    limit: Optional[Union[int, str]] = Field(
+        default=None, alias="Limit"
+    )  # Accept string explanations from LLM
 
     # Assumptions and defaults applied
-    assumptions: list[str] = []  # e.g., "Assuming 'recent' means last 7 days"
-    default_params: list[str] = []  # e.g., "Using default limit of 1000 rows"
+    assumptions: list[str] = Field(
+        default=[], alias="Assumptions"
+    )  # e.g., "Assuming 'recent' means last 7 days"
+    default_params: list[str] = Field(
+        default=[], alias="DefaultParameters"
+    )  # e.g., "Using default limit of 1000 rows"
 
     # Human-readable summary
-    plan_summary: str = ""  # 2-3 sentence explanation of what the query will do
+    plan_summary: str = Field(
+        default="", alias="PlanSummary"
+    )  # 2-3 sentence explanation of what the query will do
 
     # Complexity indicators (for transparency)
     estimated_complexity: str = "moderate"  # "simple", "moderate", "complex"

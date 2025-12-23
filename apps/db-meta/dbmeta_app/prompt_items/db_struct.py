@@ -319,6 +319,31 @@ def render_schema_to_text(schema_data: dict, table_counter_start: int = 1) -> st
     return schema_text
 
 
+def render_table_list_to_text(schema_data: dict) -> str:
+    """
+    Render a lightweight table list with just names and descriptions (no columns).
+
+    This is used for query planning where the planner needs to see all available
+    tables to make informed table selection, but doesn't need column details.
+
+    Args:
+        schema_data: Structured schema dict (full or filtered)
+
+    Returns:
+        str: Compact table list with descriptions
+    """
+    lines = ["The database contains the following tables:\n"]
+
+    for full_table_name, table_data in schema_data.items():
+        description = table_data.get("description", "")
+        if description:
+            lines.append(f"- **{full_table_name}**: {description}")
+        else:
+            lines.append(f"- **{full_table_name}**")
+
+    return "\n".join(lines)
+
+
 def get_structured_schema(engine, settings, with_examples=False):
     """
     Generate structured schema data (dict format) suitable for caching.

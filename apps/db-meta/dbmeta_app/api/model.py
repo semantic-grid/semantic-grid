@@ -6,6 +6,9 @@ from pydantic import BaseModel
 
 class PromptItemType(str, Enum):
     db_struct = "DBStruct"
+    db_table_list = (
+        "DBTableList"  # Lightweight: table names + descriptions only (no columns)
+    )
     data_sample = "DataSample"
     query_example = "QueryExample"
     instruction = "Instruction"
