@@ -507,7 +507,8 @@ def search_relevant_tables(
     # Step 4: Sort by combined score and return top_k
     combined_results.sort(key=lambda m: m.score, reverse=True)
 
-    logging.debug(
+    # Log detailed scores for debugging
+    logging.info(
         f"Hybrid search for '{query[:50]}': "
         f"BM25 found {len(bm25_results)}, Vector found {len(vector_results)}, "
         f"Combined {len(combined_results)} tables",
@@ -516,8 +517,16 @@ def search_relevant_tables(
             "query": query[:100],
             "bm25_count": len(bm25_results),
             "vector_count": len(vector_results),
-            "top_tables": [m.table_name for m in combined_results[:5]],
         },
     )
+
+    # Log top 15 results with component scores for debugging
+    for i, m in enumerate(combined_results[:15]):
+        bm25_s = bm25_scores.get(m.table_name, 0.0)
+        vector_s = vector_scores.get(m.table_name, 0.0)
+        logging.info(
+            f"  #{i + 1} {m.table_name}: combined={m.score:.3f} "
+            f"(bm25={bm25_s:.3f}, vector={vector_s:.3f})"
+        )
 
     return combined_results[:top_k]
