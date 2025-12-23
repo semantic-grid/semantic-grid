@@ -158,14 +158,59 @@ def get_all_table_records(
 _bm25_cache: dict[str, tuple[BM25Okapi, list[dict]]] = {}
 
 
+def clear_bm25_cache() -> None:
+    """Clear the BM25 cache. Call this after schema changes or tokenizer updates."""
+    global _bm25_cache
+    _bm25_cache = {}
+    logging.info("BM25 cache cleared")
+
+
+def _stem_token(token: str) -> str:
+    """
+    Simple stemming: remove common suffixes.
+
+    Handles:
+    - Plurals: hotspots → hotspot, entries → entry, tables → table
+    - -ing: processing → process
+    - -ed: aggregated → aggregat (close enough for matching)
+    """
+    if len(token) <= 3:
+        return token
+
+    # Handle -ies → -y (entries → entry)
+    if token.endswith("ies"):
+        return token[:-3] + "y"
+
+    # Handle -es (tables → tabl, but matches "table" stemmed too)
+    if token.endswith("es") and len(token) > 4:
+        return token[:-2]
+
+    # Handle -s (hotspots → hotspot)
+    if token.endswith("s") and not token.endswith("ss"):
+        return token[:-1]
+
+    # Handle -ing (processing → process)
+    if token.endswith("ing") and len(token) > 5:
+        return token[:-3]
+
+    # Handle -ed (aggregated → aggregat)
+    if token.endswith("ed") and len(token) > 4:
+        return token[:-2]
+
+    return token
+
+
 def _tokenize_for_bm25(text: str) -> list[str]:
     """
-    Tokenize text for BM25 search.
+    Tokenize text for BM25 search with simple stemming.
 
     Splits on dots, underscores, and spaces to handle table names like
     'iceberg.radius.wifi_qm_v2' → ['iceberg', 'radius', 'wifi', 'qm', 'v2']
+
+    Applies simple stemming so 'hotspots' matches 'hotspot'.
     """
-    return text.lower().replace(".", " ").replace("_", " ").split()
+    tokens = text.lower().replace(".", " ").replace("_", " ").split()
+    return [_stem_token(t) for t in tokens]
 
 
 def _build_searchable_text(record: dict) -> str:
