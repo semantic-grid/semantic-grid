@@ -91,4 +91,10 @@ written for a non-technical user. This will be shown to the user for approval.
 ---
 {% endif %}
 
+## Database Schema Reference
+
+{{ db_meta_schema }}
+
+---
+
 Provide your response as structured JSON matching the QueryPlan schema.
