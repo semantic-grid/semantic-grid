@@ -54,6 +54,7 @@ Requires-Dist: python-dotenv==1.1.0
 Requires-Dist: python-json-logger==2.0.7
 Requires-Dist: python-multipart==0.0.17
 Requires-Dist: pyyaml==6.0.2
+Requires-Dist: rank-bm25>=0.2.2
 Requires-Dist: redis>=5.0.0
 Requires-Dist: rich==13.9.4
 Requires-Dist: shellingham==1.5.4
