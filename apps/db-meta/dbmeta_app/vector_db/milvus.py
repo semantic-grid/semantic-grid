@@ -271,8 +271,10 @@ def _get_bm25_index(
     # Cache it
     _bm25_cache[cache_key] = (bm25, records)
 
+    # Log all indexed tables for debugging
+    table_names = [r.get("table_name", "?") for r in records]
     logging.info(
-        f"Built BM25 index for {cache_key} with {len(records)} tables",
+        f"Built BM25 index for {cache_key} with {len(records)} tables: {table_names}",
         extra={
             "action": "bm25_index_built",
             "profile": profile,

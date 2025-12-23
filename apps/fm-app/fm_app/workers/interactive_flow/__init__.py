@@ -9,13 +9,19 @@ from fm_app.ai_models.model import AIModel
 from fm_app.api.model import (
     IntentAnalysis,
     InteractiveRequestType,
+    McpServerRequest,
     PlanningMode,
+    QueryPlan,
     RequestStatus,
     StructuredResponse,
     WorkerRequest,
 )
 from fm_app.config import get_settings
 from fm_app.db.db import update_request_status
+from fm_app.mcp_servers.db_meta import (
+    format_table_details_for_prompt,
+    get_table_details_mcp,
+)
 from fm_app.workers.interactive_flow.clarification import (
     handle_clarification_request,
     handle_clarification_response,
@@ -32,6 +38,93 @@ from fm_app.workers.interactive_flow.linked_query import handle_linked_query
 from fm_app.workers.interactive_flow.manual_query import handle_manual_query
 from fm_app.workers.interactive_flow.query_planner import generate_query_plan
 from fm_app.workers.interactive_flow.setup import FlowContext, initialize_flow
+
+
+async def _enrich_plan_with_schema(
+    ctx: FlowContext,
+    query_plan: QueryPlan,
+) -> QueryPlan:
+    """
+    Fetch detailed schema for tables in the plan and populate relevant_schema.
+
+    This is the key step that solves the RAG gap: the planner selects tables
+    based on domain knowledge (even if they weren't in RAG top-k), and we
+    fetch their full schema here for SQL generation.
+
+    Args:
+        ctx: Flow context
+        query_plan: Query plan with tables selected by planner
+
+    Returns:
+        QueryPlan with relevant_schema populated
+    """
+    if not query_plan.tables:
+        ctx.logger.info(
+            "No tables in plan, skipping schema fetch",
+            flow_stage="schema_fetch_skip",
+        )
+        return query_plan
+
+    # Skip if schema already populated (e.g., from cache or previous run)
+    if query_plan.relevant_schema:
+        ctx.logger.info(
+            "Plan already has relevant_schema, skipping fetch",
+            flow_stage="schema_fetch_skip",
+            tables=query_plan.tables,
+        )
+        return query_plan
+
+    try:
+        # Build MCP request context
+        mcp_req = McpServerRequest(
+            request_id=ctx.req.request_id,
+            db=ctx.req.db,
+            request=ctx.req.request,
+            session_id=ctx.req.session_id,
+            model=ctx.req.model,
+            flow=ctx.req.flow,
+        )
+
+        ctx.logger.info(
+            "Fetching detailed schema for plan tables",
+            flow_stage="schema_fetch_start",
+            tables=query_plan.tables,
+        )
+
+        # Fetch table details via MCP
+        table_details = await get_table_details_mcp(
+            req=mcp_req,
+            tables=query_plan.tables,
+            flow_step_num=next(ctx.flow_step),
+            settings=ctx.settings,
+            logger=ctx.logger,
+            include=["relationships", "low_cardinality_values", "ranges"],
+        )
+
+        # Format for prompt
+        schema_text = format_table_details_for_prompt(table_details)
+
+        ctx.logger.info(
+            "Schema fetched successfully",
+            flow_stage="schema_fetch_complete",
+            tables=query_plan.tables,
+            schema_length=len(schema_text),
+            tables_returned=len(table_details.tables) if table_details.tables else 0,
+        )
+
+        # Populate the plan's relevant_schema field
+        query_plan.relevant_schema = schema_text
+
+    except Exception as e:
+        ctx.logger.warning(
+            "Failed to fetch schema for plan tables, continuing without",
+            flow_stage="schema_fetch_error",
+            tables=query_plan.tables,
+            error=str(e),
+        )
+        # Continue without schema - SQL generation will use whatever MCP provides
+
+    return query_plan
 
 
 async def _handle_replan_on_failure(
@@ -209,6 +302,10 @@ async def _route_by_intent(ctx: FlowContext, intent: IntentAnalysis) -> WorkerRe
             plan_id=str(plan_id) if plan_id else None,
             plan_summary=query_plan.plan_summary[:100] if query_plan else None,
         )
+
+        # Fetch detailed schema for tables in the plan (Phase 3: Plan-Driven Schema)
+        query_plan = await _enrich_plan_with_schema(ctx, query_plan)
+
         query_result = await handle_interactive_query(
             ctx, intent, query_plan=query_plan, plan_id=plan_id
         )
@@ -335,6 +432,10 @@ async def interactive_flow(
                 request_type=InteractiveRequestType.plan_approval,
                 requires_plan_approval=False,
             )
+
+            # Fetch detailed schema for tables in the plan (Phase 3: Plan-Driven Schema)
+            query_plan = await _enrich_plan_with_schema(ctx, query_plan)
+
             # Pass plan_id so the query can be linked to the plan after creation
             query_result = await handle_interactive_query(
                 ctx, intent, query_plan=query_plan, plan_id=plan_id
@@ -494,6 +595,10 @@ async def interactive_flow(
                 plan_id=str(plan_id) if plan_id else None,
                 plan_summary=query_plan.plan_summary[:100] if query_plan else None,
             )
+
+            # Fetch detailed schema for tables in the plan (Phase 3: Plan-Driven Schema)
+            query_plan = await _enrich_plan_with_schema(ctx, query_plan)
+
             query_result = await handle_interactive_query(
                 ctx, intent, query_plan=query_plan, plan_id=plan_id
             )
