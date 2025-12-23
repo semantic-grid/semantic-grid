@@ -44,8 +44,11 @@ export const useAdminRequests = (
     const params = new URLSearchParams({
       limit: String(limit),
       offset: String(offset),
-      status,
     });
+    // Only add status param if not "All" - backend treats missing status as all
+    if (status && status !== "All") {
+      params.set("status", status);
+    }
     if (search) {
       params.set("search", search);
     }

@@ -1132,7 +1132,7 @@ async def admin_get_all_requests(
     db: AsyncSession = Depends(get_db),
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    status_param: RequestStatus = Query(RequestStatus.done, alias="status"),
+    status_param: Optional[RequestStatus] = Query(None, alias="status"),
     search: Optional[str] = Query(None, description="Search in request, SQL, or user"),
     has_feedback: Optional[bool] = Query(
         None, description="Filter to requests with rating or review"

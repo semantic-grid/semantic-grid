@@ -1019,9 +1019,12 @@ const RequestDetailDrawer = ({
 };
 
 const REQUEST_STATUSES = [
+  "All",
   "Done",
   "New",
   "Intent",
+  "Planning",
+  "FeedbackRequested",
   "SQL",
   "DataFetch",
   "Retry",
@@ -1047,7 +1050,7 @@ const Page = withPageAuthRequired(
     });
     const [searchInput, setSearchInput] = useState("");
     const [search, setSearch] = useState("");
-    const [status, setStatus] = useState("Done");
+    const [status, setStatus] = useState("All");
     const [hasFeedback, setHasFeedback] = useState(false);
     const [isTestFilter, setIsTestFilter] = useState<string>("all");
     const [isFixedFilter, setIsFixedFilter] = useState<string>("all");

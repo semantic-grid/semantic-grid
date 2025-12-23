@@ -89,7 +89,7 @@ async def get_all_requests_admin_v2(
     limit: int,
     offset: int,
     admin: str,
-    status: RequestStatus,
+    status: RequestStatus | None,
     search: str | None,
     has_feedback: bool | None,
     is_test: bool | None,
@@ -99,6 +99,8 @@ async def get_all_requests_admin_v2(
     """
     Get all requests for admin with user email, search, and total count.
     Joins with session table to get user_owner (Auth0 sub).
+
+    If status is None, returns all requests (no status filter).
     """
     logging.debug(
         "Get all requests v2",
@@ -106,8 +108,8 @@ async def get_all_requests_admin_v2(
     )
 
     # Build WHERE clause
-    where_conditions = ["r.status = :status"]
-    params: dict = {"status": status, "limit": limit, "offset": offset}
+    where_conditions: list[str] = []
+    params: dict = {"limit": limit, "offset": offset}
 
     # Only filter for non-null SQL when not looking at statuses without SQL yet
     # - error: may have failed before SQL generation
@@ -122,8 +124,13 @@ async def get_all_requests_admin_v2(
         RequestStatus.intent,
         RequestStatus.in_process,
     }
-    if status not in statuses_without_sql:
-        where_conditions.append("r.sql is not null")
+
+    # If status provided, filter by it
+    if status is not None:
+        where_conditions.append("r.status = :status")
+        params["status"] = status
+        if status not in statuses_without_sql:
+            where_conditions.append("r.sql is not null")
 
     if search:
         where_conditions.append(
@@ -143,7 +150,11 @@ async def get_all_requests_admin_v2(
         where_conditions.append("r.is_fixed = :is_fixed")
         params["is_fixed"] = is_fixed
 
-    where_clause = " AND ".join(where_conditions)
+    # Build WHERE clause - handle empty conditions
+    if where_conditions:
+        where_clause = "WHERE " + " AND ".join(where_conditions)
+    else:
+        where_clause = ""
 
     # Count query
     count_sql = text(
@@ -151,7 +162,7 @@ async def get_all_requests_admin_v2(
         SELECT COUNT(*) as total
         FROM request r
         LEFT JOIN session s ON r.session_id = s.session_id
-        WHERE {where_clause};
+        {where_clause};
     """
     )
     count_res = await db.execute(count_sql, params=params)
@@ -168,7 +179,7 @@ async def get_all_requests_admin_v2(
         FROM request r
         LEFT JOIN session s ON r.session_id = s.session_id
         LEFT JOIN query q ON r.query_id = q.query_id
-        WHERE {where_clause}
+        {where_clause}
         ORDER BY r.created_at DESC
         LIMIT :limit OFFSET :offset;
     """
