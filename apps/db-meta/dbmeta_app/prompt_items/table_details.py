@@ -542,13 +542,26 @@ def get_table_details(request: GetTableDetailsRequest) -> GetTableDetailsRespons
 
     with engine.connect() as conn:
         for full_table_name in request.tables:
-            # Check if table exists in schema
-            if full_table_name not in structured_schema:
+            # Check if table exists in schema - try multiple key formats
+            # Plan may have 3-part (catalog.schema.table) but schema may use 2-part
+            catalog, schema, table = _parse_table_name(full_table_name)
+
+            # Try different key formats to find the table in structured_schema
+            schema_key = None
+            for candidate_key in [
+                full_table_name,  # dwh.public.subscriber_addons
+                f"{schema}.{table}" if schema else table,  # public.subscriber_addons
+                table,  # subscriber_addons
+            ]:
+                if candidate_key in structured_schema:
+                    schema_key = candidate_key
+                    break
+
+            if schema_key is None:
                 logging.warning(f"Table {full_table_name} not found in schema")
                 continue
 
-            table_schema = structured_schema[full_table_name]
-            catalog, schema, table = _parse_table_name(full_table_name)
+            table_schema = structured_schema[schema_key]
 
             # Get table metadata from YAML
             table_metadata = _get_table_metadata_with_fallback(
