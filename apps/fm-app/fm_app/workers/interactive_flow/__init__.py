@@ -92,13 +92,14 @@ async def _enrich_plan_with_schema(
         )
 
         # Fetch table details via MCP
+        # Only request relationships - skip expensive stats (cardinality, ranges)
         table_details = await get_table_details_mcp(
             req=mcp_req,
             tables=query_plan.tables,
             flow_step_num=next(ctx.flow_step),
             settings=ctx.settings,
             logger=ctx.logger,
-            include=["relationships", "low_cardinality_values", "ranges"],
+            include=["relationships"],  # Schema + PK/FK only, no expensive stats
         )
 
         # Format for prompt
