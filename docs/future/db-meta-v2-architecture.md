@@ -270,4 +270,5 @@ Key distinction from traditional semantic layers:
 
 - `docs/future/autonomous-agentic-flow.md` - FM-APP agent loop phases
 - `docs/future/db-meta-granular-schema-exploration.md` - Detailed implementation plan for Phase 1
+- `docs/future/mcp-elicitation-sampling-integration.md` - MCP Elicitation, Sampling & UI integration for autonomous db-meta (includes MCP UI/Apps for rich interactive interfaces)
 - `.claude/plans/snoopy-stirring-scott.md` - Current implementation progress

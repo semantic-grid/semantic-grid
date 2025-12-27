@@ -596,6 +596,8 @@ Agent: [Continues toward goal...]
 ## Relationship to Other Plans
 
 - **[DB-Meta Granular Schema Exploration](./db-meta-granular-schema-exploration.md)**: Provides enhanced MCP tools that the agent uses for schema discovery, validation, and deep table analysis
+- **[MCP Elicitation, Sampling & UI Integration](./mcp-elicitation-sampling-integration.md)**: Shows how MCP Elicitation (user input), Sampling (LLM calls), and MCP UI/Apps (rich interactive components) can shift intelligence from harness into db-meta, making the harness thinner and more replaceable. MCP UI enables db-meta to deliver rich visualizations (data grids, plan diagrams, schema explorers) that render in any MCP-compatible host.
+- **[DB-Meta v2 Architecture](./db-meta-v2-architecture.md)**: Overall vision for db-meta as a "Database Context Layer"
 - **Query Planner**: Becomes one tool in the agent's toolkit, not the only path
 - **Interactive Flow**: Infrastructure is reused, but orchestration changes
 

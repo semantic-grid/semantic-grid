@@ -519,7 +519,15 @@ def build_sorted_paginated_sql(
 async def verify_any_token(
     guest: dict = Depends(guest_auth.verify), user: dict = Depends(auth.verify)
 ):
-    return guest or user  # If guest verification fails, check regular user verification
+    result = (
+        guest or user
+    )  # If guest verification fails, check regular user verification
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+        )
+    return result
 
 
 def sha256_str(s: str) -> str:
