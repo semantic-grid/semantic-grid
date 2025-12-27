@@ -13,28 +13,29 @@ from fm_app.api.model import (
     WorkerRequest,
 )
 
-# Module-level client cache for session reuse within a flow
-_client_cache: dict[str, Client] = {}
 
-
-def get_db_meta_client(settings) -> Client:
+def create_db_meta_client(settings) -> Client:
     """
-    Get or create a reusable MCP client for db-meta.
+    Create a new MCP client for db-meta.
 
-    FastMCP Client supports reentrant context managers with reference counting,
-    so the same client instance can be used across multiple `async with client:`
-    blocks efficiently, reusing the same session.
+    Creates a fresh client instance. Use this at the flow level and pass
+    the client to all MCP functions to reuse the session within a single flow.
+
+    Note: Do NOT cache clients across Celery tasks - each task runs in a
+    different event loop, and reusing clients across loops causes errors.
 
     Args:
         settings: Application settings containing dbmeta URL
 
     Returns:
-        Client instance (cached per URL)
+        New Client instance
     """
     url = f"{settings.dbmeta}mcp"
-    if url not in _client_cache:
-        _client_cache[url] = Client(url)
-    return _client_cache[url]
+    return Client(url)
+
+
+# Alias for backward compatibility
+get_db_meta_client = create_db_meta_client
 
 
 @asynccontextmanager
@@ -55,7 +56,7 @@ async def db_meta_client_session(settings):
     Yields:
         Connected Client instance
     """
-    client = get_db_meta_client(settings)
+    client = create_db_meta_client(settings)
     async with client:
         yield client
 
