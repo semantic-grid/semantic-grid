@@ -256,7 +256,13 @@ def cleanup_agent_context(sender, **kwargs):
 
 @app.task(name="wrk_add_request")
 def wrk_add_request(args):
-    return asyncio.run(_wrk_add_request(args))
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        return loop.run_until_complete(_wrk_add_request(args))
+    finally:
+        # Don't close the loop - let SQLAlchemy connection pool use it for cleanup
+        pass
 
 
 async def _wrk_add_request(args):
