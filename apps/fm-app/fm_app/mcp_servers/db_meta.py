@@ -61,6 +61,31 @@ async def db_meta_client_session(settings):
         yield client
 
 
+@asynccontextmanager
+async def _use_client(client: Optional[Client], settings):
+    """
+    Internal helper: use provided client or create a new session.
+
+    If client is provided, yields it directly (assumes caller manages session).
+    If client is None, creates a new client and session.
+
+    Args:
+        client: Optional pre-connected client
+        settings: Application settings (used if client is None)
+
+    Yields:
+        Client instance ready for use
+    """
+    if client is not None:
+        # Client provided - use it directly, caller manages the session
+        yield client
+    else:
+        # No client - create new one with session
+        new_client = create_db_meta_client(settings)
+        async with new_client:
+            yield new_client
+
+
 @dataclass
 class PromptItemResult:
     """Structured result from prompt_items_v2 call."""
@@ -111,9 +136,7 @@ async def get_db_meta_mcp_prompt_items(
     client: Optional[Client] = None,
 ):
     db = get_db_name(req)
-    # Use provided client or create new one (for backward compatibility)
-    _client = client if client else get_db_meta_client(settings)
-    async with _client:
+    async with _use_client(client, settings) as _client:
         try:
             prompts = await _client.call_tool(
                 "prompt_items",
@@ -171,8 +194,7 @@ async def get_db_meta_mcp_prompt_items_v2(
     if items is None:
         items = ["DBStruct", "QueryExample", "Instruction", "SQLDialect", "DomainModel"]
 
-    _client = client if client else get_db_meta_client(settings)
-    async with _client:
+    async with _use_client(client, settings) as _client:
         try:
             result = await _client.call_tool(
                 "prompt_items_v2",
@@ -241,8 +263,7 @@ async def db_meta_mcp_analyze_query(
     client: Optional[Client] = None,
 ):
     db = get_db_name(req)
-    _client = client if client else get_db_meta_client(settings)
-    async with _client:
+    async with _use_client(client, settings) as _client:
         try:
             prompts = await _client.call_tool(
                 "preflight_query",
@@ -313,9 +334,8 @@ async def validate_query_plan(
         PlanValidationResult with validation status, errors, and suggestions
     """
     db = get_db_name(req)
-    _client = client if client else get_db_meta_client(settings)
 
-    async with _client:
+    async with _use_client(client, settings) as _client:
         try:
             result = await _client.call_tool(
                 "validate_plan",
@@ -457,9 +477,7 @@ async def get_table_details_mcp(
     if include is None:
         include = ["relationships", "cardinality", "ranges"]
 
-    _client = client if client else get_db_meta_client(settings)
-
-    async with _client:
+    async with _use_client(client, settings) as _client:
         try:
             result = await _client.call_tool(
                 "get_table_details",
@@ -636,8 +654,7 @@ async def get_db_meta_database_overview(
         if len(parts) > 1:
             mode = parts[1]
 
-    _client = client if client else get_db_meta_client(settings)
-    async with _client:
+    async with _use_client(client, settings) as _client:
         try:
             result = await _client.call_tool(
                 "get_database_overview",

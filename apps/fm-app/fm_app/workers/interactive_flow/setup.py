@@ -70,12 +70,14 @@ async def initialize_flow(
         system_version=settings.system_version,
     )
 
-    # Register async MCP providers
-    assembler.register_async_mcp(DbMetaAsyncProvider(settings, logger))
-    assembler.register_async_mcp(DbRefAsyncProvider(settings, logger))
-
     # Initialize MCP client for db-meta (reused across flow)
     mcp_client = get_db_meta_client(settings)
+
+    # Register async MCP providers (pass client for session reuse)
+    assembler.register_async_mcp(
+        DbMetaAsyncProvider(settings, logger, client=mcp_client)
+    )
+    assembler.register_async_mcp(DbRefAsyncProvider(settings, logger))
 
     # Get session data
     request_session = await get_session_by_id(session_id=req.session_id, db=db)
