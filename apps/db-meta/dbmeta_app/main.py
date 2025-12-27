@@ -61,7 +61,7 @@ def main():
     asyncio.run(check_mcp(mcp))
 
     # Start the FastMCP (FastAPI/uvicorn) server; this is typically blocking.
-    mcp.run(transport="sse", host="0.0.0.0", port=settings.port)
+    mcp.run(transport="http", host="0.0.0.0", port=settings.port)
 
 
 if __name__ == "__main__":

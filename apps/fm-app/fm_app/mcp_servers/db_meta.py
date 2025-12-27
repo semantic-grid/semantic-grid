@@ -59,7 +59,7 @@ async def get_db_meta_mcp_prompt_items(
     req: McpServerRequest, flow_step_num, settings, logger
 ):
     db = get_db_name(req)
-    client = Client(f"""{settings.dbmeta}sse""")
+    client = Client(f"""{settings.dbmeta}mcp""")
     async with client:
         try:
             prompts = await client.call_tool(
@@ -116,7 +116,7 @@ async def get_db_meta_mcp_prompt_items_v2(
     if items is None:
         items = ["DBStruct", "QueryExample", "Instruction", "SQLDialect", "DomainModel"]
 
-    client = Client(f"""{settings.dbmeta}sse""")
+    client = Client(f"""{settings.dbmeta}mcp""")
     async with client:
         try:
             result = await client.call_tool(
@@ -181,7 +181,7 @@ async def db_meta_mcp_analyze_query(
     req: McpServerRequest, sql: str, flow_step_num, settings, logger
 ):
     db = get_db_name(req)
-    client = Client(f"""{settings.dbmeta}sse""")
+    client = Client(f"""{settings.dbmeta}mcp""")
     async with client:
         try:
             prompts = await client.call_tool(
@@ -250,7 +250,7 @@ async def validate_query_plan(
         PlanValidationResult with validation status, errors, and suggestions
     """
     db = get_db_name(req)
-    client = Client(f"""{settings.dbmeta}sse""")
+    client = Client(f"""{settings.dbmeta}mcp""")
 
     async with client:
         try:
@@ -392,7 +392,7 @@ async def get_table_details_mcp(
     if include is None:
         include = ["relationships", "cardinality", "ranges"]
 
-    client = Client(f"""{settings.dbmeta}sse""")
+    client = Client(f"""{settings.dbmeta}mcp""")
 
     async with client:
         try:
@@ -567,7 +567,7 @@ async def get_db_meta_database_overview(
         if len(parts) > 1:
             mode = parts[1]
 
-    client = Client(f"""{settings.dbmeta}sse""")
+    client = Client(f"""{settings.dbmeta}mcp""")
     async with client:
         try:
             result = await client.call_tool(

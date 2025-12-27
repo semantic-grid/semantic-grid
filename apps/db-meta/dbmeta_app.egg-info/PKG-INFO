@@ -22,7 +22,7 @@ Requires-Dist: dnspython==2.7.0
 Requires-Dist: email-validator==2.2.0
 Requires-Dist: fastapi==0.115.12
 Requires-Dist: fastapi-cli==0.0.5
-Requires-Dist: fastmcp==2.2.7
+Requires-Dist: fastmcp>=2.14.0
 Requires-Dist: greenlet==3.1.1
 Requires-Dist: h11==0.14.0
 Requires-Dist: httpcore==1.0.6
@@ -43,11 +43,10 @@ Requires-Dist: pre-commit==4.0.1
 Requires-Dist: prompt-toolkit==3.0.48
 Requires-Dist: psycopg2-binary==2.9.10
 Requires-Dist: pycparser==2.22
-Requires-Dist: pydantic==2.9.2
-Requires-Dist: pydantic-core==2.23.4
+Requires-Dist: pydantic>=2.12.2
 Requires-Dist: pydantic-settings==2.6.1
 Requires-Dist: pygments==2.18.0
-Requires-Dist: pyjwt==2.9.0
+Requires-Dist: pyjwt>=2.10.1
 Requires-Dist: pymilvus~=2.5.4
 Requires-Dist: python-dateutil==2.9.0.post0
 Requires-Dist: python-dotenv==1.1.0
@@ -64,10 +63,10 @@ Requires-Dist: sqlalchemy==2.0.36
 Requires-Dist: starlette==0.41.2
 Requires-Dist: trino>=0.336.0
 Requires-Dist: typer==0.15.2
-Requires-Dist: typing-extensions==4.12.2
+Requires-Dist: typing-extensions>=4.14.1
 Requires-Dist: tzdata==2024.2
 Requires-Dist: uuid7==0.1.0
-Requires-Dist: uvicorn==0.32.0
+Requires-Dist: uvicorn>=0.35.0
 Requires-Dist: uvloop==0.21.0
 Requires-Dist: vine==5.1.0
 Requires-Dist: watchfiles==0.24.0

@@ -34,5 +34,6 @@ dbmeta_app/vector_db/milvus.py
 dbmeta_app/wh_db/__init__.py
 dbmeta_app/wh_db/db.py
 tests/test_driver_normalization.py
+tests/test_http_transport.py
 tests/test_mcp_tools.py
 tests/test_prompt_assembly.py
