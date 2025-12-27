@@ -72,7 +72,7 @@ async def get_db_meta_mcp_prompt_items(
                 },
             )
             logger.debug(
-                f"Got prompts for db={db}, has_content={bool(prompts[0].text)}"
+                f"Got prompts for db={db}, has_content={bool(prompts.content[0].text)}"
             )
 
         except Exception as e:
@@ -84,7 +84,7 @@ async def get_db_meta_mcp_prompt_items(
             )
             raise e
 
-    return prompts[0].text
+    return prompts.content[0].text
 
 
 async def get_db_meta_mcp_prompt_items_v2(
@@ -133,7 +133,7 @@ async def get_db_meta_mcp_prompt_items_v2(
             )
 
             # Parse the structured response
-            response_data = json.loads(result[0].text)
+            response_data = json.loads(result.content[0].text)
 
             prompt_items = []
             texts = []
@@ -194,7 +194,8 @@ async def db_meta_mcp_analyze_query(
                 },
             )
             logger.debug(
-                f"Preflight check for db={db}, has_content={bool(prompts[0].text)}"
+                f"Preflight check for db={db}, "
+                f"has_content={bool(prompts.content[0].text)}"
             )
 
         except Exception as e:
@@ -206,7 +207,7 @@ async def db_meta_mcp_analyze_query(
             )
             raise e
 
-    return json.loads(prompts[0].text)
+    return json.loads(prompts.content[0].text)
 
 
 @dataclass
@@ -266,7 +267,7 @@ async def validate_query_plan(
             )
 
             # Parse the response
-            response_data = json.loads(result[0].text)
+            response_data = json.loads(result.content[0].text)
 
             errors = [
                 PlanValidationError(
@@ -410,7 +411,7 @@ async def get_table_details_mcp(
             )
 
             # Parse the response
-            response_data = json.loads(result[0].text)
+            response_data = json.loads(result.content[0].text)
 
             # Parse tables
             tables_result = []
@@ -577,7 +578,7 @@ async def get_db_meta_database_overview(
                     "mode": mode,
                 },
             )
-            overview_text = result[0].text
+            overview_text = result.content[0].text
             logger.info(
                 "Got database overview",
                 flow_stage="discovery_overview",
