@@ -1593,7 +1593,7 @@ async def get_query_data(
     limit: int = 100,
     offset: int = 0,
     sort_by: Optional[str] = None,
-    sort_order: str = Query("asc", regex="^(asc|desc)$"),
+    sort_order: str = Query("asc", pattern="^(asc|desc)$"),
     db: AsyncSession = Depends(get_db),
 ) -> Response:
     sql = ""
@@ -1841,7 +1841,7 @@ async def stream_data_fetch(
     limit: int = 100,
     offset: int = 0,
     sort_by: Optional[str] = None,
-    sort_order: str = Query("asc", regex="^(asc|desc)$"),
+    sort_order: str = Query("asc", pattern="^(asc|desc)$"),
     notify_on_complete: bool = Query(False),
     user_email: Optional[str] = Query(None),
     force: bool = Query(False),
