@@ -31,7 +31,9 @@ def create_db_meta_client(settings) -> Client:
         New Client instance
     """
     url = f"{settings.dbmeta}mcp"
-    return Client(url)
+    # Set timeout to 120 seconds - db-meta can take 45+ seconds on cache miss
+    # Default httpx timeout is only 5 seconds which causes premature timeouts
+    return Client(url, timeout=120)
 
 
 # Alias for backward compatibility
