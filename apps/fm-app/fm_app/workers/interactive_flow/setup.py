@@ -8,6 +8,7 @@ from typing import Optional, Type
 
 import structlog
 from celery.utils.log import get_task_logger
+from fastmcp import Client
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.session import Session
 
@@ -16,6 +17,7 @@ from fm_app.api.model import WorkerRequest
 from fm_app.config import Settings, get_settings
 from fm_app.db.db import get_query_by_id, get_session_by_id
 from fm_app.db.query_plan_db import get_plan_for_query
+from fm_app.mcp_servers.db_meta import get_db_meta_client
 from fm_app.mcp_servers.mcp_async_providers import (
     DbMetaAsyncProvider,
     DbRefAsyncProvider,
@@ -41,6 +43,7 @@ class FlowContext:
     request_session: any
     parent_session: any
     tracer: Optional[RequestTracer] = field(default=None)
+    mcp_client: Optional[Client] = field(default=None)
 
 
 async def initialize_flow(
@@ -71,6 +74,9 @@ async def initialize_flow(
     assembler.register_async_mcp(DbMetaAsyncProvider(settings, logger))
     assembler.register_async_mcp(DbRefAsyncProvider(settings, logger))
 
+    # Initialize MCP client for db-meta (reused across flow)
+    mcp_client = get_db_meta_client(settings)
+
     # Get session data
     request_session = await get_session_by_id(session_id=req.session_id, db=db)
     parent_session = (
@@ -95,6 +101,7 @@ async def initialize_flow(
         request_session=request_session,
         parent_session=parent_session,
         tracer=tracer,
+        mcp_client=mcp_client,
     )
 
 

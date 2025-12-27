@@ -1,4 +1,5 @@
 import json
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Any, Optional
 
@@ -11,6 +12,52 @@ from fm_app.api.model import (
     PromptItemType,
     WorkerRequest,
 )
+
+# Module-level client cache for session reuse within a flow
+_client_cache: dict[str, Client] = {}
+
+
+def get_db_meta_client(settings) -> Client:
+    """
+    Get or create a reusable MCP client for db-meta.
+
+    FastMCP Client supports reentrant context managers with reference counting,
+    so the same client instance can be used across multiple `async with client:`
+    blocks efficiently, reusing the same session.
+
+    Args:
+        settings: Application settings containing dbmeta URL
+
+    Returns:
+        Client instance (cached per URL)
+    """
+    url = f"{settings.dbmeta}mcp"
+    if url not in _client_cache:
+        _client_cache[url] = Client(url)
+    return _client_cache[url]
+
+
+@asynccontextmanager
+async def db_meta_client_session(settings):
+    """
+    Context manager for db-meta MCP client session.
+
+    Use this at the flow level to maintain a single session across
+    multiple MCP tool calls:
+
+        async with db_meta_client_session(settings) as client:
+            result1 = await get_db_meta_mcp_prompt_items_v2(..., client=client)
+            result2 = await validate_query_plan(..., client=client)
+
+    Args:
+        settings: Application settings
+
+    Yields:
+        Connected Client instance
+    """
+    client = get_db_meta_client(settings)
+    async with client:
+        yield client
 
 
 @dataclass
@@ -56,13 +103,18 @@ def get_db_name(req: WorkerRequest):
 
 
 async def get_db_meta_mcp_prompt_items(
-    req: McpServerRequest, flow_step_num, settings, logger
+    req: McpServerRequest,
+    flow_step_num,
+    settings,
+    logger,
+    client: Optional[Client] = None,
 ):
     db = get_db_name(req)
-    client = Client(f"""{settings.dbmeta}mcp""")
-    async with client:
+    # Use provided client or create new one (for backward compatibility)
+    _client = client if client else get_db_meta_client(settings)
+    async with _client:
         try:
-            prompts = await client.call_tool(
+            prompts = await _client.call_tool(
                 "prompt_items",
                 {
                     "req": {
@@ -95,6 +147,7 @@ async def get_db_meta_mcp_prompt_items_v2(
     items: Optional[list[str]] = None,
     schema_top_k: int = 10,
     examples_top_k: int = 5,
+    client: Optional[Client] = None,
 ) -> PromptItemsV2Result:
     """Get prompt items with structured response and lineage metadata.
 
@@ -106,6 +159,7 @@ async def get_db_meta_mcp_prompt_items_v2(
         items: List of item types to include (defaults to all)
         schema_top_k: Number of tables for schema filtering
         examples_top_k: Number of query examples
+        client: Optional MCP client (for session reuse)
 
     Returns:
         PromptItemsV2Result with individual items and combined text
@@ -116,10 +170,10 @@ async def get_db_meta_mcp_prompt_items_v2(
     if items is None:
         items = ["DBStruct", "QueryExample", "Instruction", "SQLDialect", "DomainModel"]
 
-    client = Client(f"""{settings.dbmeta}mcp""")
-    async with client:
+    _client = client if client else get_db_meta_client(settings)
+    async with _client:
         try:
-            result = await client.call_tool(
+            result = await _client.call_tool(
                 "prompt_items_v2",
                 {
                     "req": {
@@ -178,13 +232,18 @@ async def get_db_meta_mcp_prompt_items_v2(
 
 
 async def db_meta_mcp_analyze_query(
-    req: McpServerRequest, sql: str, flow_step_num, settings, logger
+    req: McpServerRequest,
+    sql: str,
+    flow_step_num,
+    settings,
+    logger,
+    client: Optional[Client] = None,
 ):
     db = get_db_name(req)
-    client = Client(f"""{settings.dbmeta}mcp""")
-    async with client:
+    _client = client if client else get_db_meta_client(settings)
+    async with _client:
         try:
-            prompts = await client.call_tool(
+            prompts = await _client.call_tool(
                 "preflight_query",
                 {
                     "req": {
@@ -235,6 +294,7 @@ async def validate_query_plan(
     flow_step_num: int,
     settings,
     logger,
+    client: Optional[Client] = None,
 ) -> PlanValidationResult:
     """
     Validate that tables and columns from a query plan exist in the database schema.
@@ -246,16 +306,17 @@ async def validate_query_plan(
         flow_step_num: Current flow step number for logging
         settings: Application settings
         logger: Logger instance
+        client: Optional MCP client (for session reuse)
 
     Returns:
         PlanValidationResult with validation status, errors, and suggestions
     """
     db = get_db_name(req)
-    client = Client(f"""{settings.dbmeta}mcp""")
+    _client = client if client else get_db_meta_client(settings)
 
-    async with client:
+    async with _client:
         try:
-            result = await client.call_tool(
+            result = await _client.call_tool(
                 "validate_plan",
                 {
                     "req": {
@@ -362,6 +423,7 @@ async def get_table_details_mcp(
     include: Optional[list[str]] = None,
     cardinality_threshold: int = 100,
     sample_size: int = 10000,
+    client: Optional[Client] = None,
 ) -> GetTableDetailsResult:
     """
     Get detailed metadata for specific tables including relationships and stats.
@@ -383,6 +445,7 @@ async def get_table_details_mcp(
             - "indexes": Index information
         cardinality_threshold: Max distinct values for "low cardinality"
         sample_size: Rows to sample for statistics
+        client: Optional MCP client (for session reuse)
 
     Returns:
         GetTableDetailsResult with detailed table metadata and lineage info
@@ -393,11 +456,11 @@ async def get_table_details_mcp(
     if include is None:
         include = ["relationships", "cardinality", "ranges"]
 
-    client = Client(f"""{settings.dbmeta}mcp""")
+    _client = client if client else get_db_meta_client(settings)
 
-    async with client:
+    async with _client:
         try:
-            result = await client.call_tool(
+            result = await _client.call_tool(
                 "get_table_details",
                 {
                     "req": {
@@ -556,7 +619,11 @@ def format_table_details_for_prompt(result: GetTableDetailsResult) -> str:
 
 
 async def get_db_meta_database_overview(
-    req: McpServerRequest, flow_step_num, settings, logger
+    req: McpServerRequest,
+    flow_step_num,
+    settings,
+    logger,
+    client: Optional[Client] = None,
 ):
     """Get high-level database overview for discovery/welcome messages."""
     db = get_db_name(req)
@@ -568,10 +635,10 @@ async def get_db_meta_database_overview(
         if len(parts) > 1:
             mode = parts[1]
 
-    client = Client(f"""{settings.dbmeta}mcp""")
-    async with client:
+    _client = client if client else get_db_meta_client(settings)
+    async with _client:
         try:
-            result = await client.call_tool(
+            result = await _client.call_tool(
                 "get_database_overview",
                 {
                     "db": db,

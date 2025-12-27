@@ -134,7 +134,7 @@ async def handle_manual_query(ctx: FlowContext) -> None:
         )
 
         analyzed = await db_meta_mcp_analyze_query(
-            req, extracted_sql, 5, settings, logger
+            req, extracted_sql, 5, settings, logger, client=ctx.mcp_client
         )
 
         if analyzed.get("explanation"):

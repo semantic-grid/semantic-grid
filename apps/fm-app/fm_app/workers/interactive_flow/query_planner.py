@@ -246,6 +246,7 @@ async def generate_query_plan(
                 flow_step_num=next(flow_step),
                 settings=ctx.settings,
                 logger=logger,
+                client=ctx.mcp_client,  # Reuse session
             )
 
             if validation_result.valid:

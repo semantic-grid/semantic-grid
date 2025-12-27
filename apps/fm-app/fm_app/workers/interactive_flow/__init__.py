@@ -100,6 +100,7 @@ async def _enrich_plan_with_schema(
             settings=ctx.settings,
             logger=ctx.logger,
             include=["relationships"],  # Schema + PK/FK only, no expensive stats
+            client=ctx.mcp_client,  # Reuse session
         )
 
         # Format for prompt
@@ -350,6 +351,15 @@ async def interactive_flow(
     ctx = await initialize_flow(req, ai_model, db_wh, db)
 
     await update_request_status(RequestStatus.in_process, None, db, req.request_id)
+
+    # Use MCP client session for the entire flow to reuse connection
+    async with ctx.mcp_client:
+        return await _execute_flow(ctx, req)
+
+
+async def _execute_flow(ctx: FlowContext, req: WorkerRequest) -> WorkerRequest:
+    """Execute the flow logic within the MCP client session context."""
+    db = ctx.db
 
     # Route based on initial request type
     if req.request_type == InteractiveRequestType.manual_query:
