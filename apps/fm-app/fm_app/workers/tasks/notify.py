@@ -35,10 +35,10 @@ def send_query_notification(
         from uuid import UUID
 
         from fm_app.db.db import get_query_by_id
-        from fm_app.workers.db_session import SESSION
+        from fm_app.workers.db_session import dispose_engine_for_current_loop, get_db
 
         async def fetch_summary():
-            async with SESSION() as db:  # type: ignore[attr-defined]
+            async for db in get_db():
                 query = await get_query_by_id(db=db, query_id=UUID(query_id))
                 if query:
                     return query.summary
@@ -48,6 +48,8 @@ def send_query_notification(
         asyncio.set_event_loop(loop)
         try:
             summary = loop.run_until_complete(fetch_summary())
+            # Dispose the engine for this loop to prevent connection leaks
+            loop.run_until_complete(dispose_engine_for_current_loop())
         finally:
             loop.close()
     except Exception as e:
