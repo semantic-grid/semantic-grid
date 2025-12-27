@@ -256,7 +256,7 @@ def cleanup_agent_context(sender, **kwargs):
 
 @app.task(name="wrk_add_request")
 def wrk_add_request(args):
-    return asyncio.get_event_loop().run_until_complete(_wrk_add_request(args))
+    return asyncio.run(_wrk_add_request(args))
 
 
 async def _wrk_add_request(args):
