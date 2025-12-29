@@ -23,25 +23,7 @@ This document outlines the proposed v2 architecture for Semantic Grid, featuring
 
 ## Architecture Diagram
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                         AI Agents (Interchangeable)                 │
-├─────────────────┬─────────────────┬─────────────────┬───────────────┤
-│   fm-app-v2     │  Claude Desktop │    ChatGPT      │   Other MCP   │
-│  (specialized)  │   (generic)     │   (generic)     │    Clients    │
-├─────────────────┴─────────────────┴─────────────────┴───────────────┤
-│                              MCP Protocol                           │
-├─────────────────────────────────────────────────────────────────────┤
-│                           db-meta-v2                                │
-│  ┌──────────────┬──────────────┬──────────────┬──────────────┐      │
-│  │   Tools      │  Resources   │   Prompts    │   UI Specs   │      │
-│  │ (planning,   │ (schema,     │ (templates)  │ (grid specs) │      │
-│  │  querying)   │  examples)   │              │              │      │
-│  └──────────────┴──────────────┴──────────────┴──────────────┘      │
-│                                                                     │
-│  Artifact Flow: Task → Plan → Query → Result → UI Spec             │
-└─────────────────────────────────────────────────────────────────────┘
-```
+![Architecture](diagrams/01-architecture.svg)
 
 ## MCP Features Leveraged
 
@@ -133,59 +115,7 @@ async def generate_query_plan(intent: str, schema: str) -> QueryPlan:
 
 ## Proposed Query Flow (v2)
 
-```
-User: "Calculate average offload traffic for LA"
-         │
-         ▼
-┌─────────────────┐
-│   fm-app-v2     │  Manages session, routes to db-meta
-└────────┬────────┘
-         │ MCP: call tool "get_intent"
-         ▼
-┌─────────────────┐
-│   db-meta-v2    │  Determines intent, available tools
-└────────┬────────┘
-         │ MCP Sampling: "Generate query plan"
-         ▼
-┌─────────────────┐
-│   LLM (client)  │  Returns structured QueryPlan
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│   db-meta-v2    │  Validates plan against schema
-└────────┬────────┘
-         │ MCP Elicitation: "Approve this plan?"
-         ▼
-┌─────────────────┐
-│   User (client) │  YES / NO / Modify
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│   db-meta-v2    │  Enriches plan with detailed schema
-└────────┬────────┘
-         │ MCP Sampling: "Generate SQL"
-         ▼
-┌─────────────────┐
-│   LLM (client)  │  Returns SQL + metadata
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│   db-meta-v2    │  Validates SQL (EXPLAIN), repairs if needed
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│   db-meta-v2    │  Executes query, generates UI spec
-└────────┬────────┘
-         │ Returns: QueryResult + UISpec
-         ▼
-┌─────────────────┐
-│   fm-app-v2     │  Renders specialized grid UI
-└─────────────────┘
-```
+![Query Flow](diagrams/02-query-flow.svg)
 
 ## Monorepo Structure (v2 alongside v1)
 
@@ -303,17 +233,7 @@ AG-UI (Agent-User Interaction Protocol) is an open standard from CopilotKit that
 
 db-meta-v2's `get_data` tool streams state changes throughout execution:
 
-```
-get_data called
-  ├── state: "planning"
-  ├── state: "plan_ready", plan: {...}
-  ├── elicitation: "approve plan?"
-  ├── state: "generating_sql"
-  ├── state: "validating"
-  ├── state: "repairing" (if needed)
-  ├── state: "executing"
-  └── state: "complete", result: {...}, ui_spec: {...}
-```
+![State Machine](diagrams/03-state-machine.svg)
 
 AG-UI's event types map directly to this:
 - `STATE_SNAPSHOT` / `STATE_DELTA` - Progress updates
@@ -423,74 +343,13 @@ Three entry points, one unified output: **Result + UISpec**.
 | `run_sql` | `sql: str` | SQL statement | Skip NL/planning, same safety layer |
 | `get_result` | `query_uuid: str` | Canonical UUID | Fetch cached or execute stored query |
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                      db-meta-v2 Tools                       │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  get_data(intent) ──→ NL → Plan → SQL ─┐                   │
-│                                         │                   │
-│  run_sql(sql) ────────────────→ SQL ───┤                   │
-│                                         ▼                   │
-│                                   ┌───────────┐             │
-│                                   │Canonicalize│            │
-│                                   │  → UUID    │            │
-│                                   └─────┬─────┘             │
-│                                         │                   │
-│  get_result(uuid) ──────────────────────┤                   │
-│                                         ▼                   │
-│                                   ┌───────────┐             │
-│                                   │Cache hit? │             │
-│                                   └─────┬─────┘             │
-│                                    yes/ \no                 │
-│                                      /   \                  │
-│                                     ▼     ▼                 │
-│                                  Return  Safety Layer       │
-│                                     \     ↓                 │
-│                                      \   Execute            │
-│                                       \   ↓                 │
-│                                        ▼                    │
-│                                    Result + UISpec          │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
-```
+![Tools Flow](diagrams/04-tools-flow.svg)
 
 ### Shared Safety Layer
 
 All three tools converge through the same safety layer:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                   Shared Safety Layer                       │
-│                                                             │
-│  ┌──────────────┐   ┌──────────────┐   ┌──────────────┐    │
-│  │   Validate   │ → │  Read-only   │ → │ Canonicalize │    │
-│  │  (EXPLAIN)   │   │    check     │   │   → UUID     │    │
-│  └──────────────┘   └──────────────┘   └──────────────┘    │
-│                                               │             │
-│                                               ▼             │
-│                                        ┌──────────────┐     │
-│                                        │ Cache lookup │     │
-│                                        └──────┬───────┘     │
-│                                          hit/ \miss         │
-│                                            /   \            │
-│                                           ▼     ▼           │
-│                                       Return   Cost Tier    │
-│                                               Analysis      │
-│                                                  │          │
-│                              ┌───────────────────┼────────┐ │
-│                              ▼                   ▼        ▼ │
-│                           [AUTO]            [CONFIRM] [REJECT]
-│                              │                   │        │ │
-│                              ▼                   ▼        ▼ │
-│                          Execute            Elicit    Error │
-│                              │              approval       │ │
-│                              │                   │          │
-│                              └───────┬───────────┘          │
-│                                      ▼                      │
-│                               Result + UISpec               │
-└─────────────────────────────────────────────────────────────┘
-```
+![Safety Layer](diagrams/05-safety-layer.svg)
 
 ### Read-Only Enforcement
 
@@ -516,9 +375,7 @@ Cache hits always bypass cost checks - they're free.
 
 SQL text is normalized to a canonical AST, producing a deterministic UUID:
 
-```
-SQL text → Parse → Normalize AST → Serialize → SHA256 → UUID
-```
+![Canonicalization](diagrams/06-canonicalization.svg)
 
 Normalization handles:
 - Whitespace differences
@@ -531,26 +388,7 @@ Two semantically identical queries get the same UUID, enabling efficient caching
 
 ### Storage Model
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     Query Store                             │
-│                                                             │
-│  query_uuid (PK) │ canonical_sql │ original_sql │ metadata │
-│  ────────────────┼───────────────┼──────────────┼──────────│
-│  abc123...       │ SELECT ...    │ SELECT ...   │ {...}    │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────┐
-│                     Result Cache                            │
-│                                                             │
-│  Tiered: Memory (L1) → Redis (L2) → Persistent (L3)        │
-│                                                             │
-│  Key: query_uuid                                            │
-│  Value: result data, ui_spec, timestamp, ttl               │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
-```
+![Storage Model](diagrams/07-storage-model.svg)
 
 - **Query Store**: Persists canonical queries (UUID → SQL mapping)
 - **Result Cache**: Caches execution results, tiered by hotness
@@ -597,43 +435,7 @@ These are dynamically generated from featured queries in the query store.
 
 Before generating a new query, `get_data` searches for semantically similar existing queries:
 
-```
-User: "show me wallet activity"
-                │
-                ▼
-        ┌───────────────┐
-        │Semantic search│
-        │ via embedding │
-        └───────┬───────┘
-                │
-        ┌───────┴───────┐
-        │               │
-        ▼               ▼
-   [Matches]       [No matches]
-        │               │
-        ▼               ▼
-   Suggest to      Generate new
-   reuse existing  (full flow)
-```
-
-**Query Store with Embeddings:**
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     Query Store                             │
-│                                                             │
-│  query_uuid │ canonical_sql │ embedding │ metadata          │
-│  ───────────┼───────────────┼───────────┼──────────────────│
-│  abc123     │ SELECT ...    │ [0.1,...] │ {                │
-│             │               │           │   intent: "...", │
-│             │               │           │   usage_count: N,│
-│             │               │           │   last_used: ts, │
-│             │               │           │   tags: [...],   │
-│             │               │           │   featured: bool,│
-│             │               │           │   slug: "..."    │
-│             │               │           │ }                │
-└─────────────────────────────────────────────────────────────┘
-```
+![Semantic Matching](diagrams/08-semantic-matching.svg)
 
 **Flow when matches found:**
 
@@ -696,8 +498,3 @@ yield StateEvent(status="planning")
 7. [ ] Scaffold `apps/fm-app-v2` as thin PydanticAI agent
 8. [ ] Connect fm-app-v2 to db-meta-v2
 9. [ ] Feature-flag in web frontend
-
----
-
-*Document created: 2024-12-29*
-*Based on architecture discussion and MCP/PydanticAI research*

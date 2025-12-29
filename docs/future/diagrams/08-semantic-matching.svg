@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 350">
+  <defs>
+    <style>
+      .box { fill: #f8f9fa; stroke: #333; stroke-width: 2; }
+      .box-input { fill: #e8f5e9; stroke: #388e3c; stroke-width: 2; }
+      .box-process { fill: #e3f2fd; stroke: #1976d2; stroke-width: 2; }
+      .box-decision { fill: #fce4ec; stroke: #c2185b; stroke-width: 2; }
+      .box-output { fill: #fff3e0; stroke: #f57c00; stroke-width: 2; }
+      .text { font-family: system-ui, sans-serif; font-size: 12px; fill: #333; }
+      .text-bold { font-family: system-ui, sans-serif; font-size: 12px; fill: #333; font-weight: bold; }
+      .text-small { font-family: system-ui, sans-serif; font-size: 10px; fill: #666; }
+      .text-title { font-family: system-ui, sans-serif; font-size: 16px; fill: #333; font-weight: bold; }
+      .line { stroke: #333; stroke-width: 1.5; fill: none; }
+      .arrow { fill: #333; }
+    </style>
+  </defs>
+
+  <!-- Title -->
+  <text x="300" y="25" text-anchor="middle" class="text-title">Semantic Query Matching</text>
+
+  <!-- User input -->
+  <rect x="175" y="50" width="250" height="40" rx="6" class="box-input"/>
+  <text x="300" y="75" text-anchor="middle" class="text">"show me wallet activity"</text>
+  <line x1="300" y1="90" x2="300" y2="120" class="line"/>
+  <polygon points="300,125 295,115 305,115" class="arrow"/>
+
+  <!-- Semantic search -->
+  <rect x="200" y="125" width="200" height="45" rx="6" class="box-process"/>
+  <text x="300" y="145" text-anchor="middle" class="text-bold">Semantic search</text>
+  <text x="300" y="160" text-anchor="middle" class="text-small">via embedding</text>
+  <line x1="300" y1="170" x2="300" y2="200" class="line"/>
+  <polygon points="300,205 295,195 305,195" class="arrow"/>
+
+  <!-- Decision: matches found? -->
+  <polygon points="300,240 230,205 230,275 300,240 370,275 370,205" class="box-decision"/>
+  <text x="300" y="235" text-anchor="middle" class="text-small">Matches</text>
+  <text x="300" y="247" text-anchor="middle" class="text-small">found?</text>
+
+  <!-- Yes path -->
+  <line x1="230" y1="240" x2="150" y2="240" class="line"/>
+  <text x="190" y="232" class="text-small">yes</text>
+  <line x1="150" y1="240" x2="150" y2="280" class="line"/>
+  <polygon points="150,285 145,275 155,275" class="arrow"/>
+
+  <!-- Suggest -->
+  <rect x="75" y="285" width="150" height="40" rx="6" class="box-output"/>
+  <text x="150" y="310" text-anchor="middle" class="text">Suggest existing</text>
+  <line x1="150" y1="325" x2="150" y2="355" class="line"/>
+  <polygon points="150,360 145,350 155,350" class="arrow"/>
+
+  <!-- Elicit: use existing? -->
+  <polygon points="150,395 80,360 80,430 150,395 220,430 220,360" class="box-decision"/>
+  <text x="150" y="390" text-anchor="middle" class="text-small">Use</text>
+  <text x="150" y="402" text-anchor="middle" class="text-small">existing?</text>
+
+  <!-- Yes - reuse -->
+  <line x1="80" y1="395" x2="30" y2="395" class="line"/>
+  <text x="55" y="387" class="text-small">yes</text>
+  <line x1="30" y1="395" x2="30" y2="480" class="line"/>
+  <line x1="30" y1="480" x2="225" y2="480" class="line"/>
+  <polygon points="230,480 220,475 220,485" class="arrow"/>
+
+  <!-- Reuse -->
+  <rect x="30" y="430" width="100" height="35" rx="6" class="box-process"/>
+  <text x="80" y="445" text-anchor="middle" class="text-small">get_result(uuid)</text>
+  <text x="80" y="458" text-anchor="middle" class="text-small">+increment usage</text>
+
+  <!-- No path from elicit -->
+  <line x1="150" y1="430" x2="150" y2="460" class="line"/>
+  <text x="162" y="448" class="text-small">no</text>
+  <line x1="150" y1="460" x2="300" y2="460" class="line"/>
+  <line x1="300" y1="460" x2="300" y2="350" class="line"/>
+
+  <!-- No path from matches -->
+  <line x1="370" y1="240" x2="450" y2="240" class="line"/>
+  <text x="410" y="232" class="text-small">no</text>
+  <line x1="450" y1="240" x2="450" y2="310" class="line"/>
+  <polygon points="450,315 445,305 455,305" class="arrow"/>
+
+  <!-- Generate new -->
+  <rect x="375" y="315" width="150" height="40" rx="6" class="box-output"/>
+  <text x="450" y="335" text-anchor="middle" class="text-bold">Generate new</text>
+  <text x="450" y="350" text-anchor="middle" class="text-small">(full flow)</text>
+
+  <!-- Merge to result -->
+  <line x1="450" y1="355" x2="450" y2="480" class="line"/>
+  <line x1="450" y1="480" x2="370" y2="480" class="line"/>
+
+  <!-- Connect no from elicit -->
+  <line x1="300" y1="350" x2="300" y2="315" class="line"/>
+  <line x1="300" y1="315" x2="375" y2="315" class="line"/>
+
+  <!-- Result -->
+  <rect x="230" y="460" width="140" height="40" rx="6" class="box-input"/>
+  <text x="300" y="485" text-anchor="middle" class="text-bold">Result + UISpec</text>
+</svg>

@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 320">
+  <defs>
+    <style>
+      .table { fill: #f8f9fa; stroke: #333; stroke-width: 2; }
+      .table-header { fill: #e3f2fd; stroke: #333; stroke-width: 2; }
+      .text { font-family: system-ui, sans-serif; font-size: 11px; fill: #333; }
+      .text-bold { font-family: system-ui, sans-serif; font-size: 12px; fill: #333; font-weight: bold; }
+      .text-small { font-family: system-ui, sans-serif; font-size: 10px; fill: #666; }
+      .text-title { font-family: system-ui, sans-serif; font-size: 16px; fill: #333; font-weight: bold; }
+      .line { stroke: #333; stroke-width: 1.5; fill: none; }
+      .line-relation { stroke: #1976d2; stroke-width: 2; fill: none; }
+      .arrow { fill: #333; }
+    </style>
+  </defs>
+
+  <!-- Title -->
+  <text x="350" y="25" text-anchor="middle" class="text-title">Storage Model</text>
+
+  <!-- Query Store table -->
+  <rect x="50" y="50" width="280" height="180" rx="4" class="table"/>
+  <rect x="50" y="50" width="280" height="30" rx="4" class="table-header"/>
+  <text x="190" y="70" text-anchor="middle" class="text-bold">QUERY_STORE</text>
+
+  <text x="60" y="100" class="text">query_uuid</text>
+  <text x="200" y="100" class="text-small">PK, string</text>
+
+  <text x="60" y="120" class="text">canonical_sql</text>
+  <text x="200" y="120" class="text-small">string</text>
+
+  <text x="60" y="140" class="text">original_sql</text>
+  <text x="200" y="140" class="text-small">string</text>
+
+  <text x="60" y="160" class="text">embedding</text>
+  <text x="200" y="160" class="text-small">vector</text>
+
+  <text x="60" y="180" class="text">metadata</text>
+  <text x="200" y="180" class="text-small">json</text>
+
+  <line x1="50" y1="190" x2="330" y2="190" style="stroke:#ddd;stroke-width:1"/>
+  <text x="60" y="210" class="text-small">metadata: intent, usage_count,</text>
+  <text x="60" y="222" class="text-small">last_used, tags, featured, slug</text>
+
+  <!-- Result Cache table -->
+  <rect x="400" y="50" width="250" height="150" rx="4" class="table"/>
+  <rect x="400" y="50" width="250" height="30" rx="4" class="table-header"/>
+  <text x="525" y="70" text-anchor="middle" class="text-bold">RESULT_CACHE</text>
+
+  <text x="410" y="100" class="text">query_uuid</text>
+  <text x="550" y="100" class="text-small">FK, string</text>
+
+  <text x="410" y="120" class="text">result_data</text>
+  <text x="550" y="120" class="text-small">json</text>
+
+  <text x="410" y="140" class="text">ui_spec</text>
+  <text x="550" y="140" class="text-small">json</text>
+
+  <text x="410" y="160" class="text">cached_at</text>
+  <text x="550" y="160" class="text-small">timestamp</text>
+
+  <text x="410" y="180" class="text">ttl</text>
+  <text x="550" y="180" class="text-small">int</text>
+
+  <!-- Relationship line -->
+  <line x1="330" y1="100" x2="400" y2="100" class="line-relation"/>
+  <text x="365" y="95" class="text-small">1:N</text>
+
+  <!-- Cache tiers -->
+  <rect x="400" y="220" width="250" height="90" rx="4" class="table"/>
+  <text x="525" y="245" text-anchor="middle" class="text-bold">Cache Tiers</text>
+  <text x="410" y="270" class="text">L1 (Memory)</text>
+  <text x="540" y="270" class="text-small">~5min TTL</text>
+  <text x="410" y="290" class="text">L2 (Redis)</text>
+  <text x="540" y="290" class="text-small">configurable TTL</text>
+  <text x="410" y="310" class="text">L3 (Persistent)</text>
+  <text x="540" y="310" class="text-small">permanent</text>
+</svg>

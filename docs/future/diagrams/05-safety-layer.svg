@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 200">
+  <defs>
+    <style>
+      .box { fill: #f8f9fa; stroke: #333; stroke-width: 2; }
+      .box-process { fill: #fff3e0; stroke: #f57c00; stroke-width: 2; }
+      .box-decision { fill: #fce4ec; stroke: #c2185b; stroke-width: 2; }
+      .box-output { fill: #e8f5e9; stroke: #388e3c; stroke-width: 2; }
+      .box-error { fill: #ffebee; stroke: #c62828; stroke-width: 2; }
+      .text { font-family: system-ui, sans-serif; font-size: 11px; fill: #333; }
+      .text-bold { font-family: system-ui, sans-serif; font-size: 12px; fill: #333; font-weight: bold; }
+      .text-small { font-family: system-ui, sans-serif; font-size: 9px; fill: #666; }
+      .text-title { font-family: system-ui, sans-serif; font-size: 16px; fill: #333; font-weight: bold; }
+      .line { stroke: #333; stroke-width: 1.5; fill: none; }
+      .arrow { fill: #333; }
+    </style>
+  </defs>
+
+  <!-- Title -->
+  <text x="400" y="25" text-anchor="middle" class="text-title">Shared Safety Layer</text>
+
+  <!-- Input -->
+  <text x="30" y="90" class="text">SQL</text>
+  <line x1="50" y1="85" x2="80" y2="85" class="line"/>
+  <polygon points="85,85 75,80 75,90" class="arrow"/>
+
+  <!-- Validate -->
+  <rect x="85" y="65" width="100" height="40" rx="6" class="box-process"/>
+  <text x="135" y="82" text-anchor="middle" class="text-bold">Validate</text>
+  <text x="135" y="95" text-anchor="middle" class="text-small">(EXPLAIN)</text>
+  <line x1="185" y1="85" x2="215" y2="85" class="line"/>
+  <polygon points="220,85 210,80 210,90" class="arrow"/>
+
+  <!-- Read-only -->
+  <rect x="220" y="65" width="100" height="40" rx="6" class="box-process"/>
+  <text x="270" y="82" text-anchor="middle" class="text-bold">Read-only</text>
+  <text x="270" y="95" text-anchor="middle" class="text-small">check</text>
+  <line x1="320" y1="85" x2="350" y2="85" class="line"/>
+  <polygon points="355,85 345,80 345,90" class="arrow"/>
+
+  <!-- Canonicalize -->
+  <rect x="355" y="65" width="100" height="40" rx="6" class="box-process"/>
+  <text x="405" y="82" text-anchor="middle" class="text-bold">Canonicalize</text>
+  <text x="405" y="95" text-anchor="middle" class="text-small">→ UUID</text>
+  <line x1="455" y1="85" x2="485" y2="85" class="line"/>
+  <polygon points="490,85 480,80 480,90" class="arrow"/>
+
+  <!-- Cache lookup -->
+  <polygon points="545,85 490,55 490,115 545,85 600,115 600,55" class="box-decision"/>
+  <text x="545" y="80" text-anchor="middle" class="text-small">Cache</text>
+  <text x="545" y="92" text-anchor="middle" class="text-small">hit?</text>
+
+  <!-- Cache hit path -->
+  <line x1="600" y1="85" x2="630" y2="85" class="line"/>
+  <text x="615" y="77" class="text-small">yes</text>
+  <line x1="630" y1="85" x2="630" y2="175" class="line"/>
+  <line x1="630" y1="175" x2="720" y2="175" class="line"/>
+  <polygon points="725,175 715,170 715,180" class="arrow"/>
+
+  <!-- Cache miss path -->
+  <line x1="545" y1="115" x2="545" y2="140" class="line"/>
+  <text x="555" y="130" class="text-small">no</text>
+
+  <!-- Cost tier -->
+  <rect x="495" y="140" width="100" height="30" rx="6" class="box-process"/>
+  <text x="545" y="160" text-anchor="middle" class="text">Cost Tier</text>
+
+  <!-- Cost paths -->
+  <line x1="495" y1="155" x2="450" y2="155" class="line"/>
+  <text x="472" y="148" class="text-small">AUTO</text>
+  <line x1="450" y1="155" x2="450" y2="175" class="line"/>
+  <line x1="450" y1="175" x2="720" y2="175" class="line"/>
+
+  <line x1="545" y1="170" x2="545" y2="175" class="line"/>
+  <text x="560" y="185" class="text-small">CONFIRM→</text>
+  <line x1="600" y1="175" x2="720" y2="175" class="line"/>
+
+  <line x1="595" y1="155" x2="650" y2="155" class="line"/>
+  <text x="622" y="148" class="text-small">REJECT</text>
+  <rect x="650" y="140" width="60" height="30" rx="6" class="box-error"/>
+  <text x="680" y="160" text-anchor="middle" class="text-small">Error</text>
+
+  <!-- Output -->
+  <rect x="725" y="155" width="70" height="40" rx="6" class="box-output"/>
+  <text x="760" y="172" text-anchor="middle" class="text-small">Result +</text>
+  <text x="760" y="185" text-anchor="middle" class="text-small">UISpec</text>
+</svg>
