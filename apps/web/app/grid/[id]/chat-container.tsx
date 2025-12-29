@@ -21,6 +21,7 @@ import React, {
 
 import { ResponseTextMessage } from "@/app/components/chat-box/ResponseTextMessage";
 import { ResponseTextStatus } from "@/app/components/chat-box/ResponseTextStatus";
+import { ClarificationPrompt } from "@/app/components/ClarificationPrompt";
 import CopyQueryUrl from "@/app/components/CopyQueryUrl";
 import { QueryFeedback } from "@/app/components/QueryFeedback";
 import { QueryPlanCard } from "@/app/components/QueryPlanCard";
@@ -86,6 +87,7 @@ export const ChatContainer = ({
     setSelectionModel,
     approvePlan,
     rejectPlan,
+    respondToClarification,
   } = useGridSession();
   const inputRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
@@ -401,11 +403,14 @@ export const ChatContainer = ({
                                 },
                               }}
                             >
-                              <ResponseTextMessage
-                                text={msg.text}
-                                status={section.status}
-                                linkedSession={section.linkedSession}
-                              />
+                              {/* Hide response text for clarification - the ClarificationPrompt shows the question */}
+                              {section.response_type !== "clarification" && (
+                                <ResponseTextMessage
+                                  text={msg.text}
+                                  status={section.status}
+                                  linkedSession={section.linkedSession}
+                                />
+                              )}
                               <ResponseTextStatus
                                 status={section.status}
                                 rowCount={metadata?.row_count}
@@ -420,16 +425,62 @@ export const ChatContainer = ({
                                   Boolean(section.query)
                                 }
                               />
-                              {/* Show QueryPlanCard when section has a plan */}
-                              {section.query_plan && i === arr.length - 1 && (
-                                <QueryPlanCard
-                                  plan={section.query_plan}
-                                  onApprove={approvePlan}
-                                  onReject={rejectPlan}
-                                  isLoading={pending}
-                                  disabled={idx !== sects.length - 1}
-                                />
-                              )}
+                              {/* Render based on response_type (unified pattern) */}
+                              {i === arr.length - 1 &&
+                                (() => {
+                                  // Use response_type discriminator, with fallback for legacy data
+                                  const responseType =
+                                    section.response_type ||
+                                    (section.query_plan
+                                      ? "plan_approval"
+                                      : section.clarification
+                                        ? "clarification"
+                                        : null);
+
+                                  switch (responseType) {
+                                    case "plan_approval": {
+                                      // Use payload or fall back to legacy query_plan
+                                      const plan =
+                                        section.payload || section.query_plan;
+                                      return plan ? (
+                                        <QueryPlanCard
+                                          plan={plan as any}
+                                          onApprove={approvePlan}
+                                          onReject={rejectPlan}
+                                          isLoading={pending}
+                                          disabled={idx !== sects.length - 1}
+                                        />
+                                      ) : null;
+                                    }
+                                    case "clarification": {
+                                      // Use payload or fall back to legacy clarification
+                                      const clarification =
+                                        section.payload ||
+                                        section.clarification;
+                                      return clarification ? (
+                                        <ClarificationPrompt
+                                          question={
+                                            (clarification as any)?.question
+                                          }
+                                          options={
+                                            (clarification as any)?.options
+                                          }
+                                          context={
+                                            (clarification as any)?.context
+                                          }
+                                          onResponse={respondToClarification}
+                                          disabled={
+                                            pending || idx !== sects.length - 1
+                                          }
+                                        />
+                                      ) : null;
+                                    }
+                                    // Future: case "checkpoint": ...
+                                    // Future: case "verification": ...
+                                    default:
+                                      return null;
+                                  }
+                                })()}
                             </Box>
                           )}
                           {i % 2 !== 0 &&

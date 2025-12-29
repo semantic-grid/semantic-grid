@@ -9,29 +9,16 @@ import urllib3
 from celery import Celery
 from celery.signals import setup_logging
 from celery.utils.log import get_task_logger
-
-# from pydantic import ValidationError
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from trino.auth import BasicAuthentication
 
-# Disable urllib3 SSL warnings for Trino connections with verify=False
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
-
-def serialize_value(value):
-    """Convert non-JSON-serializable types to JSON-compatible formats."""
-    if isinstance(value, (date, datetime)):
-        return value.isoformat()
-    elif isinstance(value, Decimal):
-        return float(value)
-    elif value is None:
-        return None
-    else:
-        return value
-
-
-from fm_app.ai_models.llm import AnthropicModel, DeepSeekModel, GeminiModel, OpenAIModel
+from fm_app.ai_models.llm import (
+    AnthropicModel,
+    DeepSeekModel,
+    GeminiModel,
+    OpenAIModel,
+)
 from fm_app.api.db_session import normalize_database_driver
 from fm_app.api.model import (
     DBType,
@@ -51,6 +38,22 @@ from fm_app.workers.interactive_flow import interactive_flow
 from fm_app.workers.legacy.data_only_flow import data_only_flow
 from fm_app.workers.legacy.multistep_flow import multistep_flow
 from fm_app.workers.legacy.simple_flow import simple_flow
+
+# Disable urllib3 SSL warnings for Trino connections with verify=False
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+
+def serialize_value(value):
+    """Convert non-JSON-serializable types to JSON-compatible formats."""
+    if isinstance(value, (date, datetime)):
+        return value.isoformat()
+    elif isinstance(value, Decimal):
+        return float(value)
+    elif value is None:
+        return None
+    else:
+        return value
+
 
 settings = get_settings()
 
@@ -138,7 +141,8 @@ def create_wh_engine(driver: str, url: str):
             pool_recycle=360,
             connect_args={
                 "http_scheme": "https",
-                "verify": False,  # use a CA file path instead in prod, e.g. "/path/to/ca.crt"
+                # Use a CA file path instead in prod, e.g. "/path/to/ca.crt"
+                "verify": False,
                 "auth": BasicAuthentication(
                     settings.database_wh_user, settings.database_wh_pass
                 ),
@@ -177,7 +181,8 @@ DATABASE_URL_WH_NEW = f"{settings.database_wh_driver}://{settings.database_wh_us
 DATABASE_URL_WH_V2 = f"{settings.database_wh_driver}://{settings.database_wh_user}:{settings.database_wh_pass}@{settings.database_wh_server_v2}:{settings.database_wh_port_v2}/{settings.database_wh_db_v2}{settings.database_wh_params_v2}"
 ENGINE_WH = create_wh_engine(normalized_driver, DATABASE_URL_WH)
 # ENGINE_WH = create_engine(
-#     DATABASE_URL_WH, pool_size=40, max_overflow=60, pool_pre_ping=True, pool_recycle=360
+#     DATABASE_URL_WH, pool_size=40, max_overflow=60, pool_pre_ping=True,
+#     pool_recycle=360
 # )
 # )
 ENGINE_WH_NEW = create_wh_engine(normalized_driver, DATABASE_URL_WH_NEW)
@@ -202,12 +207,9 @@ SESSION_WH = sessionmaker(bind=ENGINE_WH, expire_on_commit=False)
 SESSION_WH_NEW = sessionmaker(bind=ENGINE_WH_NEW, expire_on_commit=False)
 SESSION_WH_V2 = sessionmaker(bind=ENGINE_WH_V2, expire_on_commit=False)
 
-loop = asyncio.new_event_loop()
-asyncio.set_event_loop(loop)
-
 # Import notification tasks to register them with Celery
 # Must happen after 'app' is created above
-from fm_app.workers.tasks import notify  # noqa: F401
+from fm_app.workers.tasks import notify  # noqa: F401, E402
 
 
 def add_fields_to_log(logger, log_method, event_dict):
@@ -256,7 +258,19 @@ def cleanup_agent_context(sender, **kwargs):
 
 @app.task(name="wrk_add_request")
 def wrk_add_request(args):
-    return asyncio.get_event_loop().run_until_complete(_wrk_add_request(args))
+    from fm_app.workers.db_session import dispose_engine_for_current_loop
+
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        return loop.run_until_complete(_wrk_add_request(args))
+    finally:
+        # Dispose the SQLAlchemy engine for this event loop to release connections
+        try:
+            loop.run_until_complete(dispose_engine_for_current_loop())
+        except Exception:
+            pass  # Best effort cleanup
+        loop.close()
 
 
 async def _wrk_add_request(args):
@@ -390,14 +404,14 @@ async def _wrk_add_request(args):
             if request.status == RequestStatus.error:
                 logger.error(
                     "Error in flow",
-                    request=request.model_dump(),
+                    request=request.model_dump(mode="json"),
                     flow_stage="error_in_flow",
                     flow_step_num=10000,
                 )
             else:
                 logger.info(
                     "Done with request",
-                    request=request.model_dump(),
+                    request=request.model_dump(mode="json"),
                     flow_stage="done_with_request",
                     flow_step_num=10000,
                 )
@@ -463,6 +477,31 @@ async def _wrk_add_request(args):
                     #    )
                     #    print("spawned linked task", task_id)
 
+                    # Build response_type and payload from structured_response
+                    response_type = structured_response.response_type
+                    payload = None
+
+                    if (
+                        response_type == "clarification"
+                        and structured_response.clarification
+                    ):
+                        payload = structured_response.clarification.model_dump()
+                    elif (
+                        response_type == "plan_approval"
+                        and structured_response.query_plan
+                    ):
+                        payload = structured_response.query_plan.model_dump()
+                    # For other types, payload can be built as needed
+
+                    logger.info(
+                        "Updating request with response_type and payload",
+                        flow_stage="update_request_response_type",
+                        response_type=response_type,
+                        has_payload=payload is not None,
+                        has_clarification=structured_response.clarification is not None,
+                        request_id=str(request.request_id),
+                    )
+
                     await update_request(
                         db=db,
                         update=UpdateRequestModel(
@@ -481,7 +520,7 @@ async def _wrk_add_request(args):
                             chart=structured_response.chart,
                             chart_url=structured_response.chart_url,
                             refs=(
-                                structured_response.refs.model_dump()
+                                structured_response.refs.model_dump(mode="json")
                                 if structured_response.refs
                                 else None
                             ),
@@ -491,6 +530,8 @@ async def _wrk_add_request(args):
                                 if structured_response.query_plan
                                 else None
                             ),
+                            response_type=response_type,
+                            payload=payload,
                         ),
                     )
             # await db.close()
@@ -499,7 +540,9 @@ async def _wrk_add_request(args):
         async for db in get_db():
             request.status = RequestStatus.error
             logger.error(
-                f"Unhandled Exception: {e}", request=request.model_dump(), exc_info=True
+                f"Unhandled Exception: {e}",
+                request=request.model_dump(mode="json"),
+                exc_info=True,
             )
             request.err = "Unhandled exception, check logs"
             await update_request_failure(err=str(e), status=RequestStatus.error, db=db)
@@ -632,7 +675,8 @@ def wrk_fetch_data(self, args):
             # Invalidate all cache entries for this query before fetching fresh data
             invalidated_count = run_async(invalidate_query_cache(query_id))
             logger.info(
-                f"Force refresh requested, invalidated {invalidated_count} cache entries for query {query_id}"
+                f"Force refresh requested, invalidated {invalidated_count} "
+                f"cache entries for query {query_id}"
             )
 
         if cached_result:

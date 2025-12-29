@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 400">
+  <defs>
+    <style>
+      .box { fill: #f8f9fa; stroke: #333; stroke-width: 2; }
+      .box-highlight { fill: #e3f2fd; stroke: #1976d2; stroke-width: 2; }
+      .text { font-family: system-ui, sans-serif; font-size: 14px; fill: #333; }
+      .text-bold { font-family: system-ui, sans-serif; font-size: 14px; fill: #333; font-weight: bold; }
+      .text-small { font-family: system-ui, sans-serif; font-size: 11px; fill: #666; }
+      .text-title { font-family: system-ui, sans-serif; font-size: 16px; fill: #333; font-weight: bold; }
+      .line { stroke: #333; stroke-width: 2; fill: none; }
+      .arrow { fill: #333; }
+    </style>
+  </defs>
+
+  <!-- Title -->
+  <text x="400" y="30" text-anchor="middle" class="text-title">Semantic Grid v2 Architecture</text>
+
+  <!-- AI Agents Row -->
+  <rect x="50" y="50" width="700" height="80" rx="8" class="box"/>
+  <text x="400" y="70" text-anchor="middle" class="text-small">AI Agents (Interchangeable)</text>
+
+  <rect x="70" y="85" width="130" height="35" rx="4" class="box-highlight"/>
+  <text x="135" y="107" text-anchor="middle" class="text-bold">fm-app-v2</text>
+
+  <rect x="220" y="85" width="130" height="35" rx="4" class="box"/>
+  <text x="285" y="107" text-anchor="middle" class="text">Claude Desktop</text>
+
+  <rect x="370" y="85" width="130" height="35" rx="4" class="box"/>
+  <text x="435" y="107" text-anchor="middle" class="text">ChatGPT</text>
+
+  <rect x="520" y="85" width="130" height="35" rx="4" class="box"/>
+  <text x="585" y="107" text-anchor="middle" class="text">Other Clients</text>
+
+  <!-- Arrow down -->
+  <line x1="400" y1="130" x2="400" y2="155" class="line"/>
+  <polygon points="400,165 395,155 405,155" class="arrow"/>
+
+  <!-- MCP Protocol -->
+  <rect x="150" y="165" width="500" height="35" rx="4" class="box"/>
+  <text x="400" y="188" text-anchor="middle" class="text-bold">MCP Protocol</text>
+
+  <!-- Arrow down -->
+  <line x1="400" y1="200" x2="400" y2="225" class="line"/>
+  <polygon points="400,235 395,225 405,225" class="arrow"/>
+
+  <!-- db-meta-v2 -->
+  <rect x="50" y="235" width="700" height="130" rx="8" class="box-highlight"/>
+  <text x="400" y="255" text-anchor="middle" class="text-title">db-meta-v2</text>
+
+  <!-- Inner boxes -->
+  <rect x="70" y="270" width="150" height="45" rx="4" class="box"/>
+  <text x="145" y="290" text-anchor="middle" class="text-bold">Tools</text>
+  <text x="145" y="305" text-anchor="middle" class="text-small">planning, querying</text>
+
+  <rect x="240" y="270" width="150" height="45" rx="4" class="box"/>
+  <text x="315" y="290" text-anchor="middle" class="text-bold">Resources</text>
+  <text x="315" y="305" text-anchor="middle" class="text-small">schema, examples</text>
+
+  <rect x="410" y="270" width="150" height="45" rx="4" class="box"/>
+  <text x="485" y="290" text-anchor="middle" class="text-bold">Prompts</text>
+  <text x="485" y="305" text-anchor="middle" class="text-small">templates</text>
+
+  <rect x="580" y="270" width="150" height="45" rx="4" class="box"/>
+  <text x="655" y="290" text-anchor="middle" class="text-bold">UI Specs</text>
+  <text x="655" y="305" text-anchor="middle" class="text-small">grid configs</text>
+
+  <!-- Artifact flow -->
+  <text x="400" y="350" text-anchor="middle" class="text">Artifact Flow: Task → Plan → Query → Result → UI Spec</text>
+</svg>

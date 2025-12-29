@@ -1,6 +1,8 @@
 # mcp_async_providers.py
 from typing import Any, Dict, List, Optional
 
+from fastmcp import Client
+
 from fm_app.api.model import PromptItemType
 from fm_app.mcp_servers.db_meta import (
     db_meta_mcp_analyze_query,
@@ -17,7 +19,9 @@ MCP_ITEMS_FULL = [
     "SQLDialect",
     "DomainModel",
 ]
-# Planner: domain model, schema, instructions (no SQL examples - they prime SQL)
+# Planner: domain model, schema, and instructions (no SQL examples - they prime SQL)
+# Schema is needed for planner to see table names and descriptions for selection.
+# Full detailed schema is fetched after plan approval for SQL generation.
 MCP_ITEMS_PLANNER = ["DomainModel", "DBStruct", "Instruction"]
 # With approved plan: skip schema (plan has it), keep examples, instructions, and domain model
 MCP_ITEMS_WITH_PLAN = ["QueryExample", "Instruction", "SQLDialect", "DomainModel"]
@@ -26,9 +30,10 @@ MCP_ITEMS_WITH_PLAN = ["QueryExample", "Instruction", "SQLDialect", "DomainModel
 class DbMetaAsyncProvider:
     name = "db-meta"
 
-    def __init__(self, settings, logger):
+    def __init__(self, settings, logger, client: Optional[Client] = None):
         self.settings = settings
         self.logger = logger
+        self.client = client  # Optional shared MCP client for session reuse
 
     async def vars_for_slot(
         self,
@@ -55,6 +60,7 @@ class DbMetaAsyncProvider:
                 flow_step_num=flow_step_num,
                 settings=self.settings,
                 logger=self.logger,
+                client=self.client,
             )
             return {"db_overview": text}
 
@@ -81,6 +87,7 @@ class DbMetaAsyncProvider:
             settings=self.settings,
             logger=self.logger,
             items=fetch_items,
+            client=self.client,
         )
 
         # For slots that need flexible template ordering, return individual items
@@ -117,6 +124,7 @@ class DbMetaAsyncProvider:
             flow_step_num=req_ctx.get("flow_step_num", 0),
             settings=self.settings,
             logger=self.logger,
+            client=self.client,
         )
         return res
 

@@ -17,6 +17,13 @@ Please take into account now is {{ current_datetime }}.
 
 {{ parent_session_id }}
 
+{% if query_metadata %}
+**IMPORTANT - Query Modification**: When an existing query is provided above, use its SQL
+as your starting point. Make minimal, surgical changes to achieve the user's request.
+Do NOT rewrite the query from scratch - preserve working table references, joins, and
+column names that are already validated against the database schema.
+{% endif %}
+
 {{ selected_row_data }}
 
 {{ selected_column_data }}
@@ -156,11 +163,13 @@ The user has approved the following query plan. Generate SQL that implements it.
 ---
 {% endif %}
 
+{% if not relevant_schema %}
 ## Schema Reference
 
 {{ db_meta_schema }}
 
 {{ db_ref_prompt_items }}
+{% endif %}
 
 {% if db_meta_examples %}
 ---

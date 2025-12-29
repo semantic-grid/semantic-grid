@@ -1,4 +1,5 @@
 import logging.config
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,10 +12,20 @@ from fm_app.logs import LOGGING_CONFIG
 logging.config.dictConfig(LOGGING_CONFIG)
 LOGGER = logging.getLogger("fm_app")
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    yield
+    # Shutdown
+    await engine.dispose()
+
+
 app = FastAPI(
     version="v1",
     docs_url="/swagger",
     redoc_url="/redocs",
+    lifespan=lifespan,
 )
 
 app.include_router(api_router, prefix="/api/v1")
@@ -37,8 +48,3 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-@app.on_event("shutdown")
-async def on_shutdown():
-    await engine.dispose()

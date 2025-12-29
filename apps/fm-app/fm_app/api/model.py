@@ -45,6 +45,10 @@ class InteractiveRequestType(str, Enum):
     discovery = "discovery"
     plan_approval = "plan_approval"  # User approving a query plan
     plan_amendment = "plan_amendment"  # User requesting changes to a query plan
+    clarification = "clarification"  # Agent asking a clarifying question
+    clarification_response = (
+        "clarification_response"  # User responding to clarification
+    )
     # chart_request = "chart_request"
 
 
@@ -160,6 +164,15 @@ class QueryMetadata(BaseModel):
     estimated_size_gb: Optional[float] = None
 
 
+class ClarificationData(BaseModel):
+    """Structured clarification question for frontend display."""
+
+    question: str  # The clarifying question to ask the user
+    options: Optional[list[str]] = None  # Multiple choice options (if applicable)
+    context: Optional[str] = None  # Why we're asking (helps user understand)
+    allow_freeform: bool = True  # Allow typed response vs only predefined options
+
+
 class StructuredResponse(BaseModel):
     intent: Optional[str] = None
     assumptions: Optional[str] = None
@@ -179,6 +192,11 @@ class StructuredResponse(BaseModel):
     query_plan: Optional["QueryPlan"] = None
     # Reason for re-planning (when query generation failed and new plan is presented)
     replan_reason: Optional[str] = None
+    # Response type discriminator for "ask user" patterns
+    # Values: None/"query" (default), "plan_approval", "clarification", etc.
+    response_type: Optional[str] = None
+    # Clarification data (populated when response_type="clarification")
+    clarification: Optional[ClarificationData] = None
 
 
 class IntentAnalysis(BaseModel):
@@ -188,6 +206,11 @@ class IntentAnalysis(BaseModel):
     response: Optional[str] = None
     # If True, query planner step will generate a plan for user approval
     requires_plan_approval: bool = False
+    # Clarification support - when LLM needs more info before proceeding
+    clarification_needed: bool = False
+    clarification_question: Optional[str] = None
+    clarification_options: Optional[list[str]] = None  # Multiple choice options
+    clarification_context: Optional[str] = None  # Why we're asking
 
 
 ### Query Plan Models (for multistep flow)
@@ -242,36 +265,51 @@ class QueryPlan(BaseModel):
     allowing users to verify intent before SQL is generated.
     """
 
-    model_config = {"extra": "allow"}
+    # Allow both lowercase (code) and PascalCase (LLM output) field names
+    model_config = {"extra": "allow", "populate_by_name": True}
 
     # Tables involved
-    tables: list[str] = []
-    primary_table: str = ""
+    tables: list[str] = Field(default=[], alias="Tables")
+    primary_table: str = Field(default="", alias="PrimaryTable")
 
     # Relationships
     # Accept either structured objects or simple strings for flexibility
-    joins: list[Union[QueryPlanJoin, str]] = []
+    joins: list[Union[QueryPlanJoin, str]] = Field(default=[], alias="Joins")
 
     # Data selection
-    columns_selected: list[str] = []  # columns to return (human-readable)
+    columns_selected: list[str] = Field(
+        default=[], alias="ColumnsSelected"
+    )  # columns to return (human-readable)
     # Accept either structured objects or simple strings for flexibility
-    filters: list[Union[QueryPlanFilter, str]] = []
+    filters: list[Union[QueryPlanFilter, str]] = Field(default=[], alias="Filters")
 
     # Aggregations and grouping
     # Accept either structured objects or simple strings for flexibility
-    aggregations: list[Union[QueryPlanAggregation, str]] = []
-    group_by: list[str] = []
+    aggregations: list[Union[QueryPlanAggregation, str]] = Field(
+        default=[], alias="Aggregations"
+    )
+    group_by: list[str] = Field(default=[], alias="Grouping")
 
     # Ordering and limits
-    order_by: list[str] = []  # e.g., ["volume descending", "date ascending"]
-    limit: Optional[Union[int, str]] = None  # Accept string explanations from LLM
+    order_by: list[str] = Field(
+        default=[], alias="Ordering"
+    )  # e.g., ["volume descending", "date ascending"]
+    limit: Optional[Union[int, str]] = Field(
+        default=None, alias="Limit"
+    )  # Accept string explanations from LLM
 
     # Assumptions and defaults applied
-    assumptions: list[str] = []  # e.g., "Assuming 'recent' means last 7 days"
-    default_params: list[str] = []  # e.g., "Using default limit of 1000 rows"
+    assumptions: list[str] = Field(
+        default=[], alias="Assumptions"
+    )  # e.g., "Assuming 'recent' means last 7 days"
+    default_params: list[str] = Field(
+        default=[], alias="DefaultParameters"
+    )  # e.g., "Using default limit of 1000 rows"
 
     # Human-readable summary
-    plan_summary: str = ""  # 2-3 sentence explanation of what the query will do
+    plan_summary: str = Field(
+        default="", alias="PlanSummary"
+    )  # 2-3 sentence explanation of what the query will do
 
     # Complexity indicators (for transparency)
     estimated_complexity: str = "moderate"  # "simple", "moderate", "complex"
@@ -655,8 +693,15 @@ class GetRequestModel(BaseModel):
     view: Optional[View] = None
     # data fetches for this request's query (populated in admin endpoints)
     data_fetches: Optional[list["GetDataFetchModel"]] = None
-    # query plan for multi-step flow (populated when status=FeedbackRequested)
+    # query plan for multi-step flow - LEGACY (populated when status=FeedbackRequested)
+    # New code should use response_type + payload instead
     query_plan: Optional["QueryPlan"] = None
+    # response type discriminator for unified response handling
+    response_type: Optional[str] = (
+        None  # "query", "plan_approval", "clarification", "chat", "error"
+    )
+    # type-specific payload (shape varies by response_type)
+    payload: Optional[dict[str, Any]] = None
     # admin fields
     is_test: Optional[bool] = None
     is_fixed: Optional[bool] = None
@@ -714,7 +759,13 @@ class UpdateRequestModel(BaseModel):
     linked_session_id: Optional[UUID] = None
     query_id: Optional[UUID] = None
     view: Optional[View] = None
-    query_plan: Optional[dict[str, Any]] = None  # JSON serialized QueryPlan
+    query_plan: Optional[dict[str, Any]] = None  # JSON serialized QueryPlan (legacy)
+    # Response type discriminator for unified response handling
+    response_type: Optional[str] = (
+        None  # "query", "plan_approval", "clarification", "chat", "error"
+    )
+    # Type-specific payload (shape varies by response_type)
+    payload: Optional[dict[str, Any]] = None
 
 
 ## Data Query Models

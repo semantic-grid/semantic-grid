@@ -7,10 +7,14 @@ from fastmcp import Client, FastMCP
 from dbmeta_app.api.routes import mcp
 from dbmeta_app.config import get_settings
 from dbmeta_app.logs import LOGGING_CONFIG
+from dbmeta_app.vector_db.milvus import clear_bm25_cache
 
 logging.config.dictConfig(LOGGING_CONFIG)
 
 settings = get_settings()
+
+# Clear BM25 cache on module load to ensure fresh index on deploy
+clear_bm25_cache()
 
 
 async def check_mcp(mcp_server: FastMCP):
@@ -57,7 +61,7 @@ def main():
     asyncio.run(check_mcp(mcp))
 
     # Start the FastMCP (FastAPI/uvicorn) server; this is typically blocking.
-    mcp.run(transport="sse", host="0.0.0.0", port=settings.port)
+    mcp.run(transport="http", host="0.0.0.0", port=settings.port)
 
 
 if __name__ == "__main__":

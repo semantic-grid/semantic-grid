@@ -119,6 +119,7 @@ export interface ChatSessionContextType {
   hasCachedData: boolean;
   approvePlan: () => void;
   rejectPlan: () => void;
+  respondToClarification: (response: string) => void;
 }
 
 export const getDecision = async (
@@ -252,6 +253,7 @@ const withNewMessage =
 
 const withDoneMessage = (status: TResponseResult) => (ss: TChatSection[]) =>
   ss.map((s, idx, allS) => {
+    const isLastSection = idx === allS.length - 1;
     // For error status, use err field; otherwise use response
     const messageText =
       status.status === "Error"
@@ -260,9 +262,19 @@ const withDoneMessage = (status: TResponseResult) => (ss: TChatSection[]) =>
 
     return {
       ...s,
-      query: status.query || s.query,
-      query_plan: status.query_plan || s.query_plan,
-      status: idx < allS.length - 1 ? s.status : status.status,
+      // Only update these fields for the last section (the active request)
+      query: isLastSection ? status.query || s.query : s.query,
+      query_plan: isLastSection
+        ? status.query_plan || s.query_plan
+        : s.query_plan,
+      response_type: isLastSection
+        ? status.response_type || s.response_type
+        : s.response_type,
+      payload: isLastSection ? status.payload || s.payload : s.payload,
+      clarification: isLastSection
+        ? status.clarification || s.clarification
+        : s.clarification,
+      status: isLastSection ? status.status : s.status,
       chat:
         // eslint-disable-next-line no-nested-ternary
         idx < allS.length - 1 || status.response === undefined
@@ -521,6 +533,9 @@ export const GridSessionProvider = ({
               query: apeResponse.query,
               view: apeResponse.view,
               query_plan: apeResponse?.query_plan,
+              response_type: apeResponse?.response_type,
+              payload: apeResponse?.payload,
+              clarification: apeResponse?.clarification,
             });
           } else {
             // If no matching column, add to general section
@@ -542,6 +557,9 @@ export const GridSessionProvider = ({
               query: apeResponse?.query,
               view: apeResponse?.view,
               query_plan: apeResponse?.query_plan,
+              response_type: apeResponse?.response_type,
+              payload: apeResponse?.payload,
+              clarification: apeResponse?.clarification,
             });
           }
           return acc;
@@ -585,6 +603,9 @@ export const GridSessionProvider = ({
           query: botMsg?.query,
           view: botMsg?.view,
           query_plan: botMsg?.query_plan,
+          response_type: botMsg?.response_type,
+          payload: botMsg?.payload,
+          clarification: botMsg?.clarification,
         };
       });
 
@@ -782,6 +803,8 @@ export const GridSessionProvider = ({
 
   const refs = useMemo(
     () => ({
+      // Include parent query_id so backend can reference existing SQL when modifying
+      parent: query?.query_id || undefined,
       cols:
         activeColumn &&
         activeColumn.field !== "__add_column__" &&
@@ -834,8 +857,17 @@ export const GridSessionProvider = ({
   }, [context]);
 
   const requestType = () => {
-    // Check if we're in FeedbackRequested or PlanRejected state - user is providing plan amendment
     const lastSection = sects[sects.length - 1];
+
+    // Check if we're responding to a clarification question
+    if (
+      lastSection?.status === "FeedbackRequested" &&
+      lastSection?.response_type === "clarification"
+    ) {
+      return "clarification_response";
+    }
+
+    // Check if we're in FeedbackRequested or PlanRejected state - user is providing plan amendment
     if (
       lastSection?.status === "FeedbackRequested" ||
       lastSection?.status === "PlanRejected"
@@ -1139,6 +1171,28 @@ export const GridSessionProvider = ({
     setPromptVal(""); // Clear any pending input
   }, []);
 
+  // Respond to clarification question from agent
+  const respondToClarification = useCallback(
+    (response: string) => {
+      setPending(true);
+      createRequest({
+        request: response,
+        requestType: "clarification_response",
+        flow: "Interactive",
+        model: model.value,
+        db: "V2",
+        sessionId,
+        refs,
+        queryId: query?.query_id,
+      }).then((request) => {
+        console.log("clarification response request", request);
+        setSects(withNewMessage(request as any, response));
+        return request;
+      });
+    },
+    [sessionId, refs, query?.query_id, model.value],
+  );
+
   return (
     <Index.Provider
       value={{
@@ -1191,6 +1245,7 @@ export const GridSessionProvider = ({
         hasCachedData,
         approvePlan,
         rejectPlan,
+        respondToClarification,
       }}
     >
       {children}

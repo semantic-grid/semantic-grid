@@ -3,7 +3,7 @@
 import asyncio
 import json
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Dict, Optional
 
 from fm_app.cache.redis_client import get_redis
@@ -95,7 +95,7 @@ async def set_cached_query(
         cache_data = {
             "rows": rows,
             "total_rows": total_rows,
-            "cached_at": datetime.utcnow().isoformat(),
+            "cached_at": datetime.now(UTC).isoformat(),
             "query_id": query_id,
         }
 

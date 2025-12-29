@@ -882,6 +882,25 @@ if tracer:
 
 ---
 
+## Relationship to Autonomous Agentic Flow
+
+This plan provides foundational MCP capabilities for the [Autonomous Agentic Flow](./autonomous-agentic-flow.md):
+
+| MCP Capability | Agent Usage |
+|----------------|-------------|
+| `table_details` tool | Agent fetches deep schema info when planning complex queries |
+| `domain_model` prompt | Agent understands business entities at session start |
+| `sql_dialect` prompt | Agent generates correct SQL syntax |
+| `prompt_instructions` prompt | Agent follows business rules |
+| `validate_plan` tool | Agent validates its own plans before execution |
+
+The granular schema exploration enables the agent to:
+1. **Plan intelligently**: Lightweight schema for initial planning, deep details when needed
+2. **Self-correct**: Validate tables/columns exist before generating SQL
+3. **Ask better questions**: Understand FK relationships to suggest relevant follow-ups
+
+---
+
 ## Rollout Plan
 
 1. **Phase 1**: Add `table_details` tool to db-meta (no fm-app changes)

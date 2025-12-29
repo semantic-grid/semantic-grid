@@ -48,7 +48,6 @@ async def handle_discovery(ctx: FlowContext) -> None:
 
     # For /new: return deterministic response from db-meta without LLM
     if mode == "new":
-
         # Get database overview directly from MCP (skip slot rendering for speed)
         logger.info(
             "Fetching database overview for /new",
@@ -62,6 +61,7 @@ async def handle_discovery(ctx: FlowContext) -> None:
             flow_step_num=next(flow_step),
             settings=settings,
             logger=logger,
+            client=ctx.mcp_client,  # Reuse session
         )
 
         logger.info(
@@ -155,4 +155,3 @@ async def handle_discovery(ctx: FlowContext) -> None:
         metadata=None,
         refs=None,
     )
-

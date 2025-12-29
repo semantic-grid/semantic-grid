@@ -9,13 +9,23 @@ from fm_app.ai_models.model import AIModel
 from fm_app.api.model import (
     IntentAnalysis,
     InteractiveRequestType,
+    McpServerRequest,
     PlanningMode,
+    QueryPlan,
     RequestStatus,
     StructuredResponse,
     WorkerRequest,
 )
 from fm_app.config import get_settings
 from fm_app.db.db import update_request_status
+from fm_app.mcp_servers.db_meta import (
+    format_table_details_for_prompt,
+    get_table_details_mcp,
+)
+from fm_app.workers.interactive_flow.clarification import (
+    handle_clarification_request,
+    handle_clarification_response,
+)
 from fm_app.workers.interactive_flow.data_analysis import handle_data_analysis
 from fm_app.workers.interactive_flow.discovery import handle_discovery
 from fm_app.workers.interactive_flow.general_response import handle_general_response
@@ -27,7 +37,96 @@ from fm_app.workers.interactive_flow.interactive_query import (
 from fm_app.workers.interactive_flow.linked_query import handle_linked_query
 from fm_app.workers.interactive_flow.manual_query import handle_manual_query
 from fm_app.workers.interactive_flow.query_planner import generate_query_plan
-from fm_app.workers.interactive_flow.setup import initialize_flow
+from fm_app.workers.interactive_flow.setup import FlowContext, initialize_flow
+
+
+async def _enrich_plan_with_schema(
+    ctx: FlowContext,
+    query_plan: QueryPlan,
+) -> QueryPlan:
+    """
+    Fetch detailed schema for tables in the plan and populate relevant_schema.
+
+    This is the key step that solves the RAG gap: the planner selects tables
+    based on domain knowledge (even if they weren't in RAG top-k), and we
+    fetch their full schema here for SQL generation.
+
+    Args:
+        ctx: Flow context
+        query_plan: Query plan with tables selected by planner
+
+    Returns:
+        QueryPlan with relevant_schema populated
+    """
+    if not query_plan.tables:
+        ctx.logger.info(
+            "No tables in plan, skipping schema fetch",
+            flow_stage="schema_fetch_skip",
+        )
+        return query_plan
+
+    # Skip if schema already populated (e.g., from cache or previous run)
+    if query_plan.relevant_schema:
+        ctx.logger.info(
+            "Plan already has relevant_schema, skipping fetch",
+            flow_stage="schema_fetch_skip",
+            tables=query_plan.tables,
+        )
+        return query_plan
+
+    try:
+        # Build MCP request context
+        mcp_req = McpServerRequest(
+            request_id=ctx.req.request_id,
+            db=ctx.req.db,
+            request=ctx.req.request,
+            session_id=ctx.req.session_id,
+            model=ctx.req.model,
+            flow=ctx.req.flow,
+        )
+
+        ctx.logger.info(
+            "Fetching detailed schema for plan tables",
+            flow_stage="schema_fetch_start",
+            tables=query_plan.tables,
+        )
+
+        # Fetch table details via MCP
+        # Only request relationships - skip expensive stats (cardinality, ranges)
+        table_details = await get_table_details_mcp(
+            req=mcp_req,
+            tables=query_plan.tables,
+            flow_step_num=next(ctx.flow_step),
+            settings=ctx.settings,
+            logger=ctx.logger,
+            include=["relationships"],  # Schema + PK/FK only, no expensive stats
+            client=ctx.mcp_client,  # Reuse session
+        )
+
+        # Format for prompt
+        schema_text = format_table_details_for_prompt(table_details)
+
+        ctx.logger.info(
+            "Schema fetched successfully",
+            flow_stage="schema_fetch_complete",
+            tables=query_plan.tables,
+            schema_length=len(schema_text),
+            tables_returned=len(table_details.tables) if table_details.tables else 0,
+        )
+
+        # Populate the plan's relevant_schema field
+        query_plan.relevant_schema = schema_text
+
+    except Exception as e:
+        ctx.logger.warning(
+            "Failed to fetch schema for plan tables, continuing without",
+            flow_stage="schema_fetch_error",
+            tables=query_plan.tables,
+            error=str(e),
+        )
+        # Continue without schema - SQL generation will use whatever MCP provides
+
+    return query_plan
 
 
 async def _handle_replan_on_failure(
@@ -97,6 +196,7 @@ async def _handle_replan_on_failure(
         req.structured_response = StructuredResponse()
     req.structured_response.query_plan = new_plan
     req.structured_response.intent = intent.intent
+    req.structured_response.response_type = "plan_approval"
     req.structured_response.replan_reason = (
         "The previous plan could not be executed successfully. "
         "Please review the revised plan."
@@ -116,6 +216,125 @@ async def _handle_replan_on_failure(
     return req
 
 
+async def _route_by_intent(ctx: FlowContext, intent: IntentAnalysis) -> WorkerRequest:
+    """
+    Route request based on analyzed intent.
+
+    This helper is used both by the main interactive_flow and by
+    handle_clarification_response after re-analyzing intent.
+
+    Args:
+        ctx: Flow context
+        intent: Analyzed intent
+
+    Returns:
+        WorkerRequest with appropriate status and response
+    """
+    req = ctx.req
+    db = ctx.db
+
+    # Handle clarification requests
+    if (
+        intent.clarification_needed
+        or intent.request_type == InteractiveRequestType.clarification
+    ):
+        return await handle_clarification_request(ctx, intent)
+
+    # Route based on analyzed intent
+    if intent.request_type in (
+        InteractiveRequestType.linked_session,
+        InteractiveRequestType.interactive_query,
+    ):
+        # Always generate a plan for lineage/analytics
+        # Then decide whether to wait for user approval or auto-approve
+        settings = get_settings()
+        planning_mode = PlanningMode(settings.planning_mode)
+
+        # Generate plan for every query (ensures plan_id lineage)
+        try:
+            query_plan, plan_id = await generate_query_plan(ctx, intent.intent)
+        except Exception as e:
+            ctx.logger.error(
+                "Query planning failed",
+                flow_stage="error_query_plan",
+                error=str(e),
+                error_type=type(e).__name__,
+            )
+            # Fall back to query without plan on planning failure
+            _ = await handle_interactive_query(ctx, intent)
+            return req
+
+        # Determine if we need user approval or can auto-approve
+        requires_user_approval = False
+        if planning_mode == PlanningMode.always:
+            requires_user_approval = True
+        elif planning_mode == PlanningMode.intent_based:
+            is_simple = (
+                not intent.requires_plan_approval
+                or query_plan.estimated_complexity == "simple"
+            )
+            requires_user_approval = not is_simple
+
+        ctx.logger.info(
+            "Planning decision",
+            flow_stage="planning_decision",
+            planning_mode=str(planning_mode),
+            intent_requires_approval=intent.requires_plan_approval,
+            plan_complexity=query_plan.estimated_complexity,
+            requires_user_approval=requires_user_approval,
+            plan_id=str(plan_id) if plan_id else None,
+        )
+
+        if requires_user_approval:
+            if req.structured_response is None:
+                req.structured_response = StructuredResponse()
+            req.structured_response.query_plan = query_plan
+            req.structured_response.intent = intent.intent
+            req.structured_response.response_type = "plan_approval"
+            req.status = RequestStatus.feedback_requested
+            await update_request_status(
+                RequestStatus.feedback_requested, None, db, req.request_id
+            )
+            return req
+
+        # Auto-approve: proceed directly to SQL generation
+        ctx.logger.info(
+            "Auto-approving plan",
+            flow_stage="plan_auto_approve",
+            plan_id=str(plan_id) if plan_id else None,
+            plan_summary=query_plan.plan_summary[:100] if query_plan else None,
+        )
+
+        # Fetch detailed schema for tables in the plan (Phase 3: Plan-Driven Schema)
+        query_plan = await _enrich_plan_with_schema(ctx, query_plan)
+
+        query_result = await handle_interactive_query(
+            ctx, intent, query_plan=query_plan, plan_id=plan_id
+        )
+
+        if query_result.needs_replan:
+            return await _handle_replan_on_failure(
+                ctx, req, intent, query_result, original_plan_id=plan_id
+            )
+        return req
+
+    elif intent.request_type == InteractiveRequestType.data_analysis:
+        await handle_data_analysis(ctx)
+        return req
+
+    elif intent.request_type in (
+        InteractiveRequestType.general_chat,
+        InteractiveRequestType.disambiguation,
+    ):
+        await handle_general_response(ctx, intent)
+        return req
+
+    else:
+        # Unsupported request type
+        await handle_general_response(ctx, intent)
+        return req
+
+
 async def interactive_flow(
     req: WorkerRequest, ai_model: Type[AIModel], db_wh: Session, db: AsyncSession
 ) -> WorkerRequest:
@@ -132,6 +351,15 @@ async def interactive_flow(
     ctx = await initialize_flow(req, ai_model, db_wh, db)
 
     await update_request_status(RequestStatus.in_process, None, db, req.request_id)
+
+    # Use MCP client session for the entire flow to reuse connection
+    async with ctx.mcp_client:
+        return await _execute_flow(ctx, req)
+
+
+async def _execute_flow(ctx: FlowContext, req: WorkerRequest) -> WorkerRequest:
+    """Execute the flow logic within the MCP client session context."""
+    db = ctx.db
 
     # Route based on initial request type
     if req.request_type == InteractiveRequestType.manual_query:
@@ -215,6 +443,10 @@ async def interactive_flow(
                 request_type=InteractiveRequestType.plan_approval,
                 requires_plan_approval=False,
             )
+
+            # Fetch detailed schema for tables in the plan (Phase 3: Plan-Driven Schema)
+            query_plan = await _enrich_plan_with_schema(ctx, query_plan)
+
             # Pass plan_id so the query can be linked to the plan after creation
             query_result = await handle_interactive_query(
                 ctx, intent, query_plan=query_plan, plan_id=plan_id
@@ -226,6 +458,10 @@ async def interactive_flow(
                     ctx, req, intent, query_result, original_plan_id=plan_id
                 )
         return req
+
+    elif req.request_type == InteractiveRequestType.clarification_response:
+        # User responded to a clarification question
+        return await handle_clarification_response(ctx)
 
     elif req.request_type == InteractiveRequestType.plan_amendment:
         # User requested changes to the plan - re-run planning with their feedback
@@ -278,6 +514,7 @@ async def interactive_flow(
             req.structured_response = StructuredResponse()
         req.structured_response.query_plan = query_plan
         req.structured_response.intent = combined_intent
+        req.structured_response.response_type = "plan_approval"
         req.status = RequestStatus.feedback_requested
         await update_request_status(
             RequestStatus.feedback_requested, None, ctx.db, req.request_id
@@ -291,6 +528,13 @@ async def interactive_flow(
         except Exception:
             # Error already logged and status updated in analyze_intent
             return req
+
+        # Handle clarification requests from intent analysis
+        if (
+            intent.clarification_needed
+            or intent.request_type == InteractiveRequestType.clarification
+        ):
+            return await handle_clarification_request(ctx, intent)
 
         # Route based on analyzed intent
         if intent.request_type in (
@@ -348,6 +592,7 @@ async def interactive_flow(
                     req.structured_response = StructuredResponse()
                 req.structured_response.query_plan = query_plan
                 req.structured_response.intent = intent.intent
+                req.structured_response.response_type = "plan_approval"
                 req.status = RequestStatus.feedback_requested
                 await update_request_status(
                     RequestStatus.feedback_requested, None, db, req.request_id
@@ -361,6 +606,10 @@ async def interactive_flow(
                 plan_id=str(plan_id) if plan_id else None,
                 plan_summary=query_plan.plan_summary[:100] if query_plan else None,
             )
+
+            # Fetch detailed schema for tables in the plan (Phase 3: Plan-Driven Schema)
+            query_plan = await _enrich_plan_with_schema(ctx, query_plan)
+
             query_result = await handle_interactive_query(
                 ctx, intent, query_plan=query_plan, plan_id=plan_id
             )

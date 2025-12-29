@@ -262,9 +262,12 @@ def get_cache() -> RedisCache:
 # Cache TTL configurations (in seconds)
 CACHE_TTL = {
     "schema": 3600,  # 1 hour - schema doesn't change often
+    "schema_structured": 3600,  # 1 hour - structured schema cache
     "examples": 1800,  # 30 minutes - examples update periodically
     "explain": 600,  # 10 minutes - query plans can change with data
     "prompt": 3600,  # 1 hour - prompt instructions rarely change
+    "table_details": 3600,  # 1 hour - table statistics don't change rapidly
+    "table_relationships": 86400,  # 24 hours - PK/FK relationships very stable
 }
 
 

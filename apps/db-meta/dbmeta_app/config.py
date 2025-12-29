@@ -49,6 +49,10 @@ class Settings(BaseSettings):
     redis_password: Optional[str] = None
     redis_db: int = 0
     redis_cache_enabled: bool = True
+    # Hybrid search configuration (BM25 keyword + vector)
+    search_hybrid_enabled: bool = True
+    search_bm25_weight: float = 0.3  # Weight for BM25 keyword scores
+    search_vector_weight: float = 0.7  # Weight for vector similarity scores
 
 
 @lru_cache()

@@ -18,6 +18,14 @@ export type TQueryStatusResp = {
   data?: any;
 };
 
+// Clarification data for agent questions
+export type TClarificationData = {
+  question: string;
+  options?: string[];
+  context?: string;
+  allow_freeform?: boolean;
+};
+
 export type TResponseResult = {
   session_id: string; // UUID of the session
   request_id: string; // UUID of the request
@@ -43,7 +51,12 @@ export type TResponseResult = {
   linked_session_id?: string; // UUID of the linked session, if any
   query?: TQuery; // Optional query object
   view?: TView; // Optional view object
-  query_plan?: TQueryPlan; // Query plan for multi-step flow (when status=FeedbackRequested)
+  query_plan?: TQueryPlan; // Query plan for multi-step flow - LEGACY (when status=FeedbackRequested)
+  // Response type discriminator for unified response handling
+  response_type?: string; // "query", "plan_approval", "clarification", "chat", "error"
+  // Type-specific payload (shape varies by response_type)
+  payload?: Record<string, any>;
+  clarification?: TClarificationData; // LEGACY - use payload instead
 };
 
 export type TColumn = {
@@ -184,7 +197,12 @@ export type TChatMessage = {
   isStructured?: boolean;
   query?: TQuery;
   view?: TView;
-  query_plan?: TQueryPlan; // Query plan for multi-step flow
+  query_plan?: TQueryPlan; // Query plan for multi-step flow - LEGACY
+  // Response type discriminator for unified response handling
+  response_type?: string; // "query", "plan_approval", "clarification", "chat", "error"
+  // Type-specific payload (shape varies by response_type)
+  payload?: Record<string, any>;
+  clarification?: TClarificationData; // LEGACY - use payload instead
 };
 
 export type TChatSection = {
@@ -198,7 +216,12 @@ export type TChatSection = {
   linkedSession?: string; // UUID of the linked session
   query?: TQuery; // Optional query object
   view?: TView; // Optional view object
-  query_plan?: TQueryPlan; // Query plan for multi-step flow
+  query_plan?: TQueryPlan; // Query plan for multi-step flow - LEGACY
+  // Response type discriminator for unified response handling
+  response_type?: string; // "query", "plan_approval", "clarification", "chat", "error"
+  // Type-specific payload (shape varies by response_type)
+  payload?: Record<string, any>;
+  clarification?: TClarificationData; // LEGACY - use payload instead
 };
 
 export type TChat = {

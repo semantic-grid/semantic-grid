@@ -518,7 +518,7 @@ async def handle_interactive_query(
 
             with TracingTimer() as preflight_timer:
                 analyzed = await db_meta_mcp_analyze_query(
-                    req, extracted_sql, 5, settings, logger
+                    req, extracted_sql, 5, settings, logger, client=ctx.mcp_client
                 )
 
             # Trace SQL preflight validation

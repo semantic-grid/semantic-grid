@@ -1,0 +1,130 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 700">
+  <defs>
+    <style>
+      .box { fill: #f8f9fa; stroke: #333; stroke-width: 2; }
+      .box-user { fill: #e8f5e9; stroke: #388e3c; stroke-width: 2; }
+      .box-fm { fill: #e3f2fd; stroke: #1976d2; stroke-width: 2; }
+      .box-db { fill: #fff3e0; stroke: #f57c00; stroke-width: 2; }
+      .box-llm { fill: #f3e5f5; stroke: #7b1fa2; stroke-width: 2; }
+      .text { font-family: system-ui, sans-serif; font-size: 12px; fill: #333; }
+      .text-bold { font-family: system-ui, sans-serif; font-size: 12px; fill: #333; font-weight: bold; }
+      .text-small { font-family: system-ui, sans-serif; font-size: 10px; fill: #666; }
+      .text-title { font-family: system-ui, sans-serif; font-size: 16px; fill: #333; font-weight: bold; }
+      .line { stroke: #333; stroke-width: 1.5; fill: none; }
+      .line-dashed { stroke: #333; stroke-width: 1.5; fill: none; stroke-dasharray: 5,3; }
+      .arrow { fill: #333; }
+    </style>
+  </defs>
+
+  <!-- Title -->
+  <text x="450" y="25" text-anchor="middle" class="text-title">Query Flow (v2)</text>
+
+  <!-- Column headers -->
+  <text x="100" y="55" text-anchor="middle" class="text-bold">User</text>
+  <text x="300" y="55" text-anchor="middle" class="text-bold">fm-app-v2</text>
+  <text x="550" y="55" text-anchor="middle" class="text-bold">db-meta-v2</text>
+  <text x="780" y="55" text-anchor="middle" class="text-bold">LLM</text>
+
+  <!-- Vertical lines -->
+  <line x1="100" y1="65" x2="100" y2="680" class="line-dashed"/>
+  <line x1="300" y1="65" x2="300" y2="680" class="line-dashed"/>
+  <line x1="550" y1="65" x2="550" y2="680" class="line-dashed"/>
+  <line x1="780" y1="65" x2="780" y2="680" class="line-dashed"/>
+
+  <!-- Step 1: User request -->
+  <rect x="20" y="80" width="160" height="35" rx="4" class="box-user"/>
+  <text x="100" y="102" text-anchor="middle" class="text">"Show top wallets"</text>
+  <line x1="180" y1="97" x2="220" y2="97" class="line"/>
+  <polygon points="225,97 215,92 215,102" class="arrow"/>
+
+  <!-- Step 2: FM receives -->
+  <rect x="225" y="80" width="150" height="35" rx="4" class="box-fm"/>
+  <text x="300" y="102" text-anchor="middle" class="text">Receive request</text>
+  <line x1="375" y1="97" x2="460" y2="97" class="line"/>
+  <polygon points="465,97 455,92 455,102" class="arrow"/>
+
+  <!-- Step 3: get_data call -->
+  <rect x="465" y="80" width="170" height="35" rx="4" class="box-db"/>
+  <text x="550" y="102" text-anchor="middle" class="text">get_data(intent)</text>
+
+  <!-- Step 4: Semantic search -->
+  <rect x="465" y="130" width="170" height="35" rx="4" class="box-db"/>
+  <text x="550" y="152" text-anchor="middle" class="text">Semantic search</text>
+  <line x1="550" y1="115" x2="550" y2="130" class="line"/>
+
+  <!-- Step 5: Sampling for plan -->
+  <line x1="635" y1="147" x2="700" y2="147" class="line"/>
+  <polygon points="705,147 695,142 695,152" class="arrow"/>
+  <rect x="705" y="130" width="150" height="35" rx="4" class="box-llm"/>
+  <text x="780" y="147" text-anchor="middle" class="text-small">MCP Sampling:</text>
+  <text x="780" y="160" text-anchor="middle" class="text-small">Generate plan</text>
+
+  <!-- Step 6: Plan returned -->
+  <line x1="705" y1="180" x2="640" y2="180" class="line"/>
+  <polygon points="635,180 645,175 645,185" class="arrow"/>
+  <rect x="465" y="190" width="170" height="35" rx="4" class="box-db"/>
+  <text x="550" y="212" text-anchor="middle" class="text">Validate plan</text>
+
+  <!-- Step 7: Elicitation -->
+  <line x1="465" y1="230" x2="380" y2="230" class="line"/>
+  <polygon points="375,230 385,225 385,235" class="arrow"/>
+  <rect x="225" y="240" width="150" height="35" rx="4" class="box-fm"/>
+  <text x="300" y="257" text-anchor="middle" class="text-small">MCP Elicitation:</text>
+  <text x="300" y="270" text-anchor="middle" class="text-small">Approve plan?</text>
+
+  <!-- Step 8: Show to user -->
+  <line x1="225" y1="257" x2="180" y2="257" class="line"/>
+  <polygon points="175,257 185,252 185,262" class="arrow"/>
+  <rect x="20" y="240" width="160" height="35" rx="4" class="box-user"/>
+  <text x="100" y="262" text-anchor="middle" class="text">Review plan</text>
+
+  <!-- Step 9: User approves -->
+  <rect x="20" y="290" width="160" height="35" rx="4" class="box-user"/>
+  <text x="100" y="312" text-anchor="middle" class="text">YES</text>
+  <line x1="180" y1="307" x2="460" y2="307" class="line"/>
+  <polygon points="465,307 455,302 455,312" class="arrow"/>
+
+  <!-- Step 10: Enrich schema -->
+  <rect x="465" y="340" width="170" height="35" rx="4" class="box-db"/>
+  <text x="550" y="362" text-anchor="middle" class="text">Enrich with schema</text>
+
+  <!-- Step 11: Generate SQL -->
+  <line x1="635" y1="357" x2="700" y2="357" class="line"/>
+  <polygon points="705,357 695,352 695,362" class="arrow"/>
+  <rect x="705" y="340" width="150" height="35" rx="4" class="box-llm"/>
+  <text x="780" y="357" text-anchor="middle" class="text-small">MCP Sampling:</text>
+  <text x="780" y="370" text-anchor="middle" class="text-small">Generate SQL</text>
+
+  <!-- Step 12: SQL returned -->
+  <line x1="705" y1="390" x2="640" y2="390" class="line"/>
+  <polygon points="635,390 645,385 645,395" class="arrow"/>
+  <rect x="465" y="400" width="170" height="35" rx="4" class="box-db"/>
+  <text x="550" y="422" text-anchor="middle" class="text">Validate (EXPLAIN)</text>
+
+  <!-- Step 13: Canonicalize -->
+  <rect x="465" y="450" width="170" height="35" rx="4" class="box-db"/>
+  <text x="550" y="472" text-anchor="middle" class="text">Canonicalize → UUID</text>
+  <line x1="550" y1="435" x2="550" y2="450" class="line"/>
+
+  <!-- Step 14: Cache check -->
+  <rect x="465" y="500" width="170" height="35" rx="4" class="box-db"/>
+  <text x="550" y="522" text-anchor="middle" class="text">Cache check</text>
+  <line x1="550" y1="485" x2="550" y2="500" class="line"/>
+
+  <!-- Step 15: Execute -->
+  <rect x="465" y="550" width="170" height="35" rx="4" class="box-db"/>
+  <text x="550" y="572" text-anchor="middle" class="text">Execute + UI spec</text>
+  <line x1="550" y1="535" x2="550" y2="550" class="line"/>
+
+  <!-- Step 16: Return result -->
+  <line x1="465" y1="567" x2="380" y2="567" class="line"/>
+  <polygon points="375,567 385,562 385,572" class="arrow"/>
+  <rect x="225" y="600" width="150" height="35" rx="4" class="box-fm"/>
+  <text x="300" y="622" text-anchor="middle" class="text">Result + UISpec</text>
+
+  <!-- Step 17: Render grid -->
+  <line x1="225" y1="617" x2="180" y2="617" class="line"/>
+  <polygon points="175,617 185,612 185,622" class="arrow"/>
+  <rect x="20" y="600" width="160" height="35" rx="4" class="box-user"/>
+  <text x="100" y="622" text-anchor="middle" class="text">View grid</text>
+</svg>

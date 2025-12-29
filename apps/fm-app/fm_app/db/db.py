@@ -52,7 +52,7 @@ async def add_new_session(
             "session_id": session_id,
             "parent": session.parent,
             "refs": (
-                json.dumps(session.refs.model_dump(), default=str)
+                json.dumps(session.refs.model_dump(mode="json"))
                 if session.refs
                 else None
             ),
@@ -293,7 +293,8 @@ async def add_request(
     request_id = uuid7()
     task_id = str(uuid7())
     status = RequestStatus.new if not add_req.query_id else RequestStatus.done
-    refs_dict = add_req.refs.model_dump() if add_req.refs else None
+    # Use mode="json" to convert UUID to string for JSON serialization
+    refs_dict = add_req.refs.model_dump(mode="json") if add_req.refs else None
     add_req_sql = text(
         """
         INSERT
@@ -342,6 +343,77 @@ async def add_request(
         logging.error(f"Can't validate Request object from DB error: {e}")
         raise HTTPException(status_code=500, detail=str("Internal error"))
     return result, task_id
+
+
+def normalize_response_type_and_payload(data: dict) -> dict:
+    """
+    Normalize response_type and payload for API response.
+
+    For new requests: response_type and payload are already set.
+    For legacy requests: infer from structured columns (sql, query_plan, etc.)
+
+    This ensures the frontend always gets a consistent shape regardless of
+    whether the data was stored in the new unified format or legacy columns.
+    """
+    # If response_type is already set, use it (new format)
+    if data.get("response_type") and data.get("payload"):
+        return data
+
+    # Legacy inference: derive response_type and payload from structured columns
+    response_type = None
+    payload = None
+
+    # Error response
+    if data.get("err"):
+        response_type = "error"
+        payload = {
+            "error": data.get("err"),
+            "recoverable": data.get("status") != RequestStatus.error.value
+            if isinstance(data.get("status"), str)
+            else data.get("status") != RequestStatus.error,
+        }
+
+    # Plan approval (has query_plan, awaiting feedback)
+    elif data.get("query_plan") and data.get("status") in (
+        RequestStatus.feedback_requested,
+        RequestStatus.feedback_requested.value,
+        "FeedbackRequested",
+    ):
+        response_type = "plan_approval"
+        # query_plan is already stored as dict/JSON, use it directly
+        payload = data.get("query_plan")
+        if isinstance(payload, str):
+            try:
+                payload = json.loads(payload)
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+    # Query response (has SQL and/or query)
+    elif data.get("sql") or data.get("query_id"):
+        response_type = "query"
+        payload = {
+            "sql": data.get("sql"),
+            "intent": data.get("intent"),
+            "query_id": str(data.get("query_id")) if data.get("query_id") else None,
+            "summary": data.get("response"),
+            "intro": data.get("intro"),
+            "outro": data.get("outro"),
+        }
+
+    # Chat response (text only, no query)
+    elif data.get("response"):
+        response_type = "chat"
+        payload = {
+            "message": data.get("response"),
+        }
+
+    # Only set if we inferred something (don't override None with None)
+    if response_type:
+        data["response_type"] = response_type
+    if payload:
+        data["payload"] = payload
+
+    return data
 
 
 async def get_request(
@@ -407,6 +479,9 @@ async def get_request(
     data["query"] = (
         query_data if any(v is not None for v in query_data.values()) else None
     )
+
+    # Normalize response_type and payload for consistent API response
+    data = normalize_response_type_and_payload(data)
 
     try:
         result = GetRequestModel.model_validate(data)
@@ -479,6 +554,9 @@ async def get_request_by_id(
         query_data if any(v is not None for v in query_data.values()) else None
     )
 
+    # Normalize response_type and payload for consistent API response
+    data = normalize_response_type_and_payload(data)
+
     try:
         result = GetRequestModel.model_validate(data)
 
@@ -548,6 +626,10 @@ async def get_all_requests(
         data["query"] = (
             query_data if any(v is not None for v in query_data.values()) else None
         )
+
+        # Normalize response_type and payload for consistent API response
+        data = normalize_response_type_and_payload(data)
+
         # print("row", data)
         try:
             result.append(GetRequestModel.model_validate(data))
@@ -595,6 +677,7 @@ async def update_request(db: AsyncSession, update: UpdateRequestModel):
         refs_json = json.dumps(update.refs) if update.refs else None
         view_json = update.view.model_dump_json() if update.view else None
         query_plan_json = json.dumps(update.query_plan) if update.query_plan else None
+        payload_json = json.dumps(update.payload) if update.payload else None
 
         update_sql = text(
             """
@@ -618,7 +701,9 @@ async def update_request(db: AsyncSession, update: UpdateRequestModel):
                 updated_at = now(),
                 query_id = COALESCE(:query_id, query_id),
                 view = COALESCE(:view_json, view),
-                query_plan = COALESCE(:query_plan, query_plan)
+                query_plan = COALESCE(:query_plan, query_plan),
+                response_type = COALESCE(:response_type, response_type),
+                payload = COALESCE(:payload, payload)
             WHERE request_id=:request_id
         """
         )
@@ -644,6 +729,8 @@ async def update_request(db: AsyncSession, update: UpdateRequestModel):
                 "query_id": update.query_id,
                 "view_json": view_json,
                 "query_plan": query_plan_json,
+                "response_type": update.response_type,
+                "payload": payload_json,
             },
         )
 
@@ -1043,6 +1130,84 @@ async def get_previous_request_with_plan(
         result = GetRequestModel.model_validate(data)
     except ValidationError as e:
         logging.error(f"Can't validate Request object from DB error: {e}")
+        return None
+
+    return result
+
+
+async def get_previous_request(
+    db: AsyncSession, session_id: UUID, current_request_id: UUID
+) -> Optional[GetRequestModel]:
+    """
+    Get the request immediately before the current one in the session.
+
+    Used for clarification_response flow to retrieve the previous request
+    that asked the clarification question.
+
+    Args:
+        db: Database session
+        session_id: Session ID
+        current_request_id: Current request ID
+
+    Returns:
+        The previous request, or None if not found
+    """
+    logging.info(
+        "Get previous request",
+        extra={
+            "action": "db::get_previous_request",
+            "session_id": str(session_id),
+            "current_request_id": str(current_request_id),
+        },
+    )
+
+    # Get sequence number of current request, then get the one before it
+    get_prev_sql = text(
+        """
+        SELECT r.*
+        FROM request r
+        WHERE r.session_id = :session_id
+          AND r.sequence_number = (
+              SELECT sequence_number - 1
+              FROM request
+              WHERE request_id = :current_request_id
+          )
+        LIMIT 1;
+        """
+    )
+    res = await db.execute(
+        get_prev_sql,
+        params={"session_id": session_id, "current_request_id": current_request_id},
+    )
+    row = res.mappings().fetchone()
+
+    if not row:
+        logging.warning(
+            "No previous request found",
+            extra={
+                "action": "db::get_previous_request",
+                "session_id": str(session_id),
+                "current_request_id": str(current_request_id),
+            },
+        )
+        return None
+
+    data = dict(row)
+
+    logging.info(
+        "Found previous request",
+        extra={
+            "action": "db::get_previous_request",
+            "session_id": str(session_id),
+            "current_request_id": str(current_request_id),
+            "previous_request_id": str(data.get("request_id")),
+        },
+    )
+
+    try:
+        result = GetRequestModel.model_validate(data)
+    except ValidationError as e:
+        logging.error(f"Can't validate previous Request object from DB error: {e}")
         return None
 
     return result
