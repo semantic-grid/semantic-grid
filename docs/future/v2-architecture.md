@@ -477,6 +477,249 @@ yield StateEvent(status="planning")
 4. **Usage analytics** - Track which queries are valuable
 5. **Slash commands** - Featured queries become one-click actions
 
+## Evaluation Framework: pydantic-evals
+
+### Why pydantic-evals?
+
+Since v2 is built on PydanticAI, **pydantic-evals** is the natural choice for systematic testing and evaluation. It's a code-first framework from the Pydantic team designed for evaluating stochastic (LLM-based) code.
+
+| v2 Requirement | pydantic-evals Feature |
+|----------------|------------------------|
+| PydanticAI agents | Native integration, same ecosystem |
+| SQL generation quality | Custom evaluators (syntax, semantic, logical) |
+| MCP tool orchestration | **Span-based evaluation** via OpenTelemetry traces |
+| Sampling/elicitation flows | Evaluate internal agent behavior, not just output |
+| Multi-step workflows | Trace-aware evals for "how" not just "what" |
+| Code-first philosophy | Matches prompt pack / overlay system |
+
+### Core Concepts
+
+- **Dataset**: Collection of test cases for a specific task
+- **Case**: Individual test with inputs, expected outputs, metadata
+- **Evaluator**: Scoring function (deterministic or LLM-as-judge)
+- **Experiment**: Running all cases against a task, collecting results
+
+### Evaluator Types for db-meta-v2
+
+**1. SQL Syntax Evaluator (Deterministic)**
+
+```python
+from dataclasses import dataclass
+from pydantic_evals.evaluators import Evaluator, EvaluatorContext
+import sqlglot
+
+@dataclass
+class SQLSyntaxEvaluator(Evaluator):
+    """Validates SQL parses correctly with sqlglot."""
+    dialect: str = "clickhouse"
+    
+    async def evaluate(self, ctx: EvaluatorContext[str, QueryResult]) -> float:
+        try:
+            sqlglot.parse(ctx.output.sql, dialect=self.dialect)
+            return 1.0
+        except Exception:
+            return 0.0
+```
+
+**2. Semantic Correctness Evaluator (DB-validated)**
+
+```python
+@dataclass
+class SemanticCorrectnessEvaluator(Evaluator):
+    """Validates tables/columns exist via db-meta."""
+    
+    async def evaluate(self, ctx: EvaluatorContext[str, QueryResult]) -> float:
+        validation = await validate_plan_against_schema(ctx.output.sql)
+        if not validation.valid:
+            return 0.0
+        # Partial credit for warnings
+        return 1.0 - (0.1 * len(validation.warnings))
+```
+
+**3. Intent Match Evaluator (LLM-as-Judge)**
+
+```python
+@dataclass
+class IntentMatchEvaluator(Evaluator):
+    """LLM judges whether SQL implements user intent."""
+    
+    async def evaluate(self, ctx: EvaluatorContext[str, QueryResult]) -> float:
+        prompt = f"""
+        User intent: {ctx.inputs}
+        Generated SQL: {ctx.output.sql}
+        Expected SQL: {ctx.expected_output.sql}
+        
+        Score 0.0-1.0 how well the generated SQL implements the intent.
+        Consider: correct tables, joins, filters, aggregations, output columns.
+        """
+        # Use LLM to score
+        result = await judge_agent.run(prompt)
+        return result.output.score
+```
+
+**4. Workflow Evaluator (Span-Based)**
+
+Critical for evaluating MCP sampling/elicitation flows:
+
+```python
+@dataclass
+class WorkflowEvaluator(Evaluator):
+    """Evaluate agent took correct steps via OpenTelemetry spans."""
+    required_steps: list[str] = ("plan_query", "validate_plan", "generate_sql")
+    
+    async def evaluate(self, ctx: EvaluatorContext) -> float:
+        spans = ctx.spans  # Access trace data
+        steps_taken = [s.name for s in spans]
+        matched = len(set(self.required_steps) & set(steps_taken))
+        return matched / len(self.required_steps)
+```
+
+### Dataset Structure
+
+```python
+from pydantic_evals import Case, Dataset
+
+# Load from existing query examples
+dataset = Dataset(
+    cases=[
+        Case(
+            name="top_wallets_by_volume",
+            inputs="Show me top 10 wallets by trading volume",
+            expected_output=QueryResult(
+                sql="SELECT wallet, SUM(volume) as total_volume FROM transactions GROUP BY wallet ORDER BY total_volume DESC LIMIT 10"
+            ),
+            metadata={"category": "aggregation", "tables": ["transactions"]}
+        ),
+        Case(
+            name="daily_active_users",
+            inputs="How many unique users were active each day last week?",
+            expected_output=QueryResult(
+                sql="SELECT DATE(timestamp) as day, COUNT(DISTINCT user_id) as dau FROM events WHERE timestamp >= now() - INTERVAL 7 DAY GROUP BY day ORDER BY day"
+            ),
+            metadata={"category": "time_series", "tables": ["events"]}
+        ),
+        # ... more cases from query_examples.yaml
+    ],
+    evaluators=[
+        SQLSyntaxEvaluator(),
+        SemanticCorrectnessEvaluator(),
+        IntentMatchEvaluator(),
+        WorkflowEvaluator(),
+    ]
+)
+```
+
+### Running Evals
+
+```python
+from sg_models import QueryResult
+
+async def get_data_task(intent: str) -> QueryResult:
+    """The task being evaluated - wraps db-meta-v2's get_data tool."""
+    async with db_meta_client as client:
+        result = await client.call_tool("get_data", {"intent": intent})
+        return QueryResult.model_validate(result)
+
+# Run evaluation
+report = await dataset.evaluate(get_data_task)
+report.print(include_input=True, include_output=True)
+
+# Or sync version
+report = dataset.evaluate_sync(get_data_task)
+```
+
+### Eval Directory Structure
+
+```
+apps/db-meta-v2/evals/
+├── __init__.py
+├── conftest.py                   # shared fixtures, db connections
+├── evaluators/
+│   ├── __init__.py
+│   ├── sql_syntax.py             # sqlglot validation
+│   ├── semantic.py               # schema validation
+│   ├── intent_match.py           # LLM-as-judge
+│   └── workflow.py               # span-based process evals
+├── datasets/
+│   ├── get_data.yaml             # NL → SQL test cases
+│   ├── run_sql.yaml              # SQL validation cases
+│   ├── repair_loop.yaml          # error recovery cases
+│   └── edge_cases.yaml           # error handling, timeouts
+└── run_evals.py                  # CLI entry point
+
+apps/fm-app-v2/evals/
+├── evaluators/
+│   └── ui_spec.py                # GridSpec correctness
+└── datasets/
+    └── rendering.yaml            # UI interpretation cases
+```
+
+### Key Metrics
+
+| Metric | Measures | Evaluator |
+|--------|----------|-----------|
+| **Syntax Pass Rate** | SQL parseability | SQLSyntaxEvaluator |
+| **Semantic Pass Rate** | Valid table/column refs | SemanticCorrectnessEvaluator |
+| **Intent Match Score** | User goal achievement | IntentMatchEvaluator |
+| **First-Pass Success** | No repair needed | WorkflowEvaluator |
+| **Repair Success Rate** | Error recovery | WorkflowEvaluator |
+| **Workflow Compliance** | Correct step sequence | WorkflowEvaluator (spans) |
+
+### Logfire Integration
+
+pydantic-evals integrates with Pydantic Logfire for visualization:
+
+```bash
+pip install 'pydantic-evals[logfire]'
+```
+
+Benefits:
+- **Trace visualization** for MCP tool calls
+- **Eval dashboards** with score trends over time
+- **Comparison views** for A/B testing prompts
+- **Token usage tracking** per eval run
+
+Results flow automatically to Logfire when configured, providing:
+- Historical score tracking
+- Regression detection
+- Prompt effectiveness comparison
+- Cost analysis per eval run
+
+### CI Integration
+
+```yaml
+# .github/workflows/evals.yml
+name: Run Evals
+on:
+  push:
+    paths:
+      - 'apps/db-meta-v2/**'
+      - 'packages/sg-models/**'
+  schedule:
+    - cron: '0 0 * * *'  # Daily
+
+jobs:
+  evals:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      - run: |
+          cd apps/db-meta-v2
+          uv sync
+          uv run python evals/run_evals.py --output results.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: eval-results
+          path: apps/db-meta-v2/results.json
+```
+
+### References
+
+- [pydantic-evals Documentation](https://ai.pydantic.dev/evals/)
+- [pydantic-evals PyPI](https://pypi.org/project/pydantic-evals/)
+- [Logfire Evals Integration](https://logfire.pydantic.dev/docs/guides/web-ui/evals/)
+
 ## Open Questions
 
 1. **Multi-tenant in db-meta-v2:** How does client/env routing work when db-meta-v2 is called from generic MCP clients?
