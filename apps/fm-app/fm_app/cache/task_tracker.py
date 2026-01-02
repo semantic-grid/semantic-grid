@@ -4,11 +4,17 @@ import json
 import logging
 from typing import Optional
 
+from fm_app.cache.query_cache import CacheJSONEncoder
 from fm_app.cache.redis_client import get_redis
 from fm_app.config import get_settings
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
+
+
+def _json_dumps(obj) -> str:
+    """JSON dumps with UUID/datetime handling."""
+    return json.dumps(obj, cls=CacheJSONEncoder)
 
 
 async def set_running_task(
@@ -46,7 +52,7 @@ async def set_running_task(
         }
 
         # Store with 30 minute TTL (longer than query timeout)
-        await redis.setex(key, 1800, json.dumps(task_info))
+        await redis.setex(key, 1800, _json_dumps(task_info))
         logger.info(
             f"Stored running task {task_id} for query {query_id}",
             extra={
@@ -118,9 +124,9 @@ async def add_task_subscriber(
         # Get remaining TTL and update
         ttl = await redis.ttl(key)
         if ttl > 0:
-            await redis.setex(key, ttl, json.dumps(task_info))
+            await redis.setex(key, ttl, _json_dumps(task_info))
         else:
-            await redis.setex(key, 1800, json.dumps(task_info))
+            await redis.setex(key, 1800, _json_dumps(task_info))
 
         return True
     except Exception as e:
@@ -252,9 +258,9 @@ async def remove_task_subscriber(
             # Get remaining TTL and update
             ttl = await redis.ttl(key)
             if ttl > 0:
-                await redis.setex(key, ttl, json.dumps(task_info))
+                await redis.setex(key, ttl, _json_dumps(task_info))
             else:
-                await redis.setex(key, 1800, json.dumps(task_info))
+                await redis.setex(key, 1800, _json_dumps(task_info))
 
             logger.info(
                 f"Removed subscriber from query {query_id}",
@@ -317,9 +323,9 @@ async def update_subscriber_notification(
         # Get remaining TTL and update
         ttl = await redis.ttl(key)
         if ttl > 0:
-            await redis.setex(key, ttl, json.dumps(task_info))
+            await redis.setex(key, ttl, _json_dumps(task_info))
         else:
-            await redis.setex(key, 1800, json.dumps(task_info))
+            await redis.setex(key, 1800, _json_dumps(task_info))
 
         logger.info(
             f"Updated subscriber notification for query {query_id}",

@@ -6,7 +6,6 @@ in a different event loop, and reusing connections across loops causes errors.
 
 import asyncio
 import logging
-from typing import Optional
 
 import redis.asyncio as aioredis
 

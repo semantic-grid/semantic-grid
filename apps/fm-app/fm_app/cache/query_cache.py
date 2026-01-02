@@ -5,12 +5,24 @@ import json
 import logging
 from datetime import UTC, datetime
 from typing import Any, Dict, Optional
+from uuid import UUID
 
 from fm_app.cache.redis_client import get_redis
 from fm_app.config import get_settings
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
+
+
+class CacheJSONEncoder(json.JSONEncoder):
+    """JSON encoder that handles UUID and other non-serializable types."""
+
+    def default(self, obj):
+        if isinstance(obj, UUID):
+            return str(obj)
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        return super().default(obj)
 
 
 def run_async(coro):
@@ -102,7 +114,7 @@ async def set_cached_query(
         await redis.setex(
             cache_key,
             settings.cache_ttl_seconds,
-            json.dumps(cache_data),
+            json.dumps(cache_data, cls=CacheJSONEncoder),
         )
 
         logger.debug(
