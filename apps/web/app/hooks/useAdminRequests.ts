@@ -155,12 +155,14 @@ export const useQueryExplorer = (
   limit: number = 50,
   offset: number = 0,
   search?: string,
+  hasFeedback: boolean = false,
 ) => {
-  const fetcher = ([url, limit, offset, search]: [
+  const fetcher = ([url, limit, offset, search, hasFeedback]: [
     string,
     number,
     number,
     string | undefined,
+    boolean,
   ]) => {
     const params = new URLSearchParams({
       limit: String(limit),
@@ -169,6 +171,9 @@ export const useQueryExplorer = (
     if (search) {
       params.set("search", search);
     }
+    if (hasFeedback) {
+      params.set("has_feedback", "true");
+    }
     return fetch(`${url}?${params.toString()}`).then((res) => {
       if (res.ok) return res.json();
       throw UnauthorizedError;
@@ -176,7 +181,7 @@ export const useQueryExplorer = (
   };
 
   const { data, error, isLoading, mutate } = useSWR<QueryExplorerResponse>(
-    ["/api/apegpt/admin/query-explorer", limit, offset, search],
+    ["/api/apegpt/admin/query-explorer", limit, offset, search, hasFeedback],
     fetcher,
     {
       shouldRetryOnError: false,

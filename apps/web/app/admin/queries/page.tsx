@@ -90,19 +90,41 @@ const REQUEST_TYPE_COLORS: Record<
   replan: "error",
 };
 
-// Map request types to flow-processing stage names
-const getStageLabel = (requestType: string | null | undefined): string => {
-  switch (requestType) {
-    case "initial":
+// Map request status to stage label
+// FeedbackRequested = Plan (awaiting approval)
+// Done/Error = Query (execution completed)
+const getStageLabel = (status: string | null | undefined): string => {
+  switch (status) {
+    case "FeedbackRequested":
       return "Plan";
-    case "plan_approval":
+    case "Done":
+    case "Error":
       return "Query";
-    case "plan_amendment":
-      return "Plan Amendment";
-    case "replan":
-      return "Replan";
     default:
-      return "Plan";
+      return "Query";
+  }
+};
+
+// Get chip color based on stage label
+const getStageLabelColor = (
+  status: string | null | undefined,
+):
+  | "default"
+  | "primary"
+  | "secondary"
+  | "error"
+  | "info"
+  | "success"
+  | "warning" => {
+  switch (status) {
+    case "FeedbackRequested":
+      return "info";
+    case "Done":
+      return "success";
+    case "Error":
+      return "error";
+    default:
+      return "default";
   }
 };
 
@@ -755,12 +777,12 @@ const RequestDetailDrawer = ({
       </Box>
 
       <Box sx={{ display: "flex", flexDirection: "column", gap: 3, flex: 1 }}>
-        {/* Request Type & Status */}
+        {/* Stage & Status */}
         <Box sx={{ display: "flex", gap: 1 }}>
           <Chip
-            label={getStageLabel(request.request_type)}
+            label={getStageLabel(request.status)}
             size="small"
-            color={REQUEST_TYPE_COLORS[request.request_type || ""] || "default"}
+            color={getStageLabelColor(request.status)}
             variant="outlined"
           />
           <Chip
@@ -875,7 +897,7 @@ const RequestTimelineItem = ({
   onViewDetails: () => void;
 }) => {
   const [expanded, setExpanded] = useState(false);
-  const stageLabel = getStageLabel(request.request_type);
+  const stageLabel = getStageLabel(request.status);
 
   return (
     <Box
@@ -914,7 +936,7 @@ const RequestTimelineItem = ({
         <Chip
           label={stageLabel}
           size="small"
-          color={REQUEST_TYPE_COLORS[request.request_type || ""] || "default"}
+          color={getStageLabelColor(request.status)}
           variant="outlined"
         />
         <Chip
@@ -1224,14 +1246,15 @@ const ExpandedQueryContent = ({
   selectedRequestId: string | null;
 }) => {
   // Sort requests chronologically (same order as Query Journey drawer)
-  const sortedRequests = [...(query.requests || [])].sort((a, b) => {
-    return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-  });
+  const sortedRequests = [...(query.requests || [])].sort(
+    (a, b) =>
+      new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+  );
 
   return (
     <Box>
       {sortedRequests.map((req) => {
-        const stageLabel = getStageLabel(req.request_type);
+        const stageLabel = getStageLabel(req.status);
         const isQueryStage = stageLabel === "Query";
         const isSelected = req.request_id === selectedRequestId;
 
@@ -1265,7 +1288,7 @@ const ExpandedQueryContent = ({
             <Chip
               label={stageLabel}
               size="small"
-              color={REQUEST_TYPE_COLORS[req.request_type || ""] || "default"}
+              color={getStageLabelColor(req.status)}
               variant="outlined"
               sx={{ minWidth: 80 }}
             />
@@ -1322,6 +1345,7 @@ const Page = withPageAuthRequired(
     const [searchInput, setSearchInput] = useState("");
     const [search, setSearch] = useState("");
     const [hasFeedback, setHasFeedback] = useState(false);
+    const [groupBySession, setGroupBySession] = useState(false);
     const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
     const [selectedQuery, setSelectedQuery] =
       useState<QueryExplorerItem | null>(null);
@@ -1334,6 +1358,7 @@ const Page = withPageAuthRequired(
       paginationModel.pageSize,
       paginationModel.page * paginationModel.pageSize,
       search || undefined,
+      hasFeedback,
     );
 
     const handleSearch = useCallback(() => {
@@ -1365,6 +1390,14 @@ const Page = withPageAuthRequired(
 
     const columns = useMemo<GridColDef<QueryExplorerItem>[]>(
       () => [
+        {
+          field: "session_id",
+          headerName: "Session",
+          width: 120,
+          sortable: false,
+          renderCell: (params) =>
+            params.value ? `${String(params.value).slice(0, 8)}...` : "-",
+        },
         {
           field: "created_at",
           headerName: "Date",
@@ -1471,7 +1504,7 @@ const Page = withPageAuthRequired(
             Query Explorer
           </Typography>
           <Box sx={{ flex: 1 }} />
-          <FormGroup>
+          <FormGroup row>
             <FormControlLabel
               control={
                 <Checkbox
@@ -1483,6 +1516,16 @@ const Page = withPageAuthRequired(
                 />
               }
               label="Has feedback"
+              sx={{ color: "text.primary" }}
+            />
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={groupBySession}
+                  onChange={(e) => setGroupBySession(e.target.checked)}
+                />
+              }
+              label="Group by session"
               sx={{ color: "text.primary" }}
             />
           </FormGroup>
@@ -1538,9 +1581,15 @@ const Page = withPageAuthRequired(
             paginationMode="server"
             onPaginationModelChange={setPaginationModel}
             rowCount={total}
-            onRowClick={(params) =>
-              handleQueryClick(params.row as QueryExplorerItem)
-            }
+            onRowClick={(params) => {
+              // Don't open drawer when clicking on group row
+              if (
+                params.row.id &&
+                !String(params.row.id).startsWith("auto-generated")
+              ) {
+                handleQueryClick(params.row as QueryExplorerItem);
+              }
+            }}
             getDetailPanelContent={({ row }) => (
               <ExpandedQueryContent
                 query={row as QueryExplorerItem}
@@ -1553,6 +1602,22 @@ const Page = withPageAuthRequired(
             onDetailPanelExpandedRowIdsChange={(ids) => {
               setExpandedRows(new Set(ids.map(String)));
             }}
+            columnVisibilityModel={{
+              session_id: !groupBySession,
+            }}
+            treeData={groupBySession}
+            getTreeDataPath={(row) =>
+              groupBySession ? [row.session_id, row.query_id] : [row.query_id]
+            }
+            groupingColDef={
+              groupBySession
+                ? {
+                    headerName: "Session",
+                    width: 250,
+                  }
+                : undefined
+            }
+            defaultGroupingExpansionDepth={groupBySession ? 1 : 0}
             sx={{
               height: "100%",
               border: "none",

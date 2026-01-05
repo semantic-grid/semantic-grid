@@ -286,6 +286,25 @@ Configure all three in both fm-app and db-meta `.env` files with corresponding `
 - If a task seems to require a different branch, ask the user first
 - If you think changes should be committed, ask the user first
 
+## After Every Code Change
+
+Always run type checking and linting after making code changes to ensure code quality:
+
+### Web Frontend (`apps/web`)
+```bash
+cd apps/web
+npx tsc --noEmit          # Type check
+bun lint                  # Lint (warnings are OK, errors must be fixed)
+```
+
+### Python Apps (`apps/fm-app`, `apps/db-meta`)
+```bash
+cd apps/fm-app  # or apps/db-meta
+uv run ruff check . --fix  # Lint and auto-fix
+```
+
+Fix any errors before considering the task complete. Warnings (like `no-console`) are acceptable, but errors must be resolved.
+
 ## Important Notes
 
 - This is a monorepo managed by Turbo; always run setup tasks through Turbo to respect dependencies

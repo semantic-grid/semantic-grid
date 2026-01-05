@@ -15,13 +15,18 @@ import {
   TableCell,
   TableRow,
   TextField,
-  Typography,
-} from "@mui/material";
-import { Tooltip } from "@mui/material";
+ Tooltip,  Typography } from "@mui/material";
 import type { GridColDef, GridSortItem } from "@mui/x-data-grid-pro";
 import { formatDistanceToNow } from "date-fns";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import React, { useCallback, useEffect, useState } from "react";
+
+import type { DataGridRefs } from "@/app/components/QueryDataGrid";
+import { QueryDataGrid } from "@/app/components/QueryDataGrid";
+import { QueryDataView } from "@/app/components/QueryDataView";
+import { useData } from "@/app/contexts/DataContext";
+import { useAppUser } from "@/app/hooks/useAppUser";
+import { useQueryObject } from "@/app/hooks/useQueryObject";
 
 // Telemetry types
 interface WorkerInfo {
@@ -46,13 +51,6 @@ interface TelemetryData {
     error?: string;
   };
 }
-
-import type { DataGridRefs } from "@/app/components/QueryDataGrid";
-import { QueryDataGrid } from "@/app/components/QueryDataGrid";
-import { QueryDataView } from "@/app/components/QueryDataView";
-import { useData } from "@/app/contexts/DataContext";
-import { useAppUser } from "@/app/hooks/useAppUser";
-import { useQueryObject } from "@/app/hooks/useQueryObject";
 
 type SSEEvent = {
   type: string;
@@ -434,8 +432,8 @@ const DataTestPage = () => {
                 sql={queryMetadata?.sql}
                 defaultView="grid"
                 defaultChartType="line"
-                allowViewSwitch={true}
-                allowChartTypeSwitch={true}
+                allowViewSwitch
+                allowChartTypeSwitch
                 useSSE={useSSE}
                 paginate={paginate}
                 pageSize={pageSize}

@@ -92,7 +92,7 @@ export const QueryContainer = ({
                     queryId={query.query_id}
                     columns={gridColumns}
                     queryMetadata={query}
-                    paginate={true}
+                    paginate
                     pageSize={100}
                     performanceWarning={performanceWarning}
                     estimatedRows={estimatedRows}

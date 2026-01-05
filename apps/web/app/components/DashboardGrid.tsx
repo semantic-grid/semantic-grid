@@ -1,6 +1,6 @@
 "use client";
 
-import { Box, Container, Paper, Typography } from "@mui/material";
+import { Box, Container, Paper } from "@mui/material";
 import { Responsive, WidthProvider } from "react-grid-layout";
 
 import DashboardCard from "@/app/components/DashboardItem";

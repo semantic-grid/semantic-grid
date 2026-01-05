@@ -1,1 +1,1 @@
-export type { ViewType, QueryDataViewProps } from "./index";
+export type { QueryDataViewProps,ViewType } from "./index";

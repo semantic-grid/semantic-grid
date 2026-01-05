@@ -3,8 +3,8 @@
 import {
   BarChart,
   Code,
-  ShowChart,
   PieChart as PieChartIcon,
+  ShowChart,
   TableChart,
 } from "@mui/icons-material";
 import {
@@ -18,10 +18,10 @@ import {
 import type { GridColDef } from "@mui/x-data-grid-pro";
 import React, { useCallback, useMemo, useState } from "react";
 
-import HighlightedSQL from "@/app/components/SqlView";
 import { QueryChart } from "@/app/components/QueryChart";
 import type { ChartType } from "@/app/components/QueryChart/types";
 import { QueryDataGrid } from "@/app/components/QueryDataGrid";
+import HighlightedSQL from "@/app/components/SqlView";
 import type { TQuery } from "@/app/lib/types";
 
 export type ViewType = "grid" | "chart" | "sql";

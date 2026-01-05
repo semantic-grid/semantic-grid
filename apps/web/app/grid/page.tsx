@@ -7,14 +7,14 @@ import { getDashboards } from "@/app/lib/payload";
 
 const HomePage = async () => {
   const { uid, dashboardId } = await ensureSession();
-  const dashboards = await getDashboards(uid);
+  const dashboards = await getDashboards(uid ?? undefined);
 
   return (
     <>
       <GridNavClient
         dashboards={dashboards}
-        uid={uid}
-        dashboardId={dashboardId}
+        uid={uid ?? undefined}
+        dashboardId={dashboardId ?? undefined}
       />
       <Container
         maxWidth={false}

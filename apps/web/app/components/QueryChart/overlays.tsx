@@ -1,6 +1,6 @@
 "use client";
 
-import { Refresh, NotificationsActive, Error } from "@mui/icons-material";
+import { Error,NotificationsActive, Refresh } from "@mui/icons-material";
 import { Box, Button, CircularProgress, Typography } from "@mui/material";
 import React from "react";
 
@@ -65,8 +65,7 @@ export const FetchOverlay = ({
   );
 };
 
-export const LoadingOverlay = () => {
-  return (
+export const LoadingOverlay = () => (
     <Box
       display="flex"
       flexDirection="column"
@@ -81,15 +80,13 @@ export const LoadingOverlay = () => {
       </Typography>
     </Box>
   );
-};
 
 interface ErrorOverlayProps {
   error: string;
   onRetry: () => void;
 }
 
-export const ErrorOverlay = ({ error, onRetry }: ErrorOverlayProps) => {
-  return (
+export const ErrorOverlay = ({ error, onRetry }: ErrorOverlayProps) => (
     <Box
       display="flex"
       flexDirection="column"
@@ -107,4 +104,3 @@ export const ErrorOverlay = ({ error, onRetry }: ErrorOverlayProps) => {
       </Button>
     </Box>
   );
-};

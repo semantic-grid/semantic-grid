@@ -2,19 +2,19 @@
 
 import React, {
   createContext,
+  type ReactNode,
   useCallback,
   useContext,
   useEffect,
   useMemo,
   useRef,
   useState,
-  type ReactNode,
 } from "react";
 
 import {
+  type DataContextValue,
   DEFAULT_QUERY_STATE,
   DEFAULT_TTL,
-  type DataContextValue,
   type FetchOptions,
   type QueryState,
   type SubscriptionCallbacks,
@@ -235,9 +235,7 @@ const buildFetchUrl = (queryId: string, options: FetchOptions): string => {
 };
 
 // Helper to build cache key
-const buildCacheKey = (queryId: string, options: FetchOptions): string => {
-  return `${queryId}:${options.pageSize || 100}:${options.offset || 0}:${options.sortBy || ""}:${options.sortOrder || "asc"}`;
-};
+const buildCacheKey = (queryId: string, options: FetchOptions): string => `${queryId}:${options.pageSize || 100}:${options.offset || 0}:${options.sortBy || ""}:${options.sortOrder || "asc"}`;
 
 interface FetchState {
   eventSource: EventSource | null;
@@ -280,9 +278,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 
   // Get query state (returns default if not found)
   const getQueryState = useCallback(
-    (queryId: string): QueryState => {
-      return queryStates.get(queryId) || DEFAULT_QUERY_STATE;
-    },
+    (queryId: string): QueryState => queryStates.get(queryId) || DEFAULT_QUERY_STATE,
     [queryStates],
   );
 

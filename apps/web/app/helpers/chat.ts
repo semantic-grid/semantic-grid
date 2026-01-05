@@ -222,7 +222,7 @@ export const pollForResponse = (
 
             // Wait longer on errors with exponential backoff
             // eslint-disable-next-line no-await-in-loop
-            await wait(interval * Math.pow(2, consecutiveErrors - 1));
+            await wait(interval * 2**(consecutiveErrors - 1));
             retries++;
             continue;
           }
@@ -267,7 +267,7 @@ export const pollForResponse = (
 
           // Wait longer on errors with exponential backoff
           // eslint-disable-next-line no-await-in-loop
-          await wait(interval * Math.pow(2, consecutiveErrors - 1));
+          await wait(interval * 2**(consecutiveErrors - 1));
           retries++;
         }
       }

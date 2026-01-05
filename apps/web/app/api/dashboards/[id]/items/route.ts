@@ -15,7 +15,10 @@ const Attach = z.object({
   position: z.number().int().optional(),
 });
 
-const Detach = z.object({ queryUid: z.string().uuid() });
+const Detach = z.object({
+  queryUid: z.string().uuid(),
+  itemUid: z.string(),
+});
 
 export async function POST(
   req: Request,
@@ -43,6 +46,10 @@ export async function DELETE(
   if (!parsed.success)
     return NextResponse.json({ error: parsed.error.format() }, { status: 400 });
 
-  const count = await detachQueryFromDashboard(params.id, parsed.data.queryUid);
+  const count = await detachQueryFromDashboard(
+    params.id,
+    parsed.data.queryUid,
+    parsed.data.itemUid,
+  );
   return NextResponse.json({ removed: count });
 }

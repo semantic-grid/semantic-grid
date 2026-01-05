@@ -8,7 +8,6 @@ import React, {
   useRef,
 } from "react";
 
-import { executeWithCircuitBreaker } from "@/app/lib/circuitBreaker";
 
 type FetchParams = {
   id: string;

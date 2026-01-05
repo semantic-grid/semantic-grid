@@ -4,7 +4,12 @@
     "browser": true,
     "es2021": true
   },
-  "extends": ["airbnb", "airbnb-typescript", "prettier", "next/core-web-vitals"],
+  "extends": [
+    "airbnb",
+    "airbnb-typescript",
+    "prettier",
+    "next/core-web-vitals"
+  ],
   "parser": "@typescript-eslint/parser",
   "parserOptions": {
     "ecmaFeatures": {
@@ -137,6 +142,9 @@
       "typescript": {
         "alwaysTryTypes": true
       }
+    },
+    "jest": {
+      "version": 29
     }
   }
 }

@@ -159,7 +159,7 @@ async function main() {
             queryId: qDbId as any,
             name: it.name ?? null,
             description: it.description ?? null,
-            itemType: it.type,
+            itemType: it.itemType,
             chartType: it.chartType ?? null,
             position,
           })
@@ -176,7 +176,7 @@ async function main() {
           (it.name ?? null) !== (prev.name ?? null) ||
           (it.description ?? null) !== (prev.description ?? null) ||
           (it.chartType ?? null) !== (prev.chartType ?? null) ||
-          it.type !== prev.itemType ||
+          it.itemType !== prev.itemType ||
           position !== (prev.position ?? 0);
 
         if (needsUpdate) {
@@ -185,7 +185,7 @@ async function main() {
             .set({
               name: it.name ?? null,
               description: it.description ?? null,
-              itemType: it.type,
+              itemType: it.itemType,
               chartType: it.chartType ?? null,
               position,
             })

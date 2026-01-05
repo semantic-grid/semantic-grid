@@ -1025,6 +1025,12 @@ export interface components {
             /** Data Fetches */
             data_fetches?: components["schemas"]["GetDataFetchModel"][] | null;
             query_plan?: components["schemas"]["QueryPlan"] | null;
+            /** Response Type */
+            response_type?: string | null;
+            /** Payload */
+            payload?: {
+                [key: string]: unknown;
+            } | null;
             /** Is Test */
             is_test?: boolean | null;
             /** Is Fixed */
@@ -1149,7 +1155,7 @@ export interface components {
          * InteractiveRequestType
          * @enum {string}
          */
-        InteractiveRequestType: "tbd" | "interactive_query" | "data_analysis" | "general_chat" | "disambiguation" | "linked_session" | "linked_query" | "manual_query" | "discovery" | "plan_approval" | "plan_amendment";
+        InteractiveRequestType: "tbd" | "interactive_query" | "data_analysis" | "general_chat" | "disambiguation" | "linked_session" | "linked_query" | "manual_query" | "discovery" | "plan_approval" | "plan_amendment" | "clarification" | "clarification_response";
         /**
          * ModelType
          * @enum {string}
@@ -1178,7 +1184,7 @@ export interface components {
          * PromptItemType
          * @enum {string}
          */
-        PromptItemType: "DBStruct" | "QueryExample" | "DataDescription" | "RefSources" | "Instruction" | "DataSample" | "SlotSchema" | "SQLDialect" | "AssembledPrompt";
+        PromptItemType: "DBStruct" | "QueryExample" | "DataDescription" | "RefSources" | "Instruction" | "DataSample" | "SlotSchema" | "SQLDialect" | "DomainModel" | "AssembledPrompt";
         /**
          * QueryExplorerItem
          * @description A query with its full journey from intent to result.
@@ -1251,6 +1257,11 @@ export interface components {
              * @default false
              */
             had_amendments: boolean;
+            /**
+             * Data Fetches
+             * @default []
+             */
+            data_fetches: components["schemas"]["GetDataFetchModel"][];
         };
         /**
          * QueryExplorerRequestSummary
@@ -1345,59 +1356,59 @@ export interface components {
              * Tables
              * @default []
              */
-            tables: string[];
+            Tables: string[];
             /**
-             * Primary Table
+             * Primarytable
              * @default
              */
-            primary_table: string;
+            PrimaryTable: string;
             /**
              * Joins
              * @default []
              */
-            joins: (components["schemas"]["QueryPlanJoin"] | string)[];
+            Joins: (components["schemas"]["QueryPlanJoin"] | string)[];
             /**
-             * Columns Selected
+             * Columnsselected
              * @default []
              */
-            columns_selected: string[];
+            ColumnsSelected: string[];
             /**
              * Filters
              * @default []
              */
-            filters: (components["schemas"]["QueryPlanFilter"] | string)[];
+            Filters: (components["schemas"]["QueryPlanFilter"] | string)[];
             /**
              * Aggregations
              * @default []
              */
-            aggregations: (components["schemas"]["QueryPlanAggregation"] | string)[];
+            Aggregations: (components["schemas"]["QueryPlanAggregation"] | string)[];
             /**
-             * Group By
+             * Grouping
              * @default []
              */
-            group_by: string[];
+            Grouping: string[];
             /**
-             * Order By
+             * Ordering
              * @default []
              */
-            order_by: string[];
+            Ordering: string[];
             /** Limit */
-            limit?: number | string | null;
+            Limit?: number | string | null;
             /**
              * Assumptions
              * @default []
              */
-            assumptions: string[];
+            Assumptions: string[];
             /**
-             * Default Params
+             * Defaultparameters
              * @default []
              */
-            default_params: string[];
+            DefaultParameters: string[];
             /**
-             * Plan Summary
+             * Plansummary
              * @default
              */
-            plan_summary: string;
+            PlanSummary: string;
             /**
              * Estimated Complexity
              * @default moderate
@@ -2021,7 +2032,7 @@ export interface operations {
             query?: {
                 limit?: number;
                 offset?: number;
-                status?: components["schemas"]["RequestStatus"];
+                status?: components["schemas"]["RequestStatus"] | null;
                 /** @description Search in request, SQL, or user */
                 search?: string | null;
                 /** @description Filter to requests with rating or review */

@@ -30,16 +30,14 @@ export const getFreshness = (key: string): number | null => {
   return typeof f[key] === "number" ? f[key] : null;
 };
 
-const createFetcher = (dataFetchContext: ReturnType<typeof useDataFetch>) => {
-  return async ([url, id, limit, offset, sortBy, sortOrder]: [
+const createFetcher = (dataFetchContext: ReturnType<typeof useDataFetch>) => async ([url, id, limit, offset, sortBy, sortOrder]: [
     url: string,
     id: string,
     limit?: number,
     offset?: number,
     sortBy?: string,
     sortOrder?: "asc" | "desc",
-  ]) => {
-    return new Promise<{ rows: any[]; total_rows: number }>(
+  ]) => new Promise<{ rows: any[]; total_rows: number }>(
       (resolve, reject) => {
         const unsubscribe = dataFetchContext.subscribe(
           {
@@ -62,8 +60,6 @@ const createFetcher = (dataFetchContext: ReturnType<typeof useDataFetch>) => {
         );
       },
     );
-  };
-};
 
 // Remove non-ASCII characters to avoid 400 error from API
 const sanitize = (str: string) => str.replace(/[^\x20-\x7E]+/g, "");

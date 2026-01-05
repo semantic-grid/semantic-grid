@@ -40,7 +40,7 @@ export function auth0SubToUuid(auth0Sub: string): string {
   const uuid = [
     hash.substring(0, 8),                                           // 8 chars
     hash.substring(8, 12),                                          // 4 chars
-    '5' + hash.substring(13, 16),                                   // 4 chars (version 5)
+    `5${  hash.substring(13, 16)}`,                                   // 4 chars (version 5)
     ((parseInt(hash.substring(16, 18), 16) & 0x3f) | 0x80)        // 2 chars (variant bits)
       .toString(16)
       .padStart(2, '0') + hash.substring(18, 20),                  // + 2 chars = 4 chars

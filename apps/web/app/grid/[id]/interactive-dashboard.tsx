@@ -16,7 +16,6 @@ import { useRouter } from "next/navigation";
 import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
 
 import { QueryDataGrid } from "@/app/components/QueryDataGrid";
-import type { DataGridRefs } from "@/app/components/QueryDataGrid/types";
 import HighlightedSQL from "@/app/components/SqlView";
 import { AppContext } from "@/app/contexts/App";
 import { useGridSession } from "@/app/contexts/GridSession";
@@ -607,7 +606,7 @@ export const InteractiveDashboard = ({
                         queryId={query.query_id}
                         columns={gridColumns}
                         queryMetadata={query}
-                        paginate={true}
+                        paginate
                         pageSize={100}
                         performanceWarning={performanceWarning}
                         estimatedRows={estimatedRows}
@@ -618,7 +617,7 @@ export const InteractiveDashboard = ({
                         onActiveRowsChange={setActiveRows}
                         selectionModel={selectionModel}
                         onSelectionModelChange={setSelectionModel}
-                        showAddColumn={true}
+                        showAddColumn
                         onAddColumn={handleAddColumn}
                         userEmail={appUser?.email}
                       />
@@ -735,7 +734,7 @@ export const InteractiveDashboard = ({
                         queryId={query.query_id}
                         columns={gridColumns}
                         queryMetadata={query}
-                        paginate={true}
+                        paginate
                         pageSize={100}
                         performanceWarning={performanceWarning}
                         estimatedRows={estimatedRows}
@@ -746,7 +745,7 @@ export const InteractiveDashboard = ({
                         onActiveRowsChange={setActiveRows}
                         selectionModel={selectionModel}
                         onSelectionModelChange={setSelectionModel}
-                        showAddColumn={true}
+                        showAddColumn
                         onAddColumn={handleAddColumn}
                         userEmail={appUser?.email}
                       />

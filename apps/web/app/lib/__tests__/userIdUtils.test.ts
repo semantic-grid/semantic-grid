@@ -1,4 +1,4 @@
-import { auth0SubToUuid, isAuth0UserId, isGuestJwt, normalizeUserId } from '../userIdUtils';
+import { auth0SubToUuid } from '../userIdUtils';
 
 describe('userIdUtils', () => {
   describe('auth0SubToUuid', () => {
