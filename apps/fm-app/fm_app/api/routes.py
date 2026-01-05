@@ -1105,6 +1105,7 @@ async def admin_get_all_requests(
     ),
     is_test: Optional[bool] = Query(None, description="Filter by is_test flag"),
     is_fixed: Optional[bool] = Query(None, description="Filter by is_fixed flag"),
+    needs_fixing: Optional[bool] = Query(None, description="Filter by needs_fixing flag"),
     auth_result: dict = Security(auth.verify, scopes=["admin:requests"]),
 ) -> AdminRequestsResponse:
     """
@@ -1122,6 +1123,7 @@ async def admin_get_all_requests(
         has_feedback=has_feedback,
         is_test=is_test,
         is_fixed=is_fixed,
+        needs_fixing=needs_fixing,
         admin=admin,
         db=db,
     )

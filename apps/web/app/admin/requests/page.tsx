@@ -723,6 +723,7 @@ const RequestDetailDrawer = ({
 }) => {
   const [isTest, setIsTest] = useState(false);
   const [isFixed, setIsFixed] = useState(false);
+  const [needsFixing, setNeedsFixing] = useState(false);
   const [fixComment, setFixComment] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -731,6 +732,8 @@ const RequestDetailDrawer = ({
     if (request) {
       setIsTest(request.is_test ?? false);
       setIsFixed(request.is_fixed ?? false);
+      // needs_fixing may not be in generated types yet - use type assertion
+      setNeedsFixing((request as any).needs_fixing ?? false);
       setFixComment(request.fix_comment ?? "");
     }
   }, [request]);
@@ -742,6 +745,7 @@ const RequestDetailDrawer = ({
       await updateAdminRequest(request.request_id, {
         is_test: isTest,
         is_fixed: isFixed,
+        needs_fixing: needsFixing,
         fix_comment: fixComment || undefined,
       });
       onUpdate();
@@ -758,6 +762,7 @@ const RequestDetailDrawer = ({
   const hasChanges =
     isTest !== (request.is_test ?? false) ||
     isFixed !== (request.is_fixed ?? false) ||
+    needsFixing !== ((request as any).needs_fixing ?? false) ||
     fixComment !== (request.fix_comment ?? "");
 
   // Check if this is an "Approved - proceed with SQL generation" request
@@ -834,6 +839,15 @@ const RequestDetailDrawer = ({
                 />
               }
               label="Is Fixed"
+            />
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={needsFixing}
+                  onChange={(e) => setNeedsFixing(e.target.checked)}
+                />
+              }
+              label="Needs Fixing"
             />
           </Box>
           <TextField
@@ -1054,6 +1068,7 @@ const Page = withPageAuthRequired(
     const [hasFeedback, setHasFeedback] = useState(false);
     const [isTestFilter, setIsTestFilter] = useState<string>("all");
     const [isFixedFilter, setIsFixedFilter] = useState<string>("all");
+    const [needsFixingFilter, setNeedsFixingFilter] = useState<string>("all");
     const [selectedRequest, setSelectedRequest] =
       useState<GetRequestModel | null>(null);
     const [drawerOpen, setDrawerOpen] = useState(false);
@@ -1063,15 +1078,18 @@ const Page = withPageAuthRequired(
       isTestFilter === "all" ? undefined : isTestFilter === "true";
     const isFixedValue =
       isFixedFilter === "all" ? undefined : isFixedFilter === "true";
+    const needsFixingValue =
+      needsFixingFilter === "all" ? undefined : needsFixingFilter === "true";
 
     const { data, total, isLoading, mutate } = useAdminRequests(
       paginationModel.pageSize,
       paginationModel.page * paginationModel.pageSize,
-      status,
+      status === "All" ? undefined : status,
       search || undefined,
       hasFeedback,
       isTestValue,
       isFixedValue,
+      needsFixingValue,
     );
 
     const handleSearch = useCallback(() => {
@@ -1261,6 +1279,23 @@ const Page = withPageAuthRequired(
               label="Fixed"
               onChange={(e) => {
                 setIsFixedFilter(e.target.value);
+                setPaginationModel((prev) => ({ ...prev, page: 0 }));
+              }}
+            >
+              {BOOL_FILTER_OPTIONS.map((opt) => (
+                <MenuItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControl size="small" sx={{ minWidth: 120 }}>
+            <InputLabel>Needs Fixing</InputLabel>
+            <Select
+              value={needsFixingFilter}
+              label="Needs Fixing"
+              onChange={(e) => {
+                setNeedsFixingFilter(e.target.value);
                 setPaginationModel((prev) => ({ ...prev, page: 0 }));
               }}
             >

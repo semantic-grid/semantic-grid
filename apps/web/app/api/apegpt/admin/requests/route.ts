@@ -8,16 +8,23 @@ const GET = async (req: NextRequest) => {
   try {
     const limit = Number(req.nextUrl.searchParams.get("limit") || "100");
     const offset = Number(req.nextUrl.searchParams.get("offset") || "0");
-    const status: any = req.nextUrl.searchParams.get("status") || "Done";
+    const status: any = req.nextUrl.searchParams.get("status") || undefined;
     const search = req.nextUrl.searchParams.get("search") || undefined;
     const hasFeedback =
       req.nextUrl.searchParams.get("has_feedback") === "true" || undefined;
     const isTestParam = req.nextUrl.searchParams.get("is_test");
     const isFixedParam = req.nextUrl.searchParams.get("is_fixed");
+    const needsFixingParam = req.nextUrl.searchParams.get("needs_fixing");
     const isTest =
       isTestParam === "true" ? true : isTestParam === "false" ? false : null;
     const isFixed =
       isFixedParam === "true" ? true : isFixedParam === "false" ? false : null;
+    const needsFixing =
+      needsFixingParam === "true"
+        ? true
+        : needsFixingParam === "false"
+          ? false
+          : null;
     const token = await getAccessToken({ scopes: ["admin:requests"] });
 
     if (!token) {
@@ -33,6 +40,7 @@ const GET = async (req: NextRequest) => {
           has_feedback: hasFeedback,
           is_test: isTest,
           is_fixed: isFixed,
+          needs_fixing: needsFixing,
         },
       },
       headers: { Authorization: `Bearer ${token.accessToken}` },

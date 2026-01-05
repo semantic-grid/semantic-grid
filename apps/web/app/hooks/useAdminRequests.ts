@@ -27,6 +27,7 @@ export const useAdminRequests = (
   hasFeedback?: boolean,
   isTest?: boolean,
   isFixed?: boolean,
+  needsFixing?: boolean,
 ) => {
   const fetcher = ([
     url,
@@ -37,12 +38,14 @@ export const useAdminRequests = (
     hasFeedback,
     isTest,
     isFixed,
+    needsFixing,
   ]: [
     string,
     number,
     number,
     string | undefined,
     string | undefined,
+    boolean | undefined,
     boolean | undefined,
     boolean | undefined,
     boolean | undefined,
@@ -66,6 +69,9 @@ export const useAdminRequests = (
     if (isFixed !== undefined) {
       params.set("is_fixed", String(isFixed));
     }
+    if (needsFixing !== undefined) {
+      params.set("needs_fixing", String(needsFixing));
+    }
     return fetch(`${url}?${params.toString()}`).then((res) => {
       if (res.ok) return res.json();
       throw UnauthorizedError;
@@ -82,6 +88,7 @@ export const useAdminRequests = (
       hasFeedback,
       isTest,
       isFixed,
+      needsFixing,
     ],
     fetcher,
     {
@@ -139,7 +146,12 @@ export const fetchPromptVersion = async (
 
 export const updateAdminRequest = async (
   requestId: string,
-  patch: { is_test?: boolean; is_fixed?: boolean; fix_comment?: string },
+  patch: {
+    is_test?: boolean;
+    is_fixed?: boolean;
+    fix_comment?: string;
+    needs_fixing?: boolean;
+  },
 ): Promise<GetRequestModel> => {
   const res = await fetch(`/api/apegpt/admin/requests/${requestId}`, {
     method: "PATCH",

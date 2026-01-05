@@ -92,6 +92,7 @@ async def get_all_requests_admin_v2(
     has_feedback: bool | None,
     is_test: bool | None,
     is_fixed: bool | None,
+    needs_fixing: bool | None,
     db: AsyncSession,
 ) -> AdminRequestsResult:
     """
@@ -146,6 +147,10 @@ async def get_all_requests_admin_v2(
     if is_fixed is not None:
         where_conditions.append("r.is_fixed = :is_fixed")
         params["is_fixed"] = is_fixed
+
+    if needs_fixing is not None:
+        where_conditions.append("r.needs_fixing = :needs_fixing")
+        params["needs_fixing"] = needs_fixing
 
     # Build WHERE clause - handle empty conditions
     if where_conditions:
@@ -306,6 +311,10 @@ async def update_request_admin(
     if patch.fix_comment is not None:
         set_clauses.append("fix_comment = :fix_comment")
         params["fix_comment"] = patch.fix_comment
+
+    if patch.needs_fixing is not None:
+        set_clauses.append("needs_fixing = :needs_fixing")
+        params["needs_fixing"] = patch.needs_fixing
 
     set_clause = ", ".join(set_clauses)
 

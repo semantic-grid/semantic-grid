@@ -19,9 +19,7 @@ class RequestStatus(str, Enum):
     new = "New"
     intent = "Intent"
     planning = "Planning"  # Transient: query plan is being generated
-    feedback_requested = (
-        "FeedbackRequested"  # Terminal: awaiting user approval/feedback
-    )
+    feedback_requested = "FeedbackRequested"  # Terminal: awaiting user approval/feedback
     sql = "SQL"
     data = "DataFetch"
     retry = "Retry"
@@ -46,9 +44,7 @@ class InteractiveRequestType(str, Enum):
     plan_approval = "plan_approval"  # User approving a query plan
     plan_amendment = "plan_amendment"  # User requesting changes to a query plan
     clarification = "clarification"  # Agent asking a clarifying question
-    clarification_response = (
-        "clarification_response"  # User responding to clarification
-    )
+    clarification_response = "clarification_response"  # User responding to clarification
     # chart_request = "chart_request"
 
 
@@ -235,9 +231,7 @@ class QueryPlanFilter(BaseModel):
     """Describes a filter/WHERE condition in the query plan."""
 
     column: Optional[str] = None
-    operator: Optional[str] = (
-        None  # "=", ">", "<", ">=", "<=", "!=", "like", "in", "between"
-    )
+    operator: Optional[str] = None  # "=", ">", "<", ">=", "<=", "!=", "like", "in", "between"
     value: Optional[str] = None  # human-readable value representation
     source: str = "inferred"  # "user_specified", "default", "inferred"
 
@@ -247,9 +241,7 @@ class QueryPlanFilter(BaseModel):
 class QueryPlanAggregation(BaseModel):
     """Describes an aggregation in the query plan."""
 
-    function: Optional[str] = (
-        None  # "count", "sum", "avg", "min", "max", "count_distinct"
-    )
+    function: Optional[str] = None  # "count", "sum", "avg", "min", "max", "count_distinct"
     column: Optional[str] = None  # column being aggregated, or "*" for count(*)
     alias: Optional[str] = None  # result column name
     description: Optional[str] = None  # human-readable description as fallback
@@ -285,9 +277,7 @@ class QueryPlan(BaseModel):
 
     # Aggregations and grouping
     # Accept either structured objects or simple strings for flexibility
-    aggregations: list[Union[QueryPlanAggregation, str]] = Field(
-        default=[], alias="Aggregations"
-    )
+    aggregations: list[Union[QueryPlanAggregation, str]] = Field(default=[], alias="Aggregations")
     group_by: list[str] = Field(default=[], alias="Grouping")
 
     # Ordering and limits
@@ -708,6 +698,7 @@ class GetRequestModel(BaseModel):
     fixed_by: Optional[str] = None
     fixed_ts: Optional[datetime] = None
     fix_comment: Optional[str] = None
+    needs_fixing: Optional[bool] = None
 
 
 class UpdateRequestStatusModel(BaseModel):
@@ -784,9 +775,7 @@ class GetDataResponse(BaseModel):
     query_id: UUID
     limit: int
     offset: int
-    rows: list[
-        dict[str, Any]
-    ]  # List of dictionaries representing the rows returned by the query
+    rows: list[dict[str, Any]]  # List of dictionaries representing the rows returned by the query
     total_rows: int  # Total number of rows available for the query (for pagination)
 
 
@@ -840,6 +829,7 @@ class PatchAdminRequestModel(BaseModel):
     is_test: Optional[bool] = None
     is_fixed: Optional[bool] = None
     fix_comment: Optional[str] = None
+    needs_fixing: Optional[bool] = None
 
 
 class AdminQueriesResponse(BaseModel):
