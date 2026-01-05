@@ -136,9 +136,7 @@ def replace_order_by(sql: str, new_order_by: Optional[str]) -> str:
             # Append new ORDER BY before trailing LIMIT/OFFSET/FETCH
             m = trailing_clause_pattern.search(sql)
             if m:
-                return (
-                    sql[: m.start()] + f" ORDER BY {new_order_by} " + sql[m.start() :]
-                )
+                return sql[: m.start()] + f" ORDER BY {new_order_by} " + sql[m.start() :]
             else:
                 return f"{sql} ORDER BY {new_order_by} "
     else:
@@ -519,9 +517,7 @@ def build_sorted_paginated_sql(
 async def verify_any_token(
     guest: dict = Depends(guest_auth.verify), user: dict = Depends(auth.verify)
 ):
-    result = (
-        guest or user
-    )  # If guest verification fails, check regular user verification
+    result = guest or user  # If guest verification fails, check regular user verification
     if result is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -549,9 +545,7 @@ def compute_rows_fingerprint(rows: list[dict]) -> str:
     first = rows[0]
     last = rows[-1]
     # use json dumps with sort_keys for stability
-    return sha256_str(
-        json.dumps({"first": first, "last": last}, sort_keys=True, default=str)
-    )
+    return sha256_str(json.dumps({"first": first, "last": last}, sort_keys=True, default=str))
 
 
 def compute_etag(payload: dict) -> str:
@@ -570,9 +564,7 @@ async def create_session(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No token")
     user_owner = auth_result.get("sub")
     if user_owner is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="No user name"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No user name")
     response = await add_new_session(session=session, user_owner=user_owner, db=db)
     return response
 
@@ -583,9 +575,7 @@ async def get_sessions(
 ) -> list[GetSessionModel]:
     user_owner = auth_result.get("sub")
     if user_owner is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="No user name"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No user name")
     response = await get_all_sessions(user_owner=user_owner, db=db)
     return response
 
@@ -598,9 +588,7 @@ async def get_session(
 ) -> GetSessionModel:
     user_owner = auth_result.get("sub")
     if user_owner is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="No user name"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No user name")
     response = await get_session_by_id(session_id=session_id, db=db)
     return response
 
@@ -613,13 +601,9 @@ async def admin_get_all_sessions(
     auth_result: dict = Security(auth.verify, scopes=["admin:sessions"]),
 ) -> list[GetSessionModel]:
     if auth_result is None or auth_result.get("sub") is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="No user name"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No user name")
     admin = auth_result.get("sub")
-    response = await get_all_sessions_admin(
-        limit=limit, offset=offset, admin=admin, db=db
-    )
+    response = await get_all_sessions_admin(limit=limit, offset=offset, admin=admin, db=db)
     return response
 
 
@@ -632,9 +616,7 @@ async def change_session(
 ) -> GetSessionModel:
     user_owner = auth_result.get("sub")
     if user_owner is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="No user name"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No user name")
     response = await update_session(
         user_owner=user_owner, session_id=session_id, session_patch=session_patch, db=db
     )
@@ -650,9 +632,7 @@ async def create_request(
 ) -> GetRequestModel:
     user_owner = auth_result.get("sub")
     if user_owner is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="No user name"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No user name")
 
     # Deterministic command parsing
     # Check if the request starts with a slash command
@@ -702,9 +682,7 @@ async def create_request_for_query(
 ) -> GetRequestModel:
     user_owner = auth_result.get("sub")
     if user_owner is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="No user name"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No user name")
 
     query = await get_query_by_id(query_id=query_id, db=db)
     if not query:
@@ -745,9 +723,7 @@ async def create_request_from_query(
 ) -> GetRequestModel:
     user_owner = auth_result.get("sub")
     if user_owner is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="No user name"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No user name")
     query = await get_query_by_id(query_id=query_id, db=db)
     if not query:
         raise HTTPException(
@@ -861,9 +837,7 @@ async def create_request_from_sql(
 ) -> GetRequestModel:
     user_owner = auth_result.get("sub")
     if user_owner is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="No user name"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No user name")
 
     # create a request from the query
     # (response, task_id) = await add_request(
@@ -975,9 +949,7 @@ async def create_linked_session_request(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No token")
     user_owner = auth_result.get("sub")
     if user_owner is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="No user name"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No user name")
     try:
         # create new session
         session = CreateSessionModel(
@@ -986,9 +958,7 @@ async def create_linked_session_request(
             parent=session_id,
             refs=linked_request.refs,
         )
-        session_response = await add_new_session(
-            session=session, user_owner=user_owner, db=db
-        )
+        session_response = await add_new_session(session=session, user_owner=user_owner, db=db)
 
         # create request in the new session
         add_req = AddRequestModel(
@@ -1040,9 +1010,7 @@ async def get_single_request(
 ) -> GetRequestModel:
     user_owner = auth_result.get("sub")
     if user_owner is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="No user name"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No user name")
     response = await get_request(
         user_owner=user_owner, session_id=session_id, seq_num=seq_num, db=db
     )
@@ -1058,12 +1026,8 @@ async def get_requests_for_session(
 ) -> list[GetRequestModel]:
     user_owner = auth_result.get("sub")
     if user_owner is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="No user name"
-        )
-    response = await get_all_requests(
-        user_owner=user_owner, session_id=session_id, db=db
-    )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No user name")
+    response = await get_all_requests(user_owner=user_owner, session_id=session_id, db=db)
     return response
 
 
@@ -1076,9 +1040,7 @@ async def update_single_request(
 ) -> GetRequestModel:
     user_owner = auth_result.get("sub")
     if user_owner is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="No user name"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No user name")
     logger.info(
         f"update_single_request: request_id={request_id}, rating={user_request.rating}, review={user_request.review}, status={user_request.status}"
     )
@@ -1091,9 +1053,7 @@ async def update_single_request(
             request_id=request_id,
             user_owner=user_owner,
         )
-        logger.info(
-            f"Review updated, response rating={response.rating if response else 'None'}"
-        )
+        logger.info(f"Review updated, response rating={response.rating if response else 'None'}")
     elif user_request.status is not None:
         response = await update_request_status(
             status=user_request.status, db=db, request_id=request_id, err=None
@@ -1117,9 +1077,7 @@ async def delete_request(
     before this request was added."""
     user_owner = auth_result.get("sub")
     if user_owner is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="No user name"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No user name")
     response = await delete_request_revert_session(
         db=db,
         request_id=request_id,
@@ -1154,9 +1112,7 @@ async def admin_get_all_requests(
     Returns total count for proper pagination.
     """
     if auth_result is None or auth_result.get("sub") is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Not an admin"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not an admin")
     admin = auth_result.get("sub")
     result = await get_all_requests_admin_v2(
         limit=limit,
@@ -1189,9 +1145,7 @@ async def admin_update_request(
     When is_fixed is set to True, fixed_by and fixed_ts are automatically populated.
     """
     if auth_result is None or auth_result.get("sub") is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Not an admin"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not an admin")
     admin = auth_result.get("sub")
     result = await update_request_admin(
         request_id=str(request_id),
@@ -1200,9 +1154,7 @@ async def admin_update_request(
         db=db,
     )
     if result is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Request not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found")
     return result
 
 
@@ -1220,9 +1172,7 @@ async def admin_get_all_data_fetches(
     Returns total count for proper pagination.
     """
     if auth_result is None or auth_result.get("sub") is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Not an admin"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not an admin")
 
     from fm_app.db.data_fetch_db import get_all_data_fetches_admin
 
@@ -1246,9 +1196,7 @@ async def admin_get_all_queries(
     db: AsyncSession = Depends(get_db),
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    search: Optional[str] = Query(
-        None, description="Search in request, SQL, or summary"
-    ),
+    search: Optional[str] = Query(None, description="Search in request, SQL, or summary"),
     auth_result: dict = Security(auth.verify, scopes=["admin:requests"]),
 ) -> AdminQueriesResponse:
     """
@@ -1257,9 +1205,7 @@ async def admin_get_all_queries(
     Each query includes its associated data_fetches for monitoring.
     """
     if auth_result is None or auth_result.get("sub") is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Not an admin"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not an admin")
     admin = auth_result.get("sub")
 
     result = await get_all_queries_admin(
@@ -1282,9 +1228,8 @@ async def admin_get_query_explorer(
     db: AsyncSession = Depends(get_db),
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    search: Optional[str] = Query(
-        None, description="Search in request, SQL, or summary"
-    ),
+    search: Optional[str] = Query(None, description="Search in request, SQL, or summary"),
+    has_feedback: Optional[bool] = Query(None, description="Filter to queries with rating"),
     auth_result: dict = Security(auth.verify, scopes=["admin:requests"]),
 ) -> QueryExplorerResponse:
     """
@@ -1300,9 +1245,7 @@ async def admin_get_query_explorer(
     Supports expandable rows in the frontend to show request-level details.
     """
     if auth_result is None or auth_result.get("sub") is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Not an admin"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not an admin")
     admin = auth_result.get("sub")
 
     result = await get_query_explorer_data(
@@ -1310,6 +1253,7 @@ async def admin_get_query_explorer(
         offset=offset,
         admin=admin,
         search=search,
+        has_feedback=has_feedback,
         db=db,
     )
     return QueryExplorerResponse(
@@ -1332,9 +1276,7 @@ async def admin_get_all_traces(
     Returns traces with full step details and summary statistics.
     """
     if auth_result is None or auth_result.get("sub") is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Not an admin"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not an admin")
 
     from fm_app.db.trace_db import get_requests_with_traces
 
@@ -1362,9 +1304,7 @@ async def admin_get_request_trace(
     Returns all trace steps with full metadata and summary.
     """
     if auth_result is None or auth_result.get("sub") is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Not an admin"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not an admin")
 
     from fm_app.db.trace_db import get_request_trace
 
@@ -1382,9 +1322,7 @@ async def admin_get_all_prompt_versions(
     db: AsyncSession = Depends(get_db),
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    prompt_type: Optional[PromptItemType] = Query(
-        None, description="Filter by prompt item type"
-    ),
+    prompt_type: Optional[PromptItemType] = Query(None, description="Filter by prompt item type"),
     auth_result: dict = Security(auth.verify, scopes=["admin:requests"]),
 ) -> AdminPromptVersionsResponse:
     """
@@ -1392,9 +1330,7 @@ async def admin_get_all_prompt_versions(
     Prompt versions are content-addressable records of prompts used in LLM calls.
     """
     if auth_result is None or auth_result.get("sub") is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Not an admin"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not an admin")
 
     from fm_app.db.trace_db import get_all_prompt_versions
 
@@ -1424,9 +1360,7 @@ async def admin_get_prompt_version(
     Returns full prompt content and metadata.
     """
     if auth_result is None or auth_result.get("sub") is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Not an admin"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not an admin")
 
     from fm_app.db.trace_db import get_prompt_version_by_id
 
@@ -1614,20 +1548,14 @@ async def get_query_data(
             sort_by = result
 
     else:
-        request_response = await get_request_by_id(
-            request_id=query_id, db=db, user_owner=""
-        )
+        request_response = await get_request_by_id(request_id=query_id, db=db, user_owner="")
         if request_response:
             if request_response.query:
                 sql = request_response.query.sql if request_response.query.sql else ""
                 sql = sql.strip().rstrip(";")
-                current_view = (
-                    request_response.view if request_response.view else current_view
-                )
+                current_view = request_response.view if request_response.view else current_view
                 sort_by = current_view.sort_by if current_view else (sort_by or "")
-                sort_order = (
-                    current_view.sort_order if current_view else (sort_order or "")
-                )
+                sort_order = current_view.sort_order if current_view else (sort_order or "")
 
                 # Validate sort_by against QueryMetadata columns
                 if sort_by:
@@ -1647,17 +1575,13 @@ async def get_query_data(
                 #    ),
                 # )
             else:
-                raise HTTPException(
-                    status_code=400, detail="Query not found in request"
-                )
+                raise HTTPException(status_code=400, detail="Query not found in request")
 
         else:
             session_response = await get_session_by_id(session_id=query_id, db=db)
             if session_response:
                 if not session_response.metadata:
-                    raise HTTPException(
-                        status_code=400, detail="No metadata found in session"
-                    )
+                    raise HTTPException(status_code=400, detail="No metadata found in session")
 
                 sql = session_response.metadata.get("sql", "").strip().rstrip(";")
 
@@ -1759,11 +1683,7 @@ async def get_query_data(
                 limit=limit,
                 offset=offset,
                 rows=[
-                    {
-                        k: serialize_value(v)
-                        for k, v in row.items()
-                        if k.lower() != "total_count"
-                    }
+                    {k: serialize_value(v) for k, v in row.items() if k.lower() != "total_count"}
                     for row in rows
                 ],
                 total_rows=total_count,
@@ -1792,9 +1712,7 @@ async def get_query_data(
 
             headers = {
                 "ETag": etag,
-                "Cache-Control": (
-                    "public, max-age=0, s-maxage=600, stale-while-revalidate=1200"
-                ),
+                "Cache-Control": ("public, max-age=0, s-maxage=600, stale-while-revalidate=1200"),
                 "Vary": "Authorization, Accept, Accept-Encoding",
             }
 
@@ -1829,9 +1747,7 @@ async def get_query_data(
                 )
             else:
                 # Generic error
-                raise HTTPException(
-                    status_code=500, detail=f"Error executing query: {error_msg}"
-                )
+                raise HTTPException(status_code=500, detail=f"Error executing query: {error_msg}")
 
 
 @api_router.get("/data/sse/{query_id}")
@@ -1869,9 +1785,7 @@ async def stream_data_fetch(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No token")
     user_owner = auth_result.get("sub")
     if user_owner is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="No user name"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No user name")
 
     logger.info(
         f"SSE data fetch request for query {query_id}",
@@ -1906,17 +1820,13 @@ async def stream_data_fetch(
             sort_by = result
     else:
         # Try request
-        request_response = await get_request_by_id(
-            request_id=query_id, db=db, user_owner=""
-        )
+        request_response = await get_request_by_id(request_id=query_id, db=db, user_owner="")
         if request_response and request_response.query:
             sql = request_response.query.sql if request_response.query.sql else ""
             sql = sql.strip().rstrip(";")
             actual_query_id = request_response.query.query_id
             if sort_by:
-                is_valid, result = validate_sort_column(
-                    sort_by, request_response.query.columns
-                )
+                is_valid, result = validate_sort_column(sort_by, request_response.query.columns)
                 if not is_valid:
                     raise HTTPException(status_code=400, detail=result)
                 sort_by = result
@@ -2164,9 +2074,7 @@ async def stream_data_fetch(
                 task.revoke(terminate=True)
                 yield {
                     "event": "error",
-                    "data": json.dumps(
-                        {"status": "error", "error": "Query execution timeout"}
-                    ),
+                    "data": json.dumps({"status": "error", "error": "Query execution timeout"}),
                 }
         except GeneratorExit:
             # Client disconnected - revoke the task
@@ -2213,9 +2121,7 @@ async def telemetry_sse(request: Request):
                     {
                         "id": worker_name.split("@")[-1],  # Short name
                         "active_tasks": len(active_tasks),
-                        "pool_size": worker_stats.get("pool", {}).get(
-                            "max-concurrency", 0
-                        ),
+                        "pool_size": worker_stats.get("pool", {}).get("max-concurrency", 0),
                     }
                 )
 
@@ -2305,14 +2211,10 @@ async def cancel_data_fetch(
     """
     user_owner = auth_result.get("sub")
     if user_owner is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="No user name"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No user name")
 
     # Get user email from auth result (for subscriber tracking)
-    user_email = auth_result.get("email") or auth_result.get(
-        "https://semantic-grid.com/email"
-    )
+    user_email = auth_result.get("email") or auth_result.get("https://semantic-grid.com/email")
 
     from fm_app.cache.task_tracker import (
         clear_running_task,
@@ -2419,9 +2321,7 @@ async def update_data_fetch_notification(
     """
     user_owner = auth_result.get("sub")
     if user_owner is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="No user name"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No user name")
 
     # Get user email from request or auth result
     user_email = (
@@ -2456,9 +2356,7 @@ async def update_data_fetch_notification(
         )
 
     # Update notification preference
-    success = await update_subscriber_notification(
-        tracking_id, user_email, update_request.notify
-    )
+    success = await update_subscriber_notification(tracking_id, user_email, update_request.notify)
 
     if success:
         logger.info(
@@ -2523,9 +2421,7 @@ async def stream_request_updates(
     """
     user_owner = auth_result.get("sub")
     if user_owner is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="No user name"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No user name")
 
     # Convert UUID to string for comparison
     session_id_str = str(session_id)

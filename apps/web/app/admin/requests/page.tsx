@@ -742,7 +742,7 @@ const RequestDetailDrawer = ({
       await updateAdminRequest(request.request_id, {
         is_test: isTest,
         is_fixed: isFixed,
-        fix_comment: fixComment || null,
+        fix_comment: fixComment || undefined,
       });
       onUpdate();
       onClose();
@@ -1058,10 +1058,11 @@ const Page = withPageAuthRequired(
       useState<GetRequestModel | null>(null);
     const [drawerOpen, setDrawerOpen] = useState(false);
 
-    // Convert filter string to boolean | null
-    const isTestValue = isTestFilter === "all" ? null : isTestFilter === "true";
+    // Convert filter string to boolean | undefined
+    const isTestValue =
+      isTestFilter === "all" ? undefined : isTestFilter === "true";
     const isFixedValue =
-      isFixedFilter === "all" ? null : isFixedFilter === "true";
+      isFixedFilter === "all" ? undefined : isFixedFilter === "true";
 
     const { data, total, isLoading, mutate } = useAdminRequests(
       paginationModel.pageSize,

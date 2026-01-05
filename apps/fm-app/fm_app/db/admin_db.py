@@ -32,9 +32,7 @@ async def get_all_sessions_admin(
     LIMIT :limit OFFSET :offset;
     """
     )
-    res = await db.execute(
-        get_all_session_sql, params={"limit": limit, "offset": offset}
-    )
+    res = await db.execute(get_all_session_sql, params={"limit": limit, "offset": offset})
     data = res.mappings().fetchall()
     result = []
     for s in data:
@@ -134,8 +132,7 @@ async def get_all_requests_admin_v2(
 
     if search:
         where_conditions.append(
-            "(r.request ILIKE :search OR r.sql ILIKE :search "
-            "OR s.user_owner ILIKE :search)"
+            "(r.request ILIKE :search OR r.sql ILIKE :search OR s.user_owner ILIKE :search)"
         )
         params["search"] = f"%{search}%"
 
@@ -364,8 +361,7 @@ async def get_all_queries_admin(
 
     if search:
         where_conditions.append(
-            "(q.request ILIKE :search OR q.sql ILIKE :search "
-            "OR q.summary ILIKE :search)"
+            "(q.request ILIKE :search OR q.sql ILIKE :search OR q.summary ILIKE :search)"
         )
         params["search"] = f"%{search}%"
 
@@ -455,6 +451,7 @@ async def get_query_explorer_data(
     offset: int,
     admin: str,
     search: str | None,
+    has_feedback: bool | None,
     db: AsyncSession,
 ) -> QueryExplorerResult:
     """
@@ -477,10 +474,19 @@ async def get_query_explorer_data(
 
     if search:
         where_conditions.append(
-            "(q.request ILIKE :search OR q.sql ILIKE :search "
-            "OR q.summary ILIKE :search)"
+            "(q.request ILIKE :search OR q.sql ILIKE :search OR q.summary ILIKE :search)"
         )
         params["search"] = f"%{search}%"
+
+    # Filter by has_feedback: queries where any contributing request has a rating
+    # Rating is on the request table, so we need to check if any request for this query has rating
+    if has_feedback:
+        where_conditions.append(
+            """EXISTS (
+                SELECT 1 FROM request req
+                WHERE req.query_id = q.query_id AND req.rating IS NOT NULL
+            )"""
+        )
 
     where_clause = " AND ".join(where_conditions)
 
@@ -650,9 +656,7 @@ async def get_query_explorer_data(
                 if request_text.startswith("Approved"):
                     request_type = "plan_approval"
                 # Check if this is an amendment
-                elif (
-                    "amend" in request_text.lower() or "change" in request_text.lower()
-                ):
+                elif "amend" in request_text.lower() or "change" in request_text.lower():
                     request_type = "plan_amendment"
                     had_amendments = True
 
@@ -710,8 +714,7 @@ async def get_query_explorer_data(
                 tables_data = query_plan["tables"]
                 if isinstance(tables_data, list):
                     plan_tables = [
-                        t.get("name") if isinstance(t, dict) else str(t)
-                        for t in tables_data
+                        t.get("name") if isinstance(t, dict) else str(t) for t in tables_data
                     ]
 
             # Get plan summary from query_plan JSONB
