@@ -157,12 +157,11 @@ export const useQueryExplorer = (
   search?: string,
   hasFeedback: boolean = false,
 ) => {
-  const fetcher = ([url, limit, offset, search, hasFeedback]: [
+  const fetcher = ([url, limit, offset, search]: [
     string,
     number,
     number,
     string | undefined,
-    boolean,
   ]) => {
     const params = new URLSearchParams({
       limit: String(limit),
@@ -171,9 +170,6 @@ export const useQueryExplorer = (
     if (search) {
       params.set("search", search);
     }
-    if (hasFeedback) {
-      params.set("has_feedback", "true");
-    }
     return fetch(`${url}?${params.toString()}`).then((res) => {
       if (res.ok) return res.json();
       throw UnauthorizedError;
@@ -181,7 +177,7 @@ export const useQueryExplorer = (
   };
 
   const { data, error, isLoading, mutate } = useSWR<QueryExplorerResponse>(
-    ["/api/apegpt/admin/query-explorer", limit, offset, search, hasFeedback],
+    ["/api/apegpt/admin/query-explorer", limit, offset, search],
     fetcher,
     {
       shouldRetryOnError: false,
@@ -194,9 +190,14 @@ export const useQueryExplorer = (
     },
   );
 
+  // Filter by rating on frontend if hasFeedback is enabled
+  const filteredQueries = hasFeedback
+    ? data?.queries?.filter((q) => q.rating != null)
+    : data?.queries;
+
   return {
-    data: data?.queries,
-    total: data?.total ?? 0,
+    data: filteredQueries,
+    total: hasFeedback ? (filteredQueries?.length ?? 0) : (data?.total ?? 0),
     error,
     isLoading,
     mutate,

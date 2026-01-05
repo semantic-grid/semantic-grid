@@ -1403,15 +1403,23 @@ const Page = withPageAuthRequired(
           headerName: "Date",
           width: 190,
           sortable: true,
-          renderCell: (params) =>
-            new Date(params.value as string).toLocaleString(),
+          renderCell: (params) => {
+            // Show blank for group rows (session headers)
+            if (params.rowNode.type === "group") return null;
+            return params.value
+              ? new Date(params.value as string).toLocaleString()
+              : "-";
+          },
         },
         {
           field: "user",
           headerName: "User",
           width: 200,
           sortable: true,
-          renderCell: (params) => params.value || "Unknown",
+          renderCell: (params) => {
+            if (params.rowNode.type === "group") return null;
+            return params.value || "Unknown";
+          },
         },
         {
           field: "original_intent",
@@ -1419,17 +1427,20 @@ const Page = withPageAuthRequired(
           flex: 0.3,
           minWidth: 200,
           sortable: false,
-          renderCell: (params) => (
-            <Box
-              sx={{
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {params.value || "-"}
-            </Box>
-          ),
+          renderCell: (params) => {
+            if (params.rowNode.type === "group") return null;
+            return (
+              <Box
+                sx={{
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {params.value || "-"}
+              </Box>
+            );
+          },
         },
         {
           field: "sql",
@@ -1437,27 +1448,31 @@ const Page = withPageAuthRequired(
           flex: 0.4,
           minWidth: 250,
           sortable: false,
-          renderCell: (params) => (
-            <Box
-              sx={{
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-                fontFamily: "monospace",
-                fontSize: "0.75rem",
-              }}
-            >
-              {params.value || "-"}
-            </Box>
-          ),
+          renderCell: (params) => {
+            if (params.rowNode.type === "group") return null;
+            return (
+              <Box
+                sx={{
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                  fontFamily: "monospace",
+                  fontSize: "0.75rem",
+                }}
+              >
+                {params.value || "-"}
+              </Box>
+            );
+          },
         },
         {
           field: "rating",
           headerName: "Rating",
           width: 150,
           sortable: true,
-          renderCell: (params) =>
-            params.value != null ? (
+          renderCell: (params) => {
+            if (params.rowNode.type === "group") return null;
+            return params.value != null ? (
               <Rating
                 size="small"
                 value={params.value}
@@ -1465,7 +1480,8 @@ const Page = withPageAuthRequired(
                 precision={1}
                 readOnly
               />
-            ) : null,
+            ) : null;
+          },
         },
       ],
       [],

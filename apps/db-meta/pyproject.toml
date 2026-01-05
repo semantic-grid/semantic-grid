@@ -115,7 +115,7 @@ exclude = [
     "tests",
     "examples"
 ]
-line-length = 88
+line-length = 99
 
 [tool.ruff.lint]
 fixable = ["ALL"]
@@ -123,12 +123,12 @@ unfixable = []
 select = ["E", "F", "I"]
 
 [tool.black]
-line-length = 88
+line-length = 99
 target-version = ['py312']  # Adjust based on your Python versions
 
 [tool.isort]
 profile = "black"
-line_length = 88
+line_length = 99
 
 [dependency-groups]
 dev = [

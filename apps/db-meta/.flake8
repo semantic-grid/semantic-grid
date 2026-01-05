@@ -1,6 +1,6 @@
 [flake8]
-# Match Black's default line length
-max-line-length = 88
+# Match Black's line length setting
+max-line-length = 99
 exclude = .venv,.git,__pycache__,build,dist
 # Adjust based on Black's compatibility
 ignore = E203, W503
