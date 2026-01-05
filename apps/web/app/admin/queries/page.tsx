@@ -1628,8 +1628,8 @@ const Page = withPageAuthRequired(
             groupingColDef={
               groupBySession
                 ? {
-                    headerName: "Session",
-                    width: 250,
+                    headerName: "Session / Query",
+                    width: 500,
                   }
                 : undefined
             }

@@ -157,18 +157,23 @@ export const useQueryExplorer = (
   search?: string,
   hasFeedback: boolean = false,
 ) => {
-  const fetcher = ([url, limit, offset, search]: [
+  // When filtering by feedback, fetch all data (up to 1000) since we filter client-side
+  // and need to paginate the filtered results, not the raw results
+  const effectiveLimit = hasFeedback ? 1000 : limit;
+  const effectiveOffset = hasFeedback ? 0 : offset;
+
+  const fetcher = ([url, fetchLimit, fetchOffset, searchParam]: [
     string,
     number,
     number,
     string | undefined,
   ]) => {
     const params = new URLSearchParams({
-      limit: String(limit),
-      offset: String(offset),
+      limit: String(fetchLimit),
+      offset: String(fetchOffset),
     });
-    if (search) {
-      params.set("search", search);
+    if (searchParam) {
+      params.set("search", searchParam);
     }
     return fetch(`${url}?${params.toString()}`).then((res) => {
       if (res.ok) return res.json();
@@ -177,7 +182,12 @@ export const useQueryExplorer = (
   };
 
   const { data, error, isLoading, mutate } = useSWR<QueryExplorerResponse>(
-    ["/api/apegpt/admin/query-explorer", limit, offset, search],
+    [
+      "/api/apegpt/admin/query-explorer",
+      effectiveLimit,
+      effectiveOffset,
+      search,
+    ],
     fetcher,
     {
       shouldRetryOnError: false,
@@ -191,13 +201,19 @@ export const useQueryExplorer = (
   );
 
   // Filter by rating on frontend if hasFeedback is enabled
-  const filteredQueries = hasFeedback
+  // Then apply client-side pagination to the filtered results
+  const allFilteredQueries = hasFeedback
     ? data?.queries?.filter((q) => q.rating != null)
     : data?.queries;
 
+  // Apply client-side pagination when filtering by feedback
+  const paginatedQueries = hasFeedback
+    ? allFilteredQueries?.slice(offset, offset + limit)
+    : allFilteredQueries;
+
   return {
-    data: filteredQueries,
-    total: hasFeedback ? (filteredQueries?.length ?? 0) : (data?.total ?? 0),
+    data: paginatedQueries,
+    total: hasFeedback ? (allFilteredQueries?.length ?? 0) : (data?.total ?? 0),
     error,
     isLoading,
     mutate,
