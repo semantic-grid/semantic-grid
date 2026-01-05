@@ -834,20 +834,20 @@ const RequestDetailDrawer = ({
             <FormControlLabel
               control={
                 <Switch
-                  checked={isFixed}
-                  onChange={(e) => setIsFixed(e.target.checked)}
-                />
-              }
-              label="Is Fixed"
-            />
-            <FormControlLabel
-              control={
-                <Switch
                   checked={needsFixing}
                   onChange={(e) => setNeedsFixing(e.target.checked)}
                 />
               }
               label="Needs Fixing"
+            />
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={isFixed}
+                  onChange={(e) => setIsFixed(e.target.checked)}
+                />
+              }
+              label="Is Fixed"
             />
           </Box>
           <TextField
@@ -1136,7 +1136,7 @@ const Page = withPageAuthRequired(
           field: "request",
           headerName: "Request",
           flex: 1,
-          minWidth: 300,
+          minWidth: 200,
           sortable: true,
           renderCell: (params) => {
             const request = params.value as string;
@@ -1187,6 +1187,14 @@ const Page = withPageAuthRequired(
           width: 60,
           sortable: true,
           renderCell: (params) => (params.value ? <Check /> : null),
+        },
+        {
+          field: "needs_fixing",
+          headerName: "To Fix",
+          width: 60,
+          sortable: true,
+          renderCell: (params) =>
+            (params.row as any).needs_fixing ? <Check /> : null,
         },
         {
           field: "is_fixed",
