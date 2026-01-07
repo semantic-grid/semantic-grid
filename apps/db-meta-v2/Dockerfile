@@ -9,29 +9,31 @@ ENV UV_LINK_MODE=copy \
     UV_PYTHON_DOWNLOADS=0 \
     UV_NO_DEV=1
 
-ARG PROJECT_DIR=apps/db-meta-v2
+# Replicate repo structure so relative paths work
+WORKDIR /build
 
-WORKDIR /app
+# Copy sg-models first (needed for dependency resolution)
+COPY packages/sg-models /build/packages/sg-models
+
+# Copy project files
+COPY apps/db-meta-v2/pyproject.toml apps/db-meta-v2/uv.lock /build/apps/db-meta-v2/
 
 # Install dependencies with uv cache
+WORKDIR /build/apps/db-meta-v2
 RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=bind,source=${PROJECT_DIR}/uv.lock,target=uv.lock \
-    --mount=type=bind,source=${PROJECT_DIR}/pyproject.toml,target=pyproject.toml \
-    --mount=type=bind,source=packages/sg-models,target=packages/sg-models \
     uv sync --frozen --no-install-project
 
-# Copy the project into the image
-COPY ${PROJECT_DIR}/pyproject.toml ${PROJECT_DIR}/uv.lock /app/
-COPY ${PROJECT_DIR}/src /app/src
-COPY packages/sg-models /app/packages/sg-models
+# Copy source code
+COPY apps/db-meta-v2/src /build/apps/db-meta-v2/src
 
-# Sync the project
+# Sync the project (installs the project itself)
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen
 
 FROM python:3.13-slim-bookworm
 
-COPY --from=builder --chown=nobody:nogroup /app /app
+# Copy built app
+COPY --from=builder --chown=nobody:nogroup /build/apps/db-meta-v2 /app
 
 # Copy resource packages
 ENV RESOURCES_DIR=/app/packages/resources
