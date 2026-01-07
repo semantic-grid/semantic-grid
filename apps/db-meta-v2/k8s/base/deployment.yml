@@ -26,6 +26,9 @@ spec:
                 name: db-meta-v2
             - secretRef:
                 name: semantic-grid-db-meta # Existing db-meta secret (full name, not managed by this kustomize)
+          volumeMounts:
+            - name: providers-data
+              mountPath: /data/providers
           resources:
             requests:
               memory: "256Mi"
@@ -45,6 +48,10 @@ spec:
               port: 8000
             initialDelaySeconds: 5
             periodSeconds: 10
+      volumes:
+        - name: providers-data
+          persistentVolumeClaim:
+            claimName: db-meta-v2-providers
 ---
 apiVersion: v1
 kind: Service
