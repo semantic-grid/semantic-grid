@@ -4,6 +4,7 @@ import urllib.parse
 from functools import lru_cache
 
 from sqlalchemy import Engine, create_engine, text
+from trino.auth import BasicAuthentication
 
 from db_meta_v2.config import get_settings
 
@@ -101,10 +102,21 @@ def get_engine(database_url: str | None = None) -> Engine:
 
     if dialect == "trino":
         # Trino-specific configuration
-        engine_kwargs["connect_args"] = {
+        # Extract username/password from URL for BasicAuthentication
+        parsed = urllib.parse.urlparse(normalized_url)
+        username = urllib.parse.unquote(parsed.username) if parsed.username else None
+        password = urllib.parse.unquote(parsed.password) if parsed.password else None
+
+        connect_args = {
             "http_scheme": "https",
             "verify": False,  # TODO: Make configurable for production
         }
+
+        # Add BasicAuthentication if credentials are in the URL
+        if username and password:
+            connect_args["auth"] = BasicAuthentication(username, password)
+
+        engine_kwargs["connect_args"] = connect_args
 
     try:
         engine = create_engine(normalized_url, **engine_kwargs)

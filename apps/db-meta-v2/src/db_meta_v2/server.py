@@ -1,8 +1,25 @@
 """FastMCP server for db-meta-v2."""
 
+import logging
+
 from fastmcp import FastMCP
 from starlette.requests import Request
 from starlette.responses import JSONResponse
+
+
+class HealthCheckFilter(logging.Filter):
+    """Filter out health check requests from uvicorn access logs."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        message = record.getMessage()
+        # Filter out GET /health requests
+        if "GET /health" in message:
+            return False
+        return True
+
+
+# Apply filter to uvicorn access logger
+logging.getLogger("uvicorn.access").addFilter(HealthCheckFilter())
 
 from db_meta_v2.config import get_settings
 from db_meta_v2.tools.database import (
