@@ -18,6 +18,12 @@ from db_meta_v2.tools.domain import (
     _domain_skip,
     _domain_status,
 )
+from db_meta_v2.tools.generation import (
+    _get_data,
+    _get_result,
+    _run_sql,
+    _validate_sql,
+)
 from db_meta_v2.tools.onboarding import (
     _onboarding_approve,
     _onboarding_bulk_approve,
@@ -112,6 +118,12 @@ query_feedback = mcp.tool()(_query_feedback)
 query_add_rule = mcp.tool()(_query_add_rule)
 query_list_examples = mcp.tool()(_query_list_examples)
 query_list_rules = mcp.tool()(_query_list_rules)
+
+# Register SQL generation tools (main entry points)
+get_data = mcp.tool()(_get_data)
+run_sql = mcp.tool()(_run_sql)
+validate_sql = mcp.tool()(_validate_sql)
+get_result = mcp.tool()(_get_result)
 
 
 def main():
