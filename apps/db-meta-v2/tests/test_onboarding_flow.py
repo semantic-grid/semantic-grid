@@ -106,15 +106,17 @@ class TestOnboardingStart:
 
     @pytest.mark.asyncio
     async def test_start_already_started(self, temp_providers_dir, mock_db_connection):
-        """Test starting when already started (without force)."""
+        """Test starting when already started (without force) - idempotent behavior."""
         # First start
         await _onboarding_start(provider_id="test-provider")
 
-        # Try to start again without force
+        # Try to start again without force - should return success (idempotent)
         result = await _onboarding_start(provider_id="test-provider")
 
-        assert result["started"] is False
-        assert "already started" in result["error"].lower()
+        # Idempotent: returns started=True with already_in_progress flag
+        assert result["started"] is True
+        assert result["already_in_progress"] is True
+        assert "already in progress" in result["message"].lower()
 
     @pytest.mark.asyncio
     async def test_start_force_cleans_up(

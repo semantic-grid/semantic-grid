@@ -475,6 +475,18 @@ async def _domain_approve(
     if state is None:
         return {"error": "Onboarding not started."}
 
+    # Idempotency check: if already approved and no new content, return success
+    if state.domain_model_approved and content is None:
+        settings = get_settings()
+        domain_file = Path(settings.providers_dir) / provider_id / "domain_model.md"
+        return {
+            "approved": True,
+            "provider_id": provider_id,
+            "file": str(domain_file),
+            "phase": state.phase.value,
+            "message": "Domain model was already approved.",
+        }
+
     # Use provided content or pending content
     final_content = content or state.pending_domain_model
 

@@ -240,15 +240,29 @@ async def _onboarding_start(provider_id: str | None = None, force: bool = False)
         settings = get_settings()
         provider_id = settings.provider_id
 
-    # Check if already started
+    # Check if already started - return current status instead of error
+    # This makes the tool idempotent and avoids ChatGPT retrying
     existing = load_state(provider_id)
     if existing is not None and not force:
+        # Load schema to get progress
+        schema = load_schema_descriptions(provider_id)
+        tables_described = 0
+        if schema:
+            counts = schema.count_by_status()
+            tables_described = counts.get("approved", 0) + counts.get("skipped", 0)
+
         return {
-            "started": False,
+            "started": True,  # Already started = success (idempotent)
+            "already_in_progress": True,
             "provider_id": provider_id,
-            "error": f"Onboarding already started (phase: {existing.phase.value}). "
-            "Use onboarding_status to check progress, onboarding_reset to clear state, "
-            "or pass force=True to restart from scratch.",
+            "phase": existing.phase.value,
+            "dialect": existing.dialect_detected,
+            "tables_total": existing.tables_total,
+            "tables_described": tables_described,
+            "message": f"Onboarding already in progress (phase: {existing.phase.value}). "
+            "Use onboarding_status for details, onboarding_reset to clear, "
+            "or force=True to restart.",
+            "next_action": existing.next_action(),
         }
 
     # If force=True, clean up existing state and schema files
