@@ -22,6 +22,8 @@ from db_meta_v2.tools.generation import (
     _get_data,
     _get_result,
     _run_sql,
+    _test_elicitation,
+    _test_sampling,
     _validate_sql,
 )
 from db_meta_v2.tools.onboarding import (
@@ -124,6 +126,8 @@ get_data = mcp.tool()(_get_data)
 run_sql = mcp.tool()(_run_sql)
 validate_sql = mcp.tool()(_validate_sql)
 get_result = mcp.tool()(_get_result)
+test_elicitation = mcp.tool()(_test_elicitation)
+test_sampling = mcp.tool()(_test_sampling)
 
 
 def main():
