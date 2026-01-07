@@ -144,7 +144,7 @@ def get_tables(
             return table_name
 
         if dialect == "trino" and catalog and schema:
-            # For Trino, use raw SQL to query tables from catalog.schema
+            # For Trino with both catalog and schema, query directly
             with engine.connect() as conn:
                 result = conn.execute(text(f"SHOW TABLES FROM {catalog}.{schema}"))
                 table_names = [row[0] for row in result.fetchall()]
@@ -159,6 +159,34 @@ def get_tables(
                             "full_name": make_full_name(name),
                         }
                     )
+        elif dialect == "trino" and catalog:
+            # For Trino with catalog only, iterate all schemas in that catalog
+            with engine.connect() as conn:
+                # Get schemas in this catalog
+                schema_result = conn.execute(text(f"SHOW SCHEMAS FROM {catalog}"))
+                schemas = [row[0] for row in schema_result.fetchall()]
+                schemas = [s for s in schemas if s not in ("information_schema",)]
+
+                for schema_name in schemas:
+                    try:
+                        table_result = conn.execute(
+                            text(f"SHOW TABLES FROM {catalog}.{schema_name}")
+                        )
+                        table_names = [row[0] for row in table_result.fetchall()]
+
+                        for name in table_names:
+                            tables.append(
+                                {
+                                    "name": name,
+                                    "schema": schema_name,
+                                    "catalog": catalog,
+                                    "type": "table",
+                                    "full_name": f"{catalog}.{schema_name}.{name}",
+                                }
+                            )
+                    except Exception:
+                        # Skip schemas that error
+                        continue
         else:
             # Use SQLAlchemy inspector for other databases
             inspector = inspect(engine)

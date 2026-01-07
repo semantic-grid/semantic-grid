@@ -1,14 +1,13 @@
 """Tests for onboarding flow - start, discover, reset."""
 
 import tempfile
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 from sg_models import OnboardingPhase
 
 from db_meta_v2.onboarding.schema_store import get_schema_file_path
-from db_meta_v2.onboarding.state import create_initial_state, load_state, save_state
+from db_meta_v2.onboarding.state import load_state
 from db_meta_v2.tools.onboarding import (
     _onboarding_discover,
     _onboarding_reset,
