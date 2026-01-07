@@ -322,3 +322,172 @@ def add_rule(provider_id: str, rule: str) -> dict:
         }
     else:
         return {"added": False, "error": result["error"]}
+
+
+# =============================================================================
+# Bulk Import Functions
+# =============================================================================
+
+
+def import_instructions_from_legacy(provider_id: str, yaml_content: str) -> dict:
+    """Import instructions from legacy format YAML.
+
+    Legacy format:
+        version: 1.0.0
+        profiles:
+            wh_v2:
+                - "rule 1"
+                - "rule 2"
+
+    Args:
+        provider_id: Provider identifier
+        yaml_content: YAML string in legacy format
+
+    Returns:
+        Dict with import status
+    """
+    try:
+        data = yaml.safe_load(yaml_content)
+
+        if not data or "profiles" not in data:
+            return {"imported": False, "error": "Invalid format: missing 'profiles' key"}
+
+        profiles = data.get("profiles", {})
+        all_rules = []
+
+        # Collect rules from all profiles
+        for profile_name, rules in profiles.items():
+            if isinstance(rules, list):
+                for rule in rules:
+                    if isinstance(rule, str) and rule.strip():
+                        all_rules.append(rule.strip())
+
+        if not all_rules:
+            return {"imported": False, "error": "No rules found in profiles"}
+
+        # Load existing or create new
+        instructions = load_instructions(provider_id)
+
+        # Add rules (avoiding duplicates)
+        added_count = 0
+        for rule in all_rules:
+            if rule not in instructions.rules:
+                instructions.add_rule(rule)
+                added_count += 1
+
+        result = save_instructions(instructions)
+
+        if result["saved"]:
+            return {
+                "imported": True,
+                "rules_found": len(all_rules),
+                "rules_added": added_count,
+                "rules_skipped": len(all_rules) - added_count,
+                "total_rules": len(instructions.rules),
+                "file_path": result["file_path"],
+            }
+        else:
+            return {"imported": False, "error": result["error"]}
+
+    except yaml.YAMLError as e:
+        return {"imported": False, "error": f"YAML parse error: {e}"}
+    except Exception as e:
+        return {"imported": False, "error": str(e)}
+
+
+def import_examples_from_legacy(provider_id: str, yaml_content: str) -> dict:
+    """Import examples from legacy format YAML.
+
+    Legacy format:
+        version: 1.0.0
+        profiles:
+            wh_v2:
+                examples:
+                    - request: "natural language"
+                      response: |
+                          SELECT ...
+                      db: wh_v2
+
+    Args:
+        provider_id: Provider identifier
+        yaml_content: YAML string in legacy format
+
+    Returns:
+        Dict with import status
+    """
+    try:
+        data = yaml.safe_load(yaml_content)
+
+        if not data or "profiles" not in data:
+            return {"imported": False, "error": "Invalid format: missing 'profiles' key"}
+
+        profiles = data.get("profiles", {})
+        all_examples = []
+
+        # Collect examples from all profiles
+        for profile_name, profile_data in profiles.items():
+            if isinstance(profile_data, dict):
+                examples = profile_data.get("examples", [])
+            elif isinstance(profile_data, list):
+                # Some formats have examples directly as list
+                examples = profile_data
+            else:
+                continue
+
+            for ex in examples:
+                if isinstance(ex, dict):
+                    request = ex.get("request", "").strip()
+                    response = ex.get("response", "").strip()
+                    if request and response:
+                        all_examples.append(
+                            {
+                                "natural_language": request,
+                                "sql": response,
+                                "profile": profile_name,
+                                "db": ex.get("db", profile_name),
+                            }
+                        )
+
+        if not all_examples:
+            return {"imported": False, "error": "No examples found in profiles"}
+
+        # Load existing or create new
+        examples_store = load_examples(provider_id)
+
+        # Check for duplicates by natural language
+        existing_nl = {e.natural_language for e in examples_store.examples}
+
+        added_count = 0
+        for ex in all_examples:
+            if ex["natural_language"] not in existing_nl:
+                example = QueryExample(
+                    id=str(uuid.uuid4())[:8],
+                    natural_language=ex["natural_language"],
+                    sql=ex["sql"],
+                    tables_used=[],
+                    tags=[ex.get("db", ""), ex.get("profile", "")],
+                    notes=f"Imported from legacy format (profile: {ex.get('profile', 'unknown')})",
+                    created_at=datetime.now(UTC),
+                )
+                examples_store.add_example(example)
+                existing_nl.add(ex["natural_language"])
+                added_count += 1
+
+        result = save_examples(examples_store)
+
+        if result["saved"]:
+            return {
+                "imported": True,
+                "examples_found": len(all_examples),
+                "examples_added": added_count,
+                "examples_skipped": len(all_examples) - added_count,
+                "total_examples": examples_store.count(),
+                "file_path": result["file_path"],
+            }
+        else:
+            return {"imported": False, "error": result["error"]}
+
+    except yaml.YAMLError as e:
+        return {"imported": False, "error": f"YAML parse error: {e}"}
+    except Exception as e:
+        return {"imported": False, "error": str(e)}

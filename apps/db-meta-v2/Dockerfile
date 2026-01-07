@@ -18,17 +18,17 @@ COPY packages/sg-models /build/packages/sg-models
 # Copy project files
 COPY apps/db-meta-v2/pyproject.toml apps/db-meta-v2/uv.lock /build/apps/db-meta-v2/
 
-# Install dependencies with uv cache
+# Install dependencies with uv cache (--no-editable to avoid .pth files with wrong paths)
 WORKDIR /build/apps/db-meta-v2
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-install-project
+    uv sync --frozen --no-install-project --no-editable
 
 # Copy source code
 COPY apps/db-meta-v2/src /build/apps/db-meta-v2/src
 
 # Sync the project (installs the project itself)
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen
+    uv sync --frozen --no-editable
 
 FROM python:3.13-slim-bookworm
 

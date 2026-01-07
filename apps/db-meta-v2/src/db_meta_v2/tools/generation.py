@@ -298,12 +298,25 @@ Steps:
 4. Include GROUP BY for aggregations
 5. Add ORDER BY and LIMIT
 
-After generating SQL, call run_sql(sql) to validate and execute.
+IMPORTANT: After generating SQL, you MUST call run_sql(sql) to execute it.
+Do NOT just show the SQL - the user wants DATA, not SQL code.
 
 Important:
 - Only use tables and columns from the schema
 - Follow any business rules provided
 - Default LIMIT to 100 if not specified""",
+            "guidance": {
+                "summary": "Generate SQL and execute it to return data.",
+                "next_steps": [
+                    "Generate SQL based on schema and intent",
+                    "Call run_sql(sql) to execute and get results",
+                    "Show the data to the user",
+                ],
+                "important": (
+                    "The user asked for DATA, not SQL. After generating SQL, "
+                    "you MUST call run_sql() to execute it and return the actual data."
+                ),
+            },
         }
 
     # ==========================================================================
@@ -571,6 +584,18 @@ async def _run_sql(
                 if skip_validation
                 else (explain_result.cost_tier.value if explain_result else "unknown")
             ),
+            "guidance": {
+                "summary": f"Query returned {result['rows_returned']} rows.",
+                "next_steps": [
+                    "Present the data in a clear table format",
+                    "Offer to refine the query if needed",
+                    "Suggest follow-up analyses",
+                ],
+                "suggested_response": (
+                    "Present the data above in a nice table format. "
+                    "Summarize key insights from the results."
+                ),
+            },
         }
 
     except Exception as e:

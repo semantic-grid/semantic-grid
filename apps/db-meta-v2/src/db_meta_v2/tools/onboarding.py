@@ -4,8 +4,19 @@ from sg_models import OnboardingPhase, TableDescriptionStatus
 
 from db_meta_v2.config import get_settings
 from db_meta_v2.db.connection import test_connection
-from db_meta_v2.db.introspection import get_columns, get_schemas, get_table_sample, get_tables
-from db_meta_v2.onboarding.ignore import load_ignore_patterns
+from db_meta_v2.db.introspection import (
+    get_catalogs,
+    get_columns,
+    get_schemas,
+    get_table_sample,
+    get_tables,
+)
+from db_meta_v2.onboarding.ignore import (
+    add_ignore_pattern,
+    import_ignore_patterns,
+    load_ignore_patterns,
+    remove_ignore_pattern,
+)
 from db_meta_v2.onboarding.schema_store import (
     create_initial_schema,
     get_next_pending_table,
@@ -19,6 +30,128 @@ from db_meta_v2.onboarding.state import (
     load_state,
     save_state,
 )
+
+
+def _build_status_guidance(state, tables_described: int) -> dict:
+    """Build phase-specific conversational guidance."""
+    from sg_models import OnboardingPhase
+
+    phase = state.phase
+    remaining = state.tables_total - tables_described
+
+    if phase == OnboardingPhase.INIT:
+        return {
+            "summary": "Schema discovery completed. Ready to describe tables.",
+            "next_steps": [
+                "Begin describing tables one by one",
+                "Or bulk-approve all tables with auto-generated descriptions",
+            ],
+            "suggested_response": (
+                f"I've discovered {state.tables_total} tables in your database. "
+                "Now let's add descriptions to help with SQL generation.\n\n"
+                "**Options:**\n"
+                "1. **One by one** - I'll show each table with sample data\n"
+                "2. **Bulk approve** - Auto-generate descriptions (editable later)\n\n"
+                "Which approach would you prefer?"
+            ),
+        }
+
+    elif phase == OnboardingPhase.SCHEMA:
+        if remaining > 0:
+            return {
+                "summary": f"Describing tables: {tables_described}/{state.tables_total} complete.",
+                "next_steps": [
+                    f"Continue describing remaining {remaining} tables",
+                    "Or bulk-approve remaining tables to move faster",
+                ],
+                "suggested_response": (
+                    f"**Progress: {tables_described}/{state.tables_total} tables described**\n\n"
+                    f"You have {remaining} tables left. Would you like to:\n"
+                    "- Continue with the next table?\n"
+                    "- Bulk-approve the remaining tables?\n\n"
+                    "Just say 'next' to continue or 'bulk approve' to finish quickly."
+                ),
+            }
+        else:
+            return {
+                "summary": "All tables described! Ready for business rules phase.",
+                "next_steps": [
+                    "Add business rules for SQL generation",
+                    "Add query examples",
+                ],
+                "suggested_response": (
+                    "Excellent! All tables are now described. "
+                    "Let's move to the **business rules phase**.\n\n"
+                    "Business rules help me generate accurate SQL. For example:\n"
+                    "- 'Always filter by is_active = true unless asked otherwise'\n"
+                    "- 'Use UTC timezone for all date comparisons'\n\n"
+                    "Do you have any rules to add? Or would you like to add examples?"
+                ),
+            }
+
+    elif phase == OnboardingPhase.DOMAIN:
+        return {
+            "summary": "In domain/business rules phase.",
+            "next_steps": [
+                "Add business rules that guide SQL generation",
+                "Import existing rules from a file",
+                "Move to adding query examples",
+            ],
+            "suggested_response": (
+                "We're now in the **business rules phase**.\n\n"
+                f"Current status: {state.rules_captured} rules captured\n\n"
+                "You can:\n"
+                "- Tell me rules in plain English (e.g., 'amounts are stored in cents')\n"
+                "- Upload a file with existing rules for me to import\n"
+                "- Move on to adding query examples\n\n"
+                "What would you like to do?"
+            ),
+        }
+
+    elif phase == OnboardingPhase.TRAINING:
+        return {
+            "summary": "In query training phase.",
+            "next_steps": [
+                "Add query examples (natural language → SQL pairs)",
+                "Import existing examples from a file",
+                "Test SQL generation",
+            ],
+            "suggested_response": (
+                "We're in the **query training phase**.\n\n"
+                f"Current status: {state.examples_added} examples added\n\n"
+                "You can:\n"
+                "- Give me example queries to learn from\n"
+                "- Upload a file with existing query examples\n"
+                "- Test SQL generation with a natural language question\n\n"
+                "What would you like to do?"
+            ),
+        }
+
+    elif phase == OnboardingPhase.COMPLETE:
+        return {
+            "summary": "Onboarding complete! Ready for SQL generation.",
+            "next_steps": [
+                "Generate SQL from natural language queries",
+                "Add more examples to improve accuracy",
+                "Refine business rules based on feedback",
+            ],
+            "suggested_response": (
+                "🎉 **Onboarding is complete!**\n\n"
+                f"Summary:\n"
+                f"- {state.tables_total} tables documented\n"
+                f"- {state.rules_captured} business rules\n"
+                f"- {state.examples_added} query examples\n\n"
+                "I'm ready to help generate SQL queries. "
+                "Just describe what data you're looking for in plain English!"
+            ),
+        }
+
+    # Default fallback
+    return {
+        "summary": f"Current phase: {phase.value}",
+        "next_steps": ["Check status and continue onboarding"],
+        "suggested_response": f"Currently in {phase.value} phase. How can I help?",
+    }
 
 
 async def _onboarding_status(provider_id: str | None = None) -> dict:
@@ -43,6 +176,21 @@ async def _onboarding_status(provider_id: str | None = None) -> dict:
             "phase": None,
             "progress": 0,
             "next_action": "Call onboarding_start to begin onboarding",
+            # Conversational guidance
+            "guidance": {
+                "summary": "Database onboarding has not started yet.",
+                "next_steps": [
+                    "Start the onboarding process to discover and document database schema",
+                ],
+                "suggested_response": (
+                    "I see that onboarding hasn't started yet for this database. "
+                    "Would you like me to begin the onboarding process? This will:\n"
+                    "1. Connect to your database and verify access\n"
+                    "2. Discover all schemas and tables\n"
+                    "3. Guide you through describing each table\n\n"
+                    "Just say 'yes' or 'start onboarding' to begin!"
+                ),
+            },
         }
 
     # Load schema descriptions to get counts
@@ -51,6 +199,9 @@ async def _onboarding_status(provider_id: str | None = None) -> dict:
     if schema:
         counts = schema.count_by_status()
         tables_described = counts.get("approved", 0) + counts.get("skipped", 0)
+
+    # Build phase-specific guidance
+    guidance = _build_status_guidance(state, tables_described)
 
     return {
         "provider_id": provider_id,
@@ -64,24 +215,26 @@ async def _onboarding_status(provider_id: str | None = None) -> dict:
         "examples_added": state.examples_added,
         "started_at": state.started_at.isoformat() if state.started_at else None,
         "last_updated_at": state.last_updated_at.isoformat() if state.last_updated_at else None,
+        "guidance": guidance,
     }
 
 
-async def _onboarding_start(provider_id: str | None = None) -> dict:
+async def _onboarding_start(provider_id: str | None = None, force: bool = False) -> dict:
     """Start onboarding flow for a provider.
 
     This will:
     1. Test database connection
     2. Detect SQL dialect
-    3. Discover schemas and tables
-    4. Create initial schema_descriptions.yaml with all tables
-    5. Create onboarding state for progress tracking
+    3. Show ignore patterns for user review before discovery
+
+    After reviewing patterns, call onboarding_discover to run schema discovery.
 
     Args:
         provider_id: Provider ID. Uses configured default if not provided.
+        force: If True, restart onboarding even if already started
 
     Returns:
-        Onboarding initialization result
+        Connection result with ignore patterns for review
     """
     if provider_id is None:
         settings = get_settings()
@@ -89,12 +242,13 @@ async def _onboarding_start(provider_id: str | None = None) -> dict:
 
     # Check if already started
     existing = load_state(provider_id)
-    if existing is not None:
+    if existing is not None and not force:
         return {
             "started": False,
             "provider_id": provider_id,
             "error": f"Onboarding already started (phase: {existing.phase.value}). "
-            "Use onboarding_status to check progress or onboarding_reset to start over.",
+            "Use onboarding_status to check progress, onboarding_reset to clear state, "
+            "or pass force=True to restart from scratch.",
         }
 
     # Test connection
@@ -106,46 +260,150 @@ async def _onboarding_start(provider_id: str | None = None) -> dict:
             "error": f"Database connection failed: {conn_result['error']}",
         }
 
-    # Create initial state
+    # Create initial state (INIT phase - before discovery)
     state = create_initial_state(provider_id)
     state.database_url_configured = True
     state.connection_verified = True
     state.dialect_detected = conn_result["dialect"]
     state.phase = OnboardingPhase.INIT
 
+    # Save state
+    save_result = save_state(state)
+    if not save_result["saved"]:
+        return {
+            "started": False,
+            "provider_id": provider_id,
+            "error": f"Failed to save state: {save_result['error']}",
+        }
+
+    # Load ignore patterns for review
+    ignore = load_ignore_patterns(provider_id)
+    patterns_display = "\n".join([f"  - {p}" for p in ignore.patterns[:20]])
+    if len(ignore.patterns) > 20:
+        patterns_display += f"\n  ... and {len(ignore.patterns) - 20} more"
+
+    return {
+        "started": True,
+        "provider_id": provider_id,
+        "dialect": state.dialect_detected,
+        "phase": state.phase.value,
+        "ignore_patterns": ignore.patterns,
+        "pattern_count": len(ignore.patterns),
+        "next_action": "Review ignore patterns, then call onboarding_discover to proceed",
+        "guidance": {
+            "summary": f"Connected to {state.dialect_detected} database. Review ignore patterns.",
+            "next_steps": [
+                "Review the ignore patterns below",
+                "Add patterns with onboarding_add_ignore_pattern",
+                "Remove patterns with onboarding_remove_ignore_pattern",
+                "Import from file with onboarding_import_ignore_patterns",
+                "When ready, call onboarding_discover to scan the database",
+            ],
+            "suggested_response": (
+                f"**Database connected successfully!**\n\n"
+                f"- **Dialect:** {state.dialect_detected}\n\n"
+                "Before scanning the database, please review the **ignore patterns**. "
+                "These filter out system schemas, internal tables, etc.\n\n"
+                f"**Current patterns ({len(ignore.patterns)}):**\n{patterns_display}\n\n"
+                "You can:\n"
+                "- **Add** a pattern: tell me what to ignore (e.g., 'ignore test_*')\n"
+                "- **Remove** a pattern: tell me what to include\n"
+                "- **Upload** a file with patterns for me to import\n\n"
+                "When you're happy with the patterns, say **'discover'** to scan the database."
+            ),
+        },
+    }
+
+
+async def _onboarding_discover(provider_id: str | None = None) -> dict:
+    """Run schema discovery after reviewing ignore patterns.
+
+    This will:
+    1. Discover catalogs (for Trino 3-level hierarchy)
+    2. Discover schemas and tables
+    3. Create initial schema_descriptions.yaml with all tables
+
+    Args:
+        provider_id: Provider ID. Uses configured default if not provided.
+
+    Returns:
+        Discovery result with counts
+    """
+    if provider_id is None:
+        settings = get_settings()
+        provider_id = settings.provider_id
+
+    # Load state - must be in INIT phase
+    state = load_state(provider_id)
+    if state is None:
+        return {
+            "discovered": False,
+            "error": "Onboarding not started. Call onboarding_start first.",
+        }
+
+    if state.phase != OnboardingPhase.INIT:
+        return {
+            "discovered": False,
+            "error": f"Already discovered (phase: {state.phase.value}). "
+            "Use onboarding_start with force=True to rediscover.",
+            "phase": state.phase.value,
+        }
+
     # Load ignore patterns
     ignore = load_ignore_patterns(provider_id)
 
-    # Discover schemas (filter out ignored schemas)
+    # Discover catalogs first (for Trino 3-level hierarchy)
     try:
-        schemas = get_schemas()
-        schemas = ignore.filter_schemas(schemas)
-        state.schemas_discovered = schemas
+        catalogs = get_catalogs()
+        catalogs = ignore.filter_catalogs(catalogs)
+        state.catalogs_discovered = [c for c in catalogs if c is not None]
+    except Exception:
+        catalogs = [None]
+        state.catalogs_discovered = []
+
+    # Discover schemas for each catalog
+    all_schemas = []
+    try:
+        for catalog in catalogs:
+            schemas = get_schemas(catalog=catalog)
+            schemas = ignore.filter_schemas(schemas)
+            for schema in schemas:
+                if schema is not None:
+                    all_schemas.append(schema)
+        state.schemas_discovered = all_schemas
     except Exception:
         state.schemas_discovered = []
 
-    # Discover tables with columns
+    # Discover tables with columns (iterate catalog -> schema -> table)
     all_tables = []
     try:
-        for schema in state.schemas_discovered:
-            tables = get_tables(schema)
-            tables = ignore.filter_tables(tables)
+        for catalog in catalogs:
+            schemas = get_schemas(catalog=catalog)
+            schemas = ignore.filter_schemas(schemas)
 
-            for t in tables:
-                # Get columns for each table
-                try:
-                    columns = get_columns(t["name"], schema)
-                except Exception:
-                    columns = []
+            for schema in schemas:
+                if schema is None:
+                    continue
 
-                all_tables.append(
-                    {
-                        "name": t["name"],
-                        "schema": schema,
-                        "full_name": t["full_name"],
-                        "columns": columns,
-                    }
-                )
+                tables = get_tables(schema=schema, catalog=catalog)
+                tables = ignore.filter_tables(tables)
+
+                for t in tables:
+                    # Get columns for each table
+                    try:
+                        columns = get_columns(t["name"], schema=schema, catalog=catalog)
+                    except Exception:
+                        columns = []
+
+                    all_tables.append(
+                        {
+                            "name": t["name"],
+                            "schema": schema,
+                            "catalog": catalog,
+                            "full_name": t["full_name"],
+                            "columns": columns,
+                        }
+                    )
 
         state.tables_discovered = [t["full_name"] for t in all_tables]
         state.tables_total = len(all_tables)
@@ -162,7 +420,7 @@ async def _onboarding_start(provider_id: str | None = None) -> dict:
     schema_result = save_schema_descriptions(schema)
     if not schema_result["saved"]:
         return {
-            "started": False,
+            "discovered": False,
             "provider_id": provider_id,
             "error": f"Failed to save schema descriptions: {schema_result['error']}",
         }
@@ -174,31 +432,196 @@ async def _onboarding_start(provider_id: str | None = None) -> dict:
     save_result = save_state(state)
     if not save_result["saved"]:
         return {
-            "started": False,
+            "discovered": False,
             "provider_id": provider_id,
             "error": f"Failed to save state: {save_result['error']}",
         }
 
     return {
-        "started": True,
+        "discovered": True,
         "provider_id": provider_id,
         "dialect": state.dialect_detected,
+        "catalogs_found": len(state.catalogs_discovered),
         "schemas_found": len(state.schemas_discovered),
         "tables_found": state.tables_total,
         "phase": state.phase.value,
         "schema_file": schema_result["file_path"],
         "next_action": state.next_action(),
+        "guidance": {
+            "summary": (
+                f"Discovered {state.tables_total} tables "
+                f"across {len(state.schemas_discovered)} schemas"
+                + (
+                    f" in {len(state.catalogs_discovered)} catalogs"
+                    if state.catalogs_discovered
+                    else ""
+                )
+                + "."
+            ),
+            "next_steps": [
+                "Describe tables one by one with onboarding_next",
+                "Or bulk-approve all tables with onboarding_bulk_approve",
+            ],
+            "suggested_response": (
+                "**Discovery complete!**\n\n"
+                "I found:\n"
+                + (
+                    f"- **Catalogs:** {len(state.catalogs_discovered)}\n"
+                    if state.catalogs_discovered
+                    else ""
+                )
+                + f"- **Schemas:** {len(state.schemas_discovered)}\n"
+                f"- **Tables:** {state.tables_total}\n\n"
+                "Now let's add descriptions to your tables. This helps me understand "
+                "your data and generate accurate SQL queries.\n\n"
+                "**How would you like to proceed?**\n"
+                "1. **One by one** - I'll show each table with sample data\n"
+                "2. **Bulk approve** - Auto-generate descriptions (editable later)\n\n"
+                "Which option works best for you?"
+            ),
+        },
     }
 
 
-async def _onboarding_reset(provider_id: str | None = None) -> dict:
-    """Reset onboarding state for a provider.
+async def _onboarding_add_ignore_pattern(pattern: str, provider_id: str | None = None) -> dict:
+    """Add an ignore pattern for schema discovery.
 
-    This deletes onboarding progress but keeps schema_descriptions.yaml.
-    Use with caution.
+    Patterns support wildcards: * matches any characters, ? matches single character.
+    Examples: 'test_*', 'tmp_*', '*_backup', 'pg_*'
+
+    Args:
+        pattern: Pattern to add (e.g., 'test_*', 'staging_*')
+        provider_id: Provider ID. Uses configured default if not provided.
+
+    Returns:
+        Result with updated pattern list
+    """
+    if provider_id is None:
+        settings = get_settings()
+        provider_id = settings.provider_id
+
+    result = add_ignore_pattern(provider_id, pattern)
+
+    if result.get("added"):
+        patterns_display = "\n".join([f"  - {p}" for p in result["patterns"][:15]])
+        if len(result["patterns"]) > 15:
+            patterns_display += f"\n  ... and {len(result['patterns']) - 15} more"
+
+        return {
+            **result,
+            "guidance": {
+                "summary": f"Added pattern '{pattern}'. Total: {result['total_patterns']}.",
+                "next_steps": [
+                    "Add more patterns if needed",
+                    "Remove patterns with onboarding_remove_ignore_pattern",
+                    "Call onboarding_discover when ready",
+                ],
+                "suggested_response": (
+                    f"✓ **Added:** `{pattern}`\n\n"
+                    f"**Current patterns ({result['total_patterns']}):**\n"
+                    f"{patterns_display}\n\n"
+                    "Add more patterns, or say **'discover'** when ready to scan."
+                ),
+            },
+        }
+    return result
+
+
+async def _onboarding_remove_ignore_pattern(pattern: str, provider_id: str | None = None) -> dict:
+    """Remove an ignore pattern.
+
+    Args:
+        pattern: Pattern to remove
+        provider_id: Provider ID. Uses configured default if not provided.
+
+    Returns:
+        Result with updated pattern list
+    """
+    if provider_id is None:
+        settings = get_settings()
+        provider_id = settings.provider_id
+
+    result = remove_ignore_pattern(provider_id, pattern)
+
+    if result.get("removed"):
+        patterns_display = "\n".join([f"  - {p}" for p in result["patterns"][:15]])
+        if len(result["patterns"]) > 15:
+            patterns_display += f"\n  ... and {len(result['patterns']) - 15} more"
+
+        return {
+            **result,
+            "guidance": {
+                "summary": f"Removed pattern '{pattern}'. Total: {result['total_patterns']}.",
+                "next_steps": [
+                    "Remove more patterns if needed",
+                    "Add patterns with onboarding_add_ignore_pattern",
+                    "Call onboarding_discover when ready",
+                ],
+                "suggested_response": (
+                    f"✓ **Removed:** `{pattern}`\n\n"
+                    f"**Current patterns ({result['total_patterns']}):**\n"
+                    f"{patterns_display}\n\n"
+                    "Make more changes, or say **'discover'** when ready to scan."
+                ),
+            },
+        }
+    return result
+
+
+async def _onboarding_import_ignore_patterns(
+    patterns: list[str], replace: bool = False, provider_id: str | None = None
+) -> dict:
+    """Import ignore patterns from a list (LLM extracts from uploaded file).
+
+    The LLM should read the uploaded file and extract patterns, then pass
+    them as a list to this tool.
+
+    Args:
+        patterns: List of patterns to import
+        replace: If True, replace all patterns. If False, merge with existing.
+        provider_id: Provider ID. Uses configured default if not provided.
+
+    Returns:
+        Result with updated pattern list
+    """
+    if provider_id is None:
+        settings = get_settings()
+        provider_id = settings.provider_id
+
+    result = import_ignore_patterns(provider_id, patterns, replace=replace)
+
+    if result.get("imported"):
+        patterns_display = "\n".join([f"  - {p}" for p in result["patterns"][:15]])
+        if len(result["patterns"]) > 15:
+            patterns_display += f"\n  ... and {len(result['patterns']) - 15} more"
+
+        return {
+            **result,
+            "guidance": {
+                "summary": f"Imported patterns. Total: {result['total_patterns']}.",
+                "next_steps": [
+                    "Review the patterns",
+                    "Add/remove patterns as needed",
+                    "Call onboarding_discover when ready",
+                ],
+                "suggested_response": (
+                    f"✓ **Imported patterns!**\n\n"
+                    f"**Current patterns ({result['total_patterns']}):**\n"
+                    f"{patterns_display}\n\n"
+                    "Review the patterns above. Make changes if needed, "
+                    "or say **'discover'** when ready to scan."
+                ),
+            },
+        }
+    return result
+
+
+async def _onboarding_reset(provider_id: str | None = None, hard: bool = False) -> dict:
+    """Reset onboarding state for a provider.
 
     Args:
         provider_id: Provider ID. Uses configured default if not provided.
+        hard: If True, also delete schema_descriptions.yaml (full reset)
 
     Returns:
         Reset result
@@ -208,19 +631,42 @@ async def _onboarding_reset(provider_id: str | None = None) -> dict:
         provider_id = settings.provider_id
 
     result = delete_state(provider_id)
+    schema_deleted = False
 
-    if result["deleted"]:
-        return {
-            "reset": True,
-            "provider_id": provider_id,
-            "message": "Onboarding state deleted. Call onboarding_start to begin again.",
-            "note": "schema_descriptions.yaml was preserved. Delete manually if needed.",
-        }
+    # Hard reset: also delete schema descriptions
+    if hard:
+        from db_meta_v2.onboarding.schema_store import get_schema_file_path
+
+        schema_file = get_schema_file_path(provider_id)
+        if schema_file.exists():
+            try:
+                schema_file.unlink()
+                schema_deleted = True
+            except Exception:
+                pass
+
+    if result["deleted"] or schema_deleted:
+        if hard:
+            return {
+                "reset": True,
+                "provider_id": provider_id,
+                "state_deleted": result["deleted"],
+                "schema_deleted": schema_deleted,
+                "message": "Hard reset complete. All onboarding data deleted. "
+                "Call onboarding_start to begin fresh.",
+            }
+        else:
+            return {
+                "reset": True,
+                "provider_id": provider_id,
+                "message": "Onboarding state deleted. Call onboarding_start to begin again.",
+                "note": "schema_descriptions.yaml was preserved. Use hard=True for full reset.",
+            }
     else:
         return {
             "reset": False,
             "provider_id": provider_id,
-            "error": result["error"],
+            "error": result.get("error", "Nothing to reset"),
         }
 
 
@@ -274,6 +720,24 @@ async def _onboarding_next(provider_id: str | None = None) -> dict:
             "phase": state.phase.value,
             "tables_approved": counts.get("approved", 0),
             "tables_skipped": counts.get("skipped", 0),
+            "guidance": {
+                "summary": "Schema phase complete! All tables documented.",
+                "next_steps": [
+                    "Add business rules for SQL generation",
+                    "Add query examples",
+                    "Import existing rules/examples from files",
+                ],
+                "suggested_response": (
+                    "🎉 **Schema phase complete!**\n\n"
+                    f"- {counts.get('approved', 0)} tables described\n"
+                    f"- {counts.get('skipped', 0)} tables skipped\n\n"
+                    "Now let's move to **business rules**. These help generate accurate SQL.\n\n"
+                    "Examples of business rules:\n"
+                    "- 'Prices are stored in cents, divide by 100 for dollars'\n"
+                    "- 'Always exclude deleted records unless asked'\n\n"
+                    "Do you have any rules to add? Or import from a file?"
+                ),
+            },
         }
 
     # Update current table in state
@@ -282,7 +746,12 @@ async def _onboarding_next(provider_id: str | None = None) -> dict:
 
     # Get sample data
     try:
-        sample = get_table_sample(next_table.name, next_table.schema_name, limit=3)
+        sample = get_table_sample(
+            next_table.name,
+            schema=next_table.schema_name,
+            catalog=next_table.catalog_name,
+            limit=3,
+        )
     except Exception:
         sample = []
 
@@ -290,6 +759,11 @@ async def _onboarding_next(provider_id: str | None = None) -> dict:
     counts = schema.count_by_status()
     described = counts.get("approved", 0) + counts.get("skipped", 0)
     remaining = counts.get("pending", 0)
+
+    # Format columns for display
+    columns_display = "\n".join([f"  - {c.name} ({c.type})" for c in next_table.columns[:15]])
+    if len(next_table.columns) > 15:
+        columns_display += f"\n  ... and {len(next_table.columns) - 15} more columns"
 
     return {
         "table_name": next_table.full_name,
@@ -306,6 +780,24 @@ async def _onboarding_next(provider_id: str | None = None) -> dict:
         "instruction": "Review this table and provide a description. "
         "Then call onboarding_approve with your description, "
         "or onboarding_skip to skip this table.",
+        "guidance": {
+            "summary": f"Table {next_table.full_name} ({len(next_table.columns)} columns).",
+            "next_steps": [
+                "Review the table structure and sample data",
+                "Provide a description using onboarding_approve",
+                "Or skip with onboarding_skip if not needed",
+            ],
+            "suggested_response": (
+                f"**Table {described + 1} of {state.tables_total}: `{next_table.full_name}`**\n\n"
+                f"**Columns ({len(next_table.columns)}):**\n{columns_display}\n\n"
+                f"**Sample data:** {len(sample)} rows shown above\n\n"
+                "Based on the structure and data, this table appears to store "
+                "[your analysis here].\n\n"
+                "**Suggested description:** [generate based on columns/data]\n\n"
+                "Does this look correct? Say 'approve' to save, 'skip' to skip, "
+                "or provide your own description."
+            ),
+        },
     }
 
 
@@ -361,6 +853,7 @@ async def _onboarding_approve(
 
     counts = schema.count_by_status()
     tables_described = counts.get("approved", 0) + counts.get("skipped", 0)
+    remaining = state.tables_total - tables_described
 
     return {
         "approved": True,
@@ -369,6 +862,26 @@ async def _onboarding_approve(
         "tables_total": state.tables_total,
         "progress": f"{tables_described}/{state.tables_total}",
         "next_action": "Call onboarding_next for the next table.",
+        "guidance": {
+            "summary": f"Table description saved. {remaining} tables remaining.",
+            "next_steps": [
+                "Continue to the next table",
+                "Or bulk-approve remaining tables",
+            ]
+            if remaining > 0
+            else [
+                "Move to business rules phase",
+                "Add query examples",
+            ],
+            "suggested_response": (
+                f"✓ **Saved!** Progress: {tables_described}/{state.tables_total}\n\n"
+                + (
+                    f"{remaining} tables to go. Ready for the next one?"
+                    if remaining > 0
+                    else "All tables are now described! Let's move to business rules."
+                )
+            ),
+        },
     }
 
 
@@ -420,6 +933,7 @@ async def _onboarding_skip(provider_id: str | None = None) -> dict:
 
     counts = schema.count_by_status()
     tables_described = counts.get("approved", 0) + counts.get("skipped", 0)
+    remaining = state.tables_total - tables_described
 
     return {
         "skipped": True,
@@ -427,6 +941,25 @@ async def _onboarding_skip(provider_id: str | None = None) -> dict:
         "tables_described": tables_described,
         "tables_total": state.tables_total,
         "next_action": "Call onboarding_next for the next table.",
+        "guidance": {
+            "summary": f"Table skipped. {remaining} tables remaining.",
+            "next_steps": [
+                "Continue to the next table",
+                "Or bulk-approve remaining tables",
+            ]
+            if remaining > 0
+            else [
+                "Move to business rules phase",
+            ],
+            "suggested_response": (
+                f"↷ **Skipped.** Progress: {tables_described}/{state.tables_total}\n\n"
+                + (
+                    f"{remaining} tables to go. Ready for the next one?"
+                    if remaining > 0
+                    else "All tables processed! Let's move to business rules."
+                )
+            ),
+        },
     }
 
 
@@ -529,4 +1062,23 @@ async def _onboarding_bulk_approve(
         "message": f"Bulk approved {approved_count} tables. "
         "Descriptions can be edited in schema_descriptions.yaml.",
         "schema_file": schema_result.get("file_path"),
+        "guidance": {
+            "summary": f"Bulk approved {approved_count} tables. Schema phase complete!",
+            "next_steps": [
+                "Add business rules for SQL generation",
+                "Add query examples",
+                "Import existing rules/examples from files",
+            ],
+            "suggested_response": (
+                f"✓ **Bulk approved {approved_count} tables!**\n\n"
+                "Auto-generated descriptions have been saved. You can refine them later "
+                "by editing the `schema_descriptions.yaml` file.\n\n"
+                "Now let's move to **business rules**. These help me generate accurate SQL.\n\n"
+                "Examples:\n"
+                "- 'Prices are stored in cents'\n"
+                "- 'Always exclude soft-deleted records'\n"
+                "- 'User IDs in table X reference table Y'\n\n"
+                "Do you have any rules to add? Or would you like to import from a file?"
+            ),
+        },
     }

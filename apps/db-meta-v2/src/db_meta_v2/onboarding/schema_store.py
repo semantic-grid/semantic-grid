@@ -93,7 +93,7 @@ def create_initial_schema(
     Args:
         provider_id: Provider identifier
         dialect: SQL dialect
-        tables: List of table dicts with 'name', 'schema', 'full_name', 'columns'
+        tables: List of table dicts with 'name', 'schema', 'catalog', 'full_name', 'columns'
 
     Returns:
         New SchemaDescriptions instance
@@ -115,6 +115,7 @@ def create_initial_schema(
             TableDescription(
                 name=t.get("name", ""),
                 schema_name=t.get("schema", "public"),
+                catalog_name=t.get("catalog"),  # 3-level hierarchy support
                 full_name=t.get("full_name"),
                 description=None,
                 status=TableDescriptionStatus.PENDING,
@@ -178,3 +179,99 @@ def get_next_pending_table(schema: SchemaDescriptions) -> TableDescription | Non
         if table.status == TableDescriptionStatus.PENDING:
             return table
     return None
+
+
+def rediscover_schema(
+    existing_schema: SchemaDescriptions,
+    discovered_tables: list[dict],
+) -> dict:
+    """Merge discovered tables with existing schema descriptions.
+
+    This preserves existing approved/skipped descriptions while:
+    - Adding new tables as pending
+    - Marking removed tables as 'removed' status
+    - Detecting new columns in existing tables
+
+    Args:
+        existing_schema: Current schema descriptions
+        discovered_tables: List of table dicts from database introspection
+
+    Returns:
+        Dict with merge results and updated schema
+    """
+    # Build lookup of existing tables by full_name
+    existing_by_name = {t.full_name: t for t in existing_schema.tables}
+    discovered_by_name = {t.get("full_name"): t for t in discovered_tables}
+
+    # Track changes
+    added_tables = []
+    removed_tables = []
+    tables_with_new_columns = []
+
+    # Check for new tables
+    for full_name, table_data in discovered_by_name.items():
+        if full_name not in existing_by_name:
+            # New table - add as pending
+            columns = []
+            for col in table_data.get("columns", []):
+                columns.append(
+                    ColumnDescription(
+                        name=col.get("name", ""),
+                        type=col.get("type"),
+                        description=None,
+                    )
+                )
+
+            new_table = TableDescription(
+                name=table_data.get("name", ""),
+                schema_name=table_data.get("schema", "public"),
+                catalog_name=table_data.get("catalog"),  # 3-level hierarchy support
+                full_name=full_name,
+                description=None,
+                status=TableDescriptionStatus.PENDING,
+                columns=columns,
+            )
+            existing_schema.tables.append(new_table)
+            added_tables.append(full_name)
+        else:
+            # Existing table - check for new columns
+            existing_table = existing_by_name[full_name]
+            existing_cols = {c.name for c in existing_table.columns}
+            new_cols = []
+
+            for col in table_data.get("columns", []):
+                if col.get("name") not in existing_cols:
+                    new_cols.append(col.get("name"))
+                    existing_table.columns.append(
+                        ColumnDescription(
+                            name=col.get("name", ""),
+                            type=col.get("type"),
+                            description=None,
+                        )
+                    )
+
+            if new_cols:
+                tables_with_new_columns.append(
+                    {
+                        "table": full_name,
+                        "new_columns": new_cols,
+                    }
+                )
+
+    # Check for removed tables (mark as removed but don't delete)
+    for full_name, existing_table in existing_by_name.items():
+        if full_name not in discovered_by_name:
+            if existing_table.status != TableDescriptionStatus.REMOVED:
+                existing_table.status = TableDescriptionStatus.REMOVED
+                removed_tables.append(full_name)
+
+    # Update generated timestamp
+    existing_schema.generated_at = datetime.now(UTC)
+
+    return {
+        "added_tables": added_tables,
+        "removed_tables": removed_tables,
+        "tables_with_new_columns": tables_with_new_columns,
+        "total_tables": len(existing_schema.tables),
+        "schema": existing_schema,
+    }

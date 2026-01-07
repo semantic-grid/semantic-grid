@@ -8,6 +8,7 @@ from db_meta_v2.config import get_settings
 from db_meta_v2.tools.database import (
     _describe_table,
     _detect_dialect,
+    _list_catalogs,
     _list_schemas,
     _list_tables,
     _sample_table,
@@ -29,15 +30,21 @@ from db_meta_v2.tools.generation import (
     _validate_sql,
 )
 from db_meta_v2.tools.onboarding import (
+    _onboarding_add_ignore_pattern,
     _onboarding_approve,
     _onboarding_bulk_approve,
+    _onboarding_discover,
+    _onboarding_import_ignore_patterns,
     _onboarding_next,
+    _onboarding_remove_ignore_pattern,
     _onboarding_reset,
     _onboarding_skip,
     _onboarding_start,
     _onboarding_status,
 )
 from db_meta_v2.tools.training import (
+    _import_examples,
+    _import_instructions,
     _query_add_rule,
     _query_approve,
     _query_feedback,
@@ -104,6 +111,7 @@ get_config = mcp.tool()(_get_config)
 # Register database tools
 test_connection = mcp.tool()(_test_connection)
 detect_dialect = mcp.tool()(_detect_dialect)
+list_catalogs = mcp.tool()(_list_catalogs)
 list_schemas = mcp.tool()(_list_schemas)
 list_tables = mcp.tool()(_list_tables)
 describe_table = mcp.tool()(_describe_table)
@@ -116,6 +124,10 @@ get_connection_dialect = mcp.tool()(_get_connection_dialect)
 # Register onboarding tools
 onboarding_status = mcp.tool()(_onboarding_status)
 onboarding_start = mcp.tool()(_onboarding_start)
+onboarding_add_ignore_pattern = mcp.tool()(_onboarding_add_ignore_pattern)
+onboarding_remove_ignore_pattern = mcp.tool()(_onboarding_remove_ignore_pattern)
+onboarding_import_ignore_patterns = mcp.tool()(_onboarding_import_ignore_patterns)
+onboarding_discover = mcp.tool()(_onboarding_discover)
 onboarding_reset = mcp.tool()(_onboarding_reset)
 onboarding_next = mcp.tool()(_onboarding_next)
 onboarding_approve = mcp.tool()(_onboarding_approve)
@@ -136,6 +148,10 @@ query_feedback = mcp.tool()(_query_feedback)
 query_add_rule = mcp.tool()(_query_add_rule)
 query_list_examples = mcp.tool()(_query_list_examples)
 query_list_rules = mcp.tool()(_query_list_rules)
+
+# Register import tools (bulk import from legacy format)
+import_instructions = mcp.tool()(_import_instructions)
+import_examples = mcp.tool()(_import_examples)
 
 # Register SQL generation tools (main entry points)
 get_data = mcp.tool()(_get_data)

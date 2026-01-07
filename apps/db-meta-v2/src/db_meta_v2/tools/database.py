@@ -1,7 +1,13 @@
 """Database MCP tools."""
 
 from db_meta_v2.db.connection import detect_dialect_from_url, test_connection
-from db_meta_v2.db.introspection import get_columns, get_schemas, get_table_sample, get_tables
+from db_meta_v2.db.introspection import (
+    get_catalogs,
+    get_columns,
+    get_schemas,
+    get_table_sample,
+    get_tables,
+)
 
 
 async def _test_connection(database_url: str | None = None) -> dict:
@@ -32,46 +38,85 @@ async def _detect_dialect(database_url: str) -> dict:
     }
 
 
-async def _list_schemas(database_url: str | None = None) -> dict:
-    """List all schemas in the database.
+async def _list_catalogs(database_url: str | None = None) -> dict:
+    """List all catalogs in the database (Trino 3-level hierarchy).
 
     Args:
+        database_url: Optional database URL.
+
+    Returns:
+        List of catalog names
+    """
+    try:
+        catalogs = get_catalogs(database_url)
+        # Filter out None values for display
+        catalogs_list = [c for c in catalogs if c is not None]
+        return {
+            "catalogs": catalogs_list,
+            "count": len(catalogs_list),
+            "has_catalogs": len(catalogs_list) > 0,
+            "error": None,
+        }
+    except Exception as e:
+        return {
+            "catalogs": [],
+            "count": 0,
+            "has_catalogs": False,
+            "error": str(e),
+        }
+
+
+async def _list_schemas(catalog: str | None = None, database_url: str | None = None) -> dict:
+    """List all schemas in the database (or in a specific catalog for Trino).
+
+    Args:
+        catalog: Optional catalog name (for Trino 3-level hierarchy).
         database_url: Optional database URL.
 
     Returns:
         List of schema names
     """
     try:
-        schemas = get_schemas(database_url)
+        schemas = get_schemas(database_url, catalog=catalog)
+        # Filter out None values for display
+        schemas_list = [s for s in schemas if s is not None]
         return {
-            "schemas": schemas,
-            "count": len(schemas),
+            "schemas": schemas_list,
+            "count": len(schemas_list),
+            "catalog": catalog,
             "error": None,
         }
     except Exception as e:
         return {
             "schemas": [],
             "count": 0,
+            "catalog": catalog,
             "error": str(e),
         }
 
 
-async def _list_tables(schema: str | None = None, database_url: str | None = None) -> dict:
-    """List all tables in a schema.
+async def _list_tables(
+    schema: str | None = None,
+    catalog: str | None = None,
+    database_url: str | None = None,
+) -> dict:
+    """List all tables in a schema (and catalog for Trino).
 
     Args:
         schema: Schema name. If None, uses default schema.
+        catalog: Optional catalog name (for Trino 3-level hierarchy).
         database_url: Optional database URL.
 
     Returns:
-        List of table info
+        List of table info with fully qualified names
     """
     try:
-        tables = get_tables(schema, database_url)
+        tables = get_tables(schema=schema, catalog=catalog, database_url=database_url)
         return {
             "tables": tables,
             "count": len(tables),
             "schema": schema,
+            "catalog": catalog,
             "error": None,
         }
     except Exception as e:
@@ -79,29 +124,47 @@ async def _list_tables(schema: str | None = None, database_url: str | None = Non
             "tables": [],
             "count": 0,
             "schema": schema,
+            "catalog": catalog,
             "error": str(e),
         }
 
 
+def _make_full_name(table_name: str, schema: str | None, catalog: str | None) -> str:
+    """Build fully qualified table name."""
+    if catalog and schema:
+        return f"{catalog}.{schema}.{table_name}"
+    elif schema:
+        return f"{schema}.{table_name}"
+    return table_name
+
+
 async def _describe_table(
-    table_name: str, schema: str | None = None, database_url: str | None = None
+    table_name: str,
+    schema: str | None = None,
+    catalog: str | None = None,
+    database_url: str | None = None,
 ) -> dict:
     """Get detailed information about a table.
 
     Args:
         table_name: Name of the table
         schema: Schema name. If None, uses default schema.
+        catalog: Optional catalog name (for Trino 3-level hierarchy).
         database_url: Optional database URL.
 
     Returns:
         Table info including columns
     """
+    full_name = _make_full_name(table_name, schema, catalog)
     try:
-        columns = get_columns(table_name, schema, database_url)
+        columns = get_columns(
+            table_name, schema=schema, catalog=catalog, database_url=database_url
+        )
         return {
             "table_name": table_name,
             "schema": schema,
-            "full_name": f"{schema}.{table_name}" if schema else table_name,
+            "catalog": catalog,
+            "full_name": full_name,
             "columns": columns,
             "column_count": len(columns),
             "error": None,
@@ -110,7 +173,8 @@ async def _describe_table(
         return {
             "table_name": table_name,
             "schema": schema,
-            "full_name": f"{schema}.{table_name}" if schema else table_name,
+            "catalog": catalog,
+            "full_name": full_name,
             "columns": [],
             "column_count": 0,
             "error": str(e),
@@ -120,6 +184,7 @@ async def _describe_table(
 async def _sample_table(
     table_name: str,
     schema: str | None = None,
+    catalog: str | None = None,
     limit: int = 5,
     database_url: str | None = None,
 ) -> dict:
@@ -128,6 +193,7 @@ async def _sample_table(
     Args:
         table_name: Name of the table
         schema: Schema name. If None, uses default schema.
+        catalog: Optional catalog name (for Trino 3-level hierarchy).
         limit: Maximum rows to return (default 5, max 100)
         database_url: Optional database URL.
 
@@ -136,12 +202,21 @@ async def _sample_table(
     """
     # Enforce limit bounds
     limit = max(1, min(limit, 100))
+    full_name = _make_full_name(table_name, schema, catalog)
 
     try:
-        rows = get_table_sample(table_name, schema, limit, database_url)
+        rows = get_table_sample(
+            table_name,
+            schema=schema,
+            catalog=catalog,
+            limit=limit,
+            database_url=database_url,
+        )
         return {
             "table_name": table_name,
             "schema": schema,
+            "catalog": catalog,
+            "full_name": full_name,
             "rows": rows,
             "row_count": len(rows),
             "limit": limit,
@@ -151,6 +226,8 @@ async def _sample_table(
         return {
             "table_name": table_name,
             "schema": schema,
+            "catalog": catalog,
+            "full_name": full_name,
             "rows": [],
             "row_count": 0,
             "limit": limit,

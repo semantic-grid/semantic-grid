@@ -25,6 +25,7 @@ class TableDescriptionStatus(str, Enum):
     IN_PROGRESS = "in_progress"
     APPROVED = "approved"
     SKIPPED = "skipped"
+    REMOVED = "removed"  # Table no longer exists in database
 
 
 # =============================================================================
@@ -47,6 +48,9 @@ class TableDescription(BaseModel):
 
     name: str = Field(..., description="Table name (without schema)")
     schema_name: str = Field(default="public", description="Schema name", alias="schema")
+    catalog_name: str | None = Field(
+        default=None, description="Catalog name (for Trino 3-level hierarchy)", alias="catalog"
+    )
     full_name: str | None = Field(default=None, description="Fully qualified name")
     description: str | None = Field(default=None, description="Table description")
     status: TableDescriptionStatus = Field(
@@ -55,6 +59,14 @@ class TableDescription(BaseModel):
     columns: list[ColumnDescription] = Field(
         default_factory=list, description="Column descriptions"
     )
+
+    def get_full_name(self) -> str:
+        """Get the fully qualified table name."""
+        if self.full_name:
+            return self.full_name
+        if self.catalog_name:
+            return f"{self.catalog_name}.{self.schema_name}.{self.name}"
+        return f"{self.schema_name}.{self.name}"
 
 
 class SchemaDescriptions(BaseModel):
@@ -119,6 +131,9 @@ class OnboardingState(BaseModel):
     database_url_configured: bool = Field(default=False)
     connection_verified: bool = Field(default=False)
     dialect_detected: str | None = Field(default=None, description="Detected SQL dialect")
+    catalogs_discovered: list[str] = Field(
+        default_factory=list, description="Discovered catalogs (Trino 3-level hierarchy)"
+    )
     schemas_discovered: list[str] = Field(default_factory=list)
     tables_discovered: list[str] = Field(default_factory=list)
 

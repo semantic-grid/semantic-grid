@@ -7,64 +7,190 @@ from sqlalchemy import inspect, text
 from db_meta_v2.db.connection import DatabaseError, get_engine
 
 
-def get_schemas(database_url: str | None = None) -> list[str]:
-    """Get list of schemas in the database.
+def get_dialect(database_url: str | None = None) -> str:
+    """Get the SQL dialect for the database.
 
     Args:
         database_url: Optional database URL. If not provided, uses settings.
 
     Returns:
-        List of schema names
+        Dialect name (e.g., 'trino', 'clickhouse', 'postgresql')
     """
     try:
         engine = get_engine(database_url)
-        inspector = inspect(engine)
-        return inspector.get_schema_names()
+        return engine.dialect.name
+    except Exception as e:
+        raise DatabaseError(f"Failed to get dialect: {e}") from e
+
+
+def get_catalogs(database_url: str | None = None) -> list[str | None]:
+    """Get list of catalogs in the database.
+
+    For Trino: Queries all available catalogs via SHOW CATALOGS
+    For ClickHouse: Returns the database name from URL as single catalog
+    For PostgreSQL and others: Returns [None] (no catalog level)
+
+    Args:
+        database_url: Optional database URL. If not provided, uses settings.
+
+    Returns:
+        List of catalog names, or [None] if not applicable
+    """
+    try:
+        engine = get_engine(database_url)
+        dialect = engine.dialect.name.lower()
+
+        if dialect == "trino":
+            # Query all available catalogs in Trino
+            try:
+                with engine.connect() as conn:
+                    result = conn.execute(text("SHOW CATALOGS"))
+                    catalogs = [row[0] for row in result.fetchall()]
+                    # Filter out system catalogs
+                    catalogs = [c for c in catalogs if c not in ("system", "information_schema")]
+                    return catalogs if catalogs else [None]
+            except Exception:
+                # Fallback to extracting from URL if SHOW CATALOGS fails
+                url = engine.url
+                if url.database:
+                    parts = url.database.split("/")
+                    return [parts[0]]
+                return [None]
+        elif dialect == "clickhouse":
+            # For ClickHouse, the database acts as the catalog
+            url = engine.url
+            return [url.database] if url.database else [None]
+        else:
+            # PostgreSQL and others don't have catalog level
+            return [None]
+    except Exception as e:
+        raise DatabaseError(f"Failed to get catalogs: {e}") from e
+
+
+def get_schemas(database_url: str | None = None, catalog: str | None = None) -> list[str | None]:
+    """Get list of schemas in the database.
+
+    For Trino with catalog: Executes SHOW SCHEMAS FROM catalog
+    For others: Uses SQLAlchemy inspector
+
+    Args:
+        database_url: Optional database URL. If not provided, uses settings.
+        catalog: Optional catalog name (for Trino 3-level hierarchy)
+
+    Returns:
+        List of schema names, or [None] if not applicable
+    """
+    try:
+        engine = get_engine(database_url)
+        dialect = engine.dialect.name.lower()
+
+        if dialect == "trino" and catalog:
+            # Query schemas within the specific catalog
+            try:
+                with engine.connect() as conn:
+                    result = conn.execute(text(f"SHOW SCHEMAS FROM {catalog}"))
+                    schemas = [row[0] for row in result.fetchall()]
+                    # Filter out system schemas
+                    schemas = [s for s in schemas if s not in ("information_schema",)]
+                    return schemas if schemas else [None]
+            except Exception:
+                # Fallback to inspector if query fails
+                try:
+                    inspector = inspect(engine)
+                    return inspector.get_schema_names()
+                except Exception:
+                    return [None]
+        else:
+            # Use SQLAlchemy inspector for other databases
+            try:
+                inspector = inspect(engine)
+                return inspector.get_schema_names()
+            except Exception:
+                return [None]
     except Exception as e:
         raise DatabaseError(f"Failed to get schemas: {e}") from e
 
 
-def get_tables(schema: str | None = None, database_url: str | None = None) -> list[dict[str, Any]]:
+def get_tables(
+    schema: str | None = None,
+    catalog: str | None = None,
+    database_url: str | None = None,
+) -> list[dict[str, Any]]:
     """Get list of tables in a schema.
+
+    For Trino with catalog: Executes SHOW TABLES FROM catalog.schema
+    For others: Uses SQLAlchemy inspector
 
     Args:
         schema: Schema name. If None, uses default schema.
+        catalog: Optional catalog name (for Trino 3-level hierarchy)
         database_url: Optional database URL.
 
     Returns:
-        List of table info dicts with 'name', 'schema', 'type' keys
+        List of table info dicts with 'name', 'schema', 'catalog', 'type' keys
     """
     try:
         engine = get_engine(database_url)
-        inspector = inspect(engine)
+        dialect = engine.dialect.name
 
         tables = []
-        table_names = inspector.get_table_names(schema=schema)
-        for name in table_names:
-            tables.append(
-                {
-                    "name": name,
-                    "schema": schema,
-                    "type": "table",
-                    "full_name": f"{schema}.{name}" if schema else name,
-                }
-            )
 
-        # Also get views
-        try:
-            view_names = inspector.get_view_names(schema=schema)
-            for name in view_names:
+        # Build full_name based on hierarchy level
+        def make_full_name(table_name: str) -> str:
+            if catalog and schema:
+                return f"{catalog}.{schema}.{table_name}"
+            elif schema:
+                return f"{schema}.{table_name}"
+            return table_name
+
+        if dialect == "trino" and catalog and schema:
+            # For Trino, use raw SQL to query tables from catalog.schema
+            with engine.connect() as conn:
+                result = conn.execute(text(f"SHOW TABLES FROM {catalog}.{schema}"))
+                table_names = [row[0] for row in result.fetchall()]
+
+                for name in table_names:
+                    tables.append(
+                        {
+                            "name": name,
+                            "schema": schema,
+                            "catalog": catalog,
+                            "type": "table",
+                            "full_name": make_full_name(name),
+                        }
+                    )
+        else:
+            # Use SQLAlchemy inspector for other databases
+            inspector = inspect(engine)
+
+            table_names = inspector.get_table_names(schema=schema)
+            for name in table_names:
                 tables.append(
                     {
                         "name": name,
                         "schema": schema,
-                        "type": "view",
-                        "full_name": f"{schema}.{name}" if schema else name,
+                        "catalog": catalog,
+                        "type": "table",
+                        "full_name": make_full_name(name),
                     }
                 )
-        except Exception:
-            # Some databases don't support view introspection
-            pass
+
+            # Also get views
+            try:
+                view_names = inspector.get_view_names(schema=schema)
+                for name in view_names:
+                    tables.append(
+                        {
+                            "name": name,
+                            "schema": schema,
+                            "catalog": catalog,
+                            "type": "view",
+                            "full_name": make_full_name(name),
+                        }
+                    )
+            except Exception:
+                # Some databases don't support view introspection
+                pass
 
         return tables
     except Exception as e:
@@ -72,13 +198,20 @@ def get_tables(schema: str | None = None, database_url: str | None = None) -> li
 
 
 def get_columns(
-    table_name: str, schema: str | None = None, database_url: str | None = None
+    table_name: str,
+    schema: str | None = None,
+    catalog: str | None = None,
+    database_url: str | None = None,
 ) -> list[dict[str, Any]]:
     """Get column information for a table.
+
+    For Trino with catalog: Uses DESCRIBE catalog.schema.table
+    For others: Uses SQLAlchemy inspector
 
     Args:
         table_name: Name of the table
         schema: Schema name. If None, uses default schema.
+        catalog: Optional catalog name (for Trino 3-level hierarchy)
         database_url: Optional database URL.
 
     Returns:
@@ -86,8 +219,32 @@ def get_columns(
     """
     try:
         engine = get_engine(database_url)
-        inspector = inspect(engine)
+        dialect = engine.dialect.name.lower()
 
+        if dialect == "trino" and catalog and schema:
+            # For Trino, use DESCRIBE to get column info
+            try:
+                with engine.connect() as conn:
+                    result = conn.execute(text(f"DESCRIBE {catalog}.{schema}.{table_name}"))
+                    columns = []
+                    for row in result.fetchall():
+                        columns.append(
+                            {
+                                "name": row[0],
+                                "type": row[1],
+                                "nullable": True,  # Trino DESCRIBE doesn't show nullable
+                                "default": None,
+                                "primary_key": False,
+                                "comment": row[2] if len(row) > 2 else None,
+                            }
+                        )
+                    return columns
+            except Exception:
+                # Fallback to inspector
+                pass
+
+        # Use SQLAlchemy inspector for other databases or as fallback
+        inspector = inspect(engine)
         columns = inspector.get_columns(table_name, schema=schema)
 
         result = []
@@ -111,6 +268,7 @@ def get_columns(
 def get_table_sample(
     table_name: str,
     schema: str | None = None,
+    catalog: str | None = None,
     limit: int = 5,
     database_url: str | None = None,
 ) -> list[dict[str, Any]]:
@@ -119,6 +277,7 @@ def get_table_sample(
     Args:
         table_name: Name of the table
         schema: Schema name. If None, uses default schema.
+        catalog: Optional catalog name (for Trino 3-level hierarchy)
         limit: Maximum number of rows to return
         database_url: Optional database URL.
 
@@ -128,7 +287,13 @@ def get_table_sample(
     try:
         engine = get_engine(database_url)
 
-        full_name = f"{schema}.{table_name}" if schema else table_name
+        # Build full table name based on hierarchy
+        if catalog and schema:
+            full_name = f"{catalog}.{schema}.{table_name}"
+        elif schema:
+            full_name = f"{schema}.{table_name}"
+        else:
+            full_name = table_name
 
         # Use parameterized limit to prevent SQL injection
         # Note: table name should be validated before this point

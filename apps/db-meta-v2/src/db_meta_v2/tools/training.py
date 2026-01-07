@@ -32,11 +32,14 @@ async def _query_status() -> dict:
 
     feedback_counts = feedback_log.count_by_type()
 
+    rules_count = len(instructions.rules)
+    examples_count = examples.count()
+
     return {
         "provider_id": provider_id,
         "phase": state.phase.value if state else "unknown",
         "examples": {
-            "total": examples.count(),
+            "total": examples_count,
         },
         "feedback": {
             "total": len(feedback_log.feedback),
@@ -45,10 +48,31 @@ async def _query_status() -> dict:
             "corrections": len(feedback_log.get_corrections()),
         },
         "rules": {
-            "approved": len(instructions.rules),
+            "approved": rules_count,
             "pending": len(instructions.get_pending_candidates()),
         },
         "next_action": "Use query_generate to create a SQL query from natural language",
+        "guidance": {
+            "summary": f"Training status: {rules_count} rules, {examples_count} examples.",
+            "next_steps": [
+                "Add business rules with query_add_rule",
+                "Add query examples with query_approve",
+                "Test SQL generation with query_generate",
+                "Import rules/examples from files",
+            ],
+            "suggested_response": (
+                f"**Training Status**\n\n"
+                f"- **Business rules:** {rules_count}\n"
+                f"- **Query examples:** {examples_count}\n"
+                f"- **Feedback entries:** {len(feedback_log.feedback)}\n\n"
+                "You can:\n"
+                "- Add rules: Tell me business rules in plain English\n"
+                "- Add examples: Give me natural language → SQL pairs\n"
+                "- Test: Ask me to generate SQL for a question\n"
+                "- Import: Upload files with existing rules or examples\n\n"
+                "What would you like to do?"
+            ),
+        },
     }
 
 
@@ -171,12 +195,28 @@ async def _query_approve(
             tables_involved=tables_used,
         )
 
+        total = result["total_examples"]
         return {
             "status": "approved",
             "example_id": result["example_id"],
-            "total_examples": result["total_examples"],
+            "total_examples": total,
             "file_path": result["file_path"],
-            "message": f"Example added successfully. Total examples: {result['total_examples']}",
+            "message": f"Example added successfully. Total examples: {total}",
+            "guidance": {
+                "summary": f"Example saved. You now have {total} examples.",
+                "next_steps": [
+                    "Add more examples to improve accuracy",
+                    "Test SQL generation with a new question",
+                    "Add business rules if needed",
+                ],
+                "suggested_response": (
+                    f"✓ **Example saved!** Total: {total} examples\n\n"
+                    "More examples help me generate better SQL. Would you like to:\n"
+                    "- Add another example?\n"
+                    "- Test SQL generation with a question?\n"
+                    "- Add some business rules?"
+                ),
+            },
         }
     else:
         return {
@@ -292,11 +332,27 @@ async def _query_add_rule(
     result = add_rule(provider_id, rule)
 
     if result.get("added"):
+        total = result["total_rules"]
         return {
             "status": "added",
-            "total_rules": result["total_rules"],
+            "total_rules": total,
             "file_path": result["file_path"],
-            "message": f"Rule added. Total rules: {result['total_rules']}",
+            "message": f"Rule added. Total rules: {total}",
+            "guidance": {
+                "summary": f"Rule saved. You now have {total} business rules.",
+                "next_steps": [
+                    "Add more rules",
+                    "Add query examples",
+                    "Test SQL generation",
+                ],
+                "suggested_response": (
+                    f"✓ **Rule added!** Total: {total} rules\n\n"
+                    "Would you like to:\n"
+                    "- Add another rule?\n"
+                    "- Move on to adding query examples?\n"
+                    "- Test SQL generation with a question?"
+                ),
+            },
         }
     else:
         return {
@@ -371,4 +427,173 @@ async def _query_list_rules() -> dict:
             }
             for c in instructions.get_pending_candidates()
         ],
+    }
+
+
+# =============================================================================
+# Import Tools (LLM-assisted)
+# =============================================================================
+
+
+async def _import_instructions(rules: list[str]) -> dict:
+    """Import business rules/instructions.
+
+    The LLM should read the uploaded file (any format), extract, dedupe,
+    and distill the rules, then pass them as a list to this tool.
+
+    Args:
+        rules: List of business rule strings extracted by the LLM
+
+    Returns:
+        Dict with import status and counts
+    """
+    settings = get_settings()
+    provider_id = settings.provider_id
+
+    if not rules:
+        return {"status": "error", "error": "No rules provided"}
+
+    instructions = load_instructions(provider_id)
+    existing_rules = set(instructions.rules)
+
+    added_count = 0
+    skipped_count = 0
+
+    for rule in rules:
+        rule = rule.strip()
+        if rule and rule not in existing_rules:
+            instructions.add_rule(rule)
+            existing_rules.add(rule)
+            added_count += 1
+        else:
+            skipped_count += 1
+
+    from db_meta_v2.training.store import save_instructions
+
+    result = save_instructions(instructions)
+
+    if result["saved"]:
+        total = len(instructions.rules)
+        return {
+            "status": "success",
+            "provider_id": provider_id,
+            "rules_added": added_count,
+            "rules_skipped": skipped_count,
+            "total_rules": total,
+            "file_path": result["file_path"],
+            "message": (
+                f"Imported {added_count} rules "
+                f"({skipped_count} duplicates skipped). "
+                f"Total rules: {total}"
+            ),
+            "guidance": {
+                "summary": f"Imported {added_count} rules. Total: {total}.",
+                "next_steps": [
+                    "Review imported rules with query_list_rules",
+                    "Add more rules manually",
+                    "Import query examples",
+                    "Test SQL generation",
+                ],
+                "suggested_response": (
+                    f"✓ **Imported {added_count} rules!**\n"
+                    f"({skipped_count} duplicates skipped)\n\n"
+                    f"Total rules: {total}\n\n"
+                    "Would you like to:\n"
+                    "- Review the imported rules?\n"
+                    "- Import query examples as well?\n"
+                    "- Test SQL generation with a question?"
+                ),
+            },
+        }
+    else:
+        return {"status": "error", "error": result.get("error", "Save failed")}
+
+
+async def _import_examples(examples: list[dict]) -> dict:
+    """Import query examples.
+
+    The LLM should read the uploaded file (any format), extract and dedupe
+    examples, then pass them as a list to this tool.
+
+    Each example should be a dict with:
+        - natural_language: The natural language query
+        - sql: The SQL query
+        - tables_used: Optional list of table names
+        - tags: Optional list of tags
+
+    Args:
+        examples: List of example dicts extracted by the LLM
+
+    Returns:
+        Dict with import status and counts
+    """
+    settings = get_settings()
+    provider_id = settings.provider_id
+
+    if not examples:
+        return {"status": "error", "error": "No examples provided"}
+
+    examples_store = load_examples(provider_id)
+    existing_nl = {e.natural_language for e in examples_store.examples}
+
+    added_count = 0
+    skipped_count = 0
+
+    for ex in examples:
+        nl = ex.get("natural_language", "").strip()
+        sql = ex.get("sql", "").strip()
+
+        if not nl or not sql:
+            skipped_count += 1
+            continue
+
+        if nl in existing_nl:
+            skipped_count += 1
+            continue
+
+        result = add_example(
+            provider_id=provider_id,
+            natural_language=nl,
+            sql=sql,
+            tables_used=ex.get("tables_used"),
+            tags=ex.get("tags"),
+            notes=ex.get("notes", "Imported via LLM extraction"),
+        )
+
+        if result.get("added"):
+            existing_nl.add(nl)
+            added_count += 1
+        else:
+            skipped_count += 1
+
+    total = load_examples(provider_id).count()
+    return {
+        "status": "success",
+        "provider_id": provider_id,
+        "examples_added": added_count,
+        "examples_skipped": skipped_count,
+        "total_examples": total,
+        "message": (
+            f"Imported {added_count} examples "
+            f"({skipped_count} duplicates/invalid skipped). "
+            f"Total examples: {total}"
+        ),
+        "guidance": {
+            "summary": f"Imported {added_count} examples. Total: {total}.",
+            "next_steps": [
+                "Review imported examples with query_list_examples",
+                "Add more examples manually",
+                "Import business rules",
+                "Test SQL generation",
+            ],
+            "suggested_response": (
+                f"✓ **Imported {added_count} examples!**\n"
+                f"({skipped_count} duplicates/invalid skipped)\n\n"
+                f"Total examples: {total}\n\n"
+                "Would you like to:\n"
+                "- Review the imported examples?\n"
+                "- Import business rules as well?\n"
+                "- Test SQL generation with a question?"
+            ),
+        },
     }
