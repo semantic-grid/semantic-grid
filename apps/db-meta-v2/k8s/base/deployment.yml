@@ -25,7 +25,7 @@ spec:
             - configMapRef:
                 name: db-meta-v2
             - secretRef:
-                name: db-meta # Reuse existing db-meta secret
+                name: semantic-grid-db-meta # Existing db-meta secret (full name, not managed by this kustomize)
           resources:
             requests:
               memory: "256Mi"
