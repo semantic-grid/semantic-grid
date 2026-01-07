@@ -1,0 +1,46 @@
+[project]
+name = "db-meta-v2"
+version = "0.1.0"
+description = "MCP server for database semantics and query intelligence"
+requires-python = ">=3.13"
+dependencies = [
+    "fastmcp>=2.0.0",
+    "pydantic-ai>=0.1.0",
+    "pydantic-graph>=0.1.0",
+    "pydantic-settings>=2.0.0",
+    "sqlalchemy>=2.0.0",
+    "sqlglot>=26.0.0",
+    "trino>=0.330.0",
+    "clickhouse-sqlalchemy>=0.3.0",
+    "psycopg2-binary>=2.9.0",
+    "pyyaml>=6.0.0",
+    "sg-models",
+]
+
+[tool.uv.sources]
+sg-models = { path = "../../packages/sg-models", editable = true }
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+    "ruff>=0.8.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 99
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

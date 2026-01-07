@@ -1,0 +1,38 @@
+version: 1.0.0
+dialect: trino
+description: SQL dialect instructions for Trino/Presto
+
+rules:
+  # Syntax
+  - "Generated SQL must be compatible with Trino SQL dialect."
+  - "Always use fully-qualified table names: catalog.schema.table_name"
+  - "Use CAST(value AS type) for type casting, not :: operator."
+
+  # JSON
+  - |
+    JSON field extraction in Trino:
+    - json_extract_scalar(column, '$.field') for scalar values
+    - json_extract(column, '$.field') for nested objects
+    Do NOT use PostgreSQL-style ->> or -> operators.
+
+  # Arrays
+  - "Array indexing is 1-based, not 0-based."
+  - "Use transform(array, x -> expr) for array mapping."
+  - "Use cardinality(array) for array length."
+  - "Use unnest(array) to expand arrays into rows."
+
+  # Date/Time
+  - "Use date_diff('unit', ts1, ts2) for timestamp differences."
+  - "Use INTERVAL '1' DAY syntax for date arithmetic."
+  - "Do not subtract timestamps directly."
+
+  # Aggregation
+  - "Use approx_distinct() instead of COUNT(DISTINCT) for large datasets."
+  - "Use stddev_pop() or stddev_samp() for standard deviation."
+
+  # Performance
+  - |
+    For large tables, always:
+    1. Add LIMIT to DISTINCT queries
+    2. Use partition pruning with date filters
+    3. Avoid ORDER BY without LIMIT

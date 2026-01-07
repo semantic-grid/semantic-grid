@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "db-meta-v2": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "/path/to/semantic-grid/apps/db-meta-v2",
+        "python",
+        "-m",
+        "db_meta_v2"
+      ],
+      "env": {
+        "DATABASE_URL": "trino://user:password@host:8443/catalog/schema",
+        "PROVIDER_ID": "my-provider"
+      }
+    }
+  }
+}

@@ -1,0 +1,36 @@
+# .dbmetaignore - Patterns for schemas and tables to skip during onboarding
+# Uses fnmatch/glob patterns (*, ?, [seq], [!seq])
+
+# PostgreSQL system schemas
+information_schema
+pg_catalog
+pg_toast
+pg_temp_*
+
+# ClickHouse system schemas
+system
+INFORMATION_SCHEMA
+
+# Trino/Presto internal
+$internal
+
+# MySQL system schemas
+mysql
+performance_schema
+sys
+
+# Django internal tables
+django_*
+auth_*
+authtoken_*
+
+# Common migration tables
+alembic_version
+flyway_*
+schema_migrations
+__migration*
+
+# Common internal/temp tables
+_*
+tmp_*
+temp_*

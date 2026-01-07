@@ -1,0 +1,37 @@
+version: 1.0.0
+dialect: postgresql
+description: SQL dialect instructions for PostgreSQL
+
+rules:
+  # Syntax
+  - "Generated SQL must be compatible with PostgreSQL."
+  - "Table names can be unqualified if in search_path."
+
+  # Type casting
+  - "Use value::type or CAST(value AS type) for type casting."
+
+  # JSON
+  - |
+    JSON field extraction in PostgreSQL:
+    - column->>'field' for text value
+    - column->'field' for JSON value
+    - column#>>'{path,to,field}' for nested path
+
+  # Arrays
+  - "Array indexing is 1-based."
+  - "Use array_agg() to aggregate into arrays."
+  - "Use unnest(array) to expand arrays."
+  - "Use array_length(array, 1) for array length."
+
+  # Date/Time
+  - "Use age(ts1, ts2) or ts1 - ts2 for intervals."
+  - "Use EXTRACT(unit FROM timestamp) for date parts."
+  - "Use NOW() or CURRENT_TIMESTAMP for current time."
+
+  # String
+  - "Use || for string concatenation."
+  - "Use ILIKE for case-insensitive matching."
+
+  # Performance
+  - "Use EXPLAIN ANALYZE to check query plans."
+  - "Consider using partial indexes for filtered queries."

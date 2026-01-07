@@ -1,0 +1,40 @@
+version: 1.0.0
+dialect: clickhouse
+description: SQL dialect instructions for ClickHouse
+
+rules:
+  # Syntax
+  - "Generated SQL must be compatible with ClickHouse."
+  - "Use database.table format for fully-qualified names."
+
+  # Type casting
+  - "Use toType(value) functions: toInt32(), toString(), toDate()."
+  - "CAST(value AS type) also works."
+
+  # JSON
+  - |
+    JSON field extraction in ClickHouse:
+    - JSONExtractString(column, 'field') for strings
+    - JSONExtractInt(column, 'field') for integers
+    - JSONExtractRaw(column, 'field') for nested JSON
+
+  # Arrays
+  - "Array indexing is 1-based."
+  - "Use arrayMap(x -> expr, array) for mapping."
+  - "Use length(array) for array length."
+  - "Use arrayJoin(array) to expand arrays."
+
+  # Date/Time
+  - "Use dateDiff('unit', date1, date2) for differences."
+  - "Use toDate() and toDateTime() for conversions."
+  - "Use now() for current timestamp."
+
+  # Aggregation
+  - "Use uniq() for approximate distinct count."
+  - "Use groupArray() to collect into arrays."
+  - "ClickHouse is columnar - avoid SELECT *."
+
+  # Performance
+  - "Always filter on partition key columns first."
+  - "Use PREWHERE for efficient filtering."
+  - "Use LIMIT early when possible."
