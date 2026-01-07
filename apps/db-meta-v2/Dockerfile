@@ -43,6 +43,7 @@ COPY --chown=nobody:nogroup packages/resources/ /app/packages/resources/
 EXPOSE 8000
 
 ENV PATH="/app/.venv/bin:$PATH"
+ENV PYTHONPATH="/app/src"
 ENV MCP_TRANSPORT=http
 ENV MCP_HOST=0.0.0.0
 ENV MCP_PORT=8000
