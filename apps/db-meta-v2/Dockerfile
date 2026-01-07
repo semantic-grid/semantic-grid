@@ -32,8 +32,10 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 FROM python:3.13-slim-bookworm
 
-# Copy built app
+# Copy built app (includes .venv with all dependencies)
 COPY --from=builder --chown=nobody:nogroup /build/apps/db-meta-v2 /app
+# Copy sg-models (local dependency)
+COPY --from=builder --chown=nobody:nogroup /build/packages/sg-models /app/packages/sg-models
 
 # Copy resource packages
 ENV RESOURCES_DIR=/app/packages/resources
@@ -43,7 +45,7 @@ COPY --chown=nobody:nogroup packages/resources/ /app/packages/resources/
 EXPOSE 8000
 
 ENV PATH="/app/.venv/bin:$PATH"
-ENV PYTHONPATH="/app/src"
+ENV PYTHONPATH="/app/src:/app/packages/sg-models/src"
 ENV MCP_TRANSPORT=http
 ENV MCP_HOST=0.0.0.0
 ENV MCP_PORT=8000
