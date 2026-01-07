@@ -251,6 +251,21 @@ async def _onboarding_start(provider_id: str | None = None, force: bool = False)
             "or pass force=True to restart from scratch.",
         }
 
+    # If force=True, clean up existing state and schema files
+    if force and existing is not None:
+        from db_meta_v2.onboarding.schema_store import get_schema_file_path
+
+        # Delete existing state
+        delete_state(provider_id)
+
+        # Delete existing schema descriptions
+        schema_file = get_schema_file_path(provider_id)
+        if schema_file.exists():
+            try:
+                schema_file.unlink()
+            except Exception:
+                pass
+
     # Test connection
     conn_result = test_connection()
     if not conn_result["connected"]:
