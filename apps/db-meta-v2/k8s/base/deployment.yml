@@ -16,6 +16,7 @@ spec:
     spec:
       containers:
         - name: db-meta-v2
+          image: db-meta-v2
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000
