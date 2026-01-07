@@ -6,21 +6,6 @@ from fastmcp import FastMCP
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
-
-class HealthCheckFilter(logging.Filter):
-    """Filter out health check requests from uvicorn access logs."""
-
-    def filter(self, record: logging.LogRecord) -> bool:
-        message = record.getMessage()
-        # Filter out GET /health requests
-        if "GET /health" in message:
-            return False
-        return True
-
-
-# Apply filter to uvicorn access logger
-logging.getLogger("uvicorn.access").addFilter(HealthCheckFilter())
-
 from db_meta_v2.config import get_settings
 from db_meta_v2.tools.database import (
     _describe_table,
@@ -70,6 +55,21 @@ from db_meta_v2.tools.training import (
     _query_list_rules,
     _query_status,
 )
+
+
+class HealthCheckFilter(logging.Filter):
+    """Filter out health check requests from uvicorn access logs."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        message = record.getMessage()
+        # Filter out GET /health requests
+        if "GET /health" in message:
+            return False
+        return True
+
+
+# Apply filter to uvicorn access logger
+logging.getLogger("uvicorn.access").addFilter(HealthCheckFilter())
 
 # Create MCP server
 mcp = FastMCP(
@@ -122,61 +122,67 @@ async def _get_config() -> dict:
 
 
 # Register core tools
-ping = mcp.tool()(_ping)
-get_config = mcp.tool()(_get_config)
+ping = mcp.tool(name="ping")(_ping)
+get_config = mcp.tool(name="get_config")(_get_config)
 
 # Register database tools
-test_connection = mcp.tool()(_test_connection)
-detect_dialect = mcp.tool()(_detect_dialect)
-list_catalogs = mcp.tool()(_list_catalogs)
-list_schemas = mcp.tool()(_list_schemas)
-list_tables = mcp.tool()(_list_tables)
-describe_table = mcp.tool()(_describe_table)
-sample_table = mcp.tool()(_sample_table)
+test_connection = mcp.tool(name="test_connection")(_test_connection)
+detect_dialect = mcp.tool(name="detect_dialect")(_detect_dialect)
+list_catalogs = mcp.tool(name="list_catalogs")(_list_catalogs)
+list_schemas = mcp.tool(name="list_schemas")(_list_schemas)
+list_tables = mcp.tool(name="list_tables")(_list_tables)
+describe_table = mcp.tool(name="describe_table")(_describe_table)
+sample_table = mcp.tool(name="sample_table")(_sample_table)
 
 # Register dialect tools
-get_dialect_rules = mcp.tool()(_get_dialect_rules)
-get_connection_dialect = mcp.tool()(_get_connection_dialect)
+get_dialect_rules = mcp.tool(name="get_dialect_rules")(_get_dialect_rules)
+get_connection_dialect = mcp.tool(name="get_connection_dialect")(_get_connection_dialect)
 
 # Register onboarding tools
-onboarding_status = mcp.tool()(_onboarding_status)
-onboarding_start = mcp.tool()(_onboarding_start)
-onboarding_add_ignore_pattern = mcp.tool()(_onboarding_add_ignore_pattern)
-onboarding_remove_ignore_pattern = mcp.tool()(_onboarding_remove_ignore_pattern)
-onboarding_import_ignore_patterns = mcp.tool()(_onboarding_import_ignore_patterns)
-onboarding_discover = mcp.tool()(_onboarding_discover)
-onboarding_reset = mcp.tool()(_onboarding_reset)
-onboarding_next = mcp.tool()(_onboarding_next)
-onboarding_approve = mcp.tool()(_onboarding_approve)
-onboarding_skip = mcp.tool()(_onboarding_skip)
-onboarding_bulk_approve = mcp.tool()(_onboarding_bulk_approve)
+onboarding_status = mcp.tool(name="onboarding_status")(_onboarding_status)
+onboarding_start = mcp.tool(name="onboarding_start")(_onboarding_start)
+onboarding_add_ignore_pattern = mcp.tool(name="onboarding_add_ignore_pattern")(
+    _onboarding_add_ignore_pattern
+)
+onboarding_remove_ignore_pattern = mcp.tool(name="onboarding_remove_ignore_pattern")(
+    _onboarding_remove_ignore_pattern
+)
+onboarding_import_ignore_patterns = mcp.tool(name="onboarding_import_ignore_patterns")(
+    _onboarding_import_ignore_patterns
+)
+onboarding_discover = mcp.tool(name="onboarding_discover")(_onboarding_discover)
+onboarding_reset = mcp.tool(name="onboarding_reset")(_onboarding_reset)
+onboarding_next = mcp.tool(name="onboarding_next")(_onboarding_next)
+onboarding_approve = mcp.tool(name="onboarding_approve")(_onboarding_approve)
+onboarding_skip = mcp.tool(name="onboarding_skip")(_onboarding_skip)
+onboarding_bulk_approve = mcp.tool(name="onboarding_bulk_approve")(_onboarding_bulk_approve)
 
 # Register domain tools
-domain_status = mcp.tool()(_domain_status)
-domain_generate = mcp.tool()(_domain_generate)
-domain_approve = mcp.tool()(_domain_approve)
-domain_skip = mcp.tool()(_domain_skip)
+domain_status = mcp.tool(name="domain_status")(_domain_status)
+domain_generate = mcp.tool(name="domain_generate")(_domain_generate)
+domain_approve = mcp.tool(name="domain_approve")(_domain_approve)
+domain_skip = mcp.tool(name="domain_skip")(_domain_skip)
 
 # Register query training tools
-query_status = mcp.tool()(_query_status)
-query_generate = mcp.tool()(_query_generate)
-query_approve = mcp.tool()(_query_approve)
-query_feedback = mcp.tool()(_query_feedback)
-query_add_rule = mcp.tool()(_query_add_rule)
-query_list_examples = mcp.tool()(_query_list_examples)
-query_list_rules = mcp.tool()(_query_list_rules)
+query_status = mcp.tool(name="query_status")(_query_status)
+query_generate = mcp.tool(name="query_generate")(_query_generate)
+query_approve = mcp.tool(name="query_approve")(_query_approve)
+query_feedback = mcp.tool(name="query_feedback")(_query_feedback)
+query_add_rule = mcp.tool(name="query_add_rule")(_query_add_rule)
+query_list_examples = mcp.tool(name="query_list_examples")(_query_list_examples)
+query_list_rules = mcp.tool(name="query_list_rules")(_query_list_rules)
 
 # Register import tools (bulk import from legacy format)
-import_instructions = mcp.tool()(_import_instructions)
-import_examples = mcp.tool()(_import_examples)
+import_instructions = mcp.tool(name="import_instructions")(_import_instructions)
+import_examples = mcp.tool(name="import_examples")(_import_examples)
 
 # Register SQL generation tools (main entry points)
-get_data = mcp.tool()(_get_data)
-run_sql = mcp.tool()(_run_sql)
-validate_sql = mcp.tool()(_validate_sql)
-get_result = mcp.tool()(_get_result)
-test_elicitation = mcp.tool()(_test_elicitation)
-test_sampling = mcp.tool()(_test_sampling)
+get_data = mcp.tool(name="get_data")(_get_data)
+run_sql = mcp.tool(name="run_sql")(_run_sql)
+validate_sql = mcp.tool(name="validate_sql")(_validate_sql)
+get_result = mcp.tool(name="get_result")(_get_result)
+test_elicitation = mcp.tool(name="test_elicitation")(_test_elicitation)
+test_sampling = mcp.tool(name="test_sampling")(_test_sampling)
 
 
 def main():
