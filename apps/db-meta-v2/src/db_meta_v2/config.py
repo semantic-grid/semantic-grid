@@ -1,6 +1,6 @@
 """Configuration for db-meta-v2."""
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -13,11 +13,47 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # Database connection
+    # Database connection - either full URL or components
     database_url: str = Field(
         default="",
         description="Database connection URL (e.g., trino://user:pass@host:port/catalog/schema)",
     )
+
+    # Component-based DB config (reuses existing db-meta secrets)
+    database_wh_driver: str = Field(default="", description="DB driver (trino, clickhouse+native)")
+    database_wh_server_v2: str = Field(default="", description="DB server host")
+    database_wh_port_v2: str = Field(default="", description="DB server port")
+    database_wh_user: str = Field(default="", description="DB username")
+    database_wh_pass: str = Field(default="", description="DB password")
+    database_wh_db_v2: str = Field(default="", description="DB name/catalog/schema")
+    database_wh_params_v2: str = Field(default="", description="DB connection params")
+
+    @model_validator(mode="after")
+    def build_database_url(self) -> "Settings":
+        """Build database_url from components if not directly provided."""
+        if self.database_url:
+            return self
+
+        # Build URL from components if available
+        if self.database_wh_server_v2 and self.database_wh_driver:
+            driver = self.database_wh_driver
+            user = self.database_wh_user or ""
+            password = self.database_wh_pass or ""
+            host = self.database_wh_server_v2
+            port = self.database_wh_port_v2 or ""
+            db = self.database_wh_db_v2 or ""
+            params = self.database_wh_params_v2 or ""
+
+            # Build auth part
+            auth = f"{user}:{password}@" if password else (f"{user}@" if user else "")
+
+            # Build host:port
+            host_port = f"{host}:{port}" if port else host
+
+            # Build URL
+            self.database_url = f"{driver}://{auth}{host_port}/{db}{params}"
+
+        return self
 
     # Provider configuration
     provider_id: str = Field(

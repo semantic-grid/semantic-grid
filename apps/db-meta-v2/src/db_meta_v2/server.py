@@ -1,6 +1,8 @@
 """FastMCP server for db-meta-v2."""
 
 from fastmcp import FastMCP
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 from db_meta_v2.config import get_settings
 from db_meta_v2.tools.database import (
@@ -58,6 +60,20 @@ mcp = FastMCP(
     - Query validation and execution
     """,
 )
+
+
+# Health check endpoint for k8s probes
+@mcp.custom_route("/health", methods=["GET"])
+async def health_check(request: Request) -> JSONResponse:
+    """Health check endpoint for load balancers and k8s probes."""
+    settings = get_settings()
+    return JSONResponse(
+        {
+            "status": "healthy",
+            "service": "db-meta-v2",
+            "provider_id": settings.provider_id,
+        }
+    )
 
 
 async def _ping() -> dict:
