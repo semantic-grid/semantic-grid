@@ -631,6 +631,7 @@ async def _onboarding_reset(provider_id: str | None = None, hard: bool = False) 
         provider_id = settings.provider_id
 
     result = delete_state(provider_id)
+    state_deleted = result.get("deleted", False)
     schema_deleted = False
 
     # Hard reset: also delete schema descriptions
@@ -645,7 +646,9 @@ async def _onboarding_reset(provider_id: str | None = None, hard: bool = False) 
             except Exception:
                 pass
 
-    if result["deleted"] or schema_deleted:
+    # Return success if either file was deleted, or if hard reset was requested
+    # (even if files didn't exist, we've "reset" to a clean state)
+    if state_deleted or schema_deleted or hard:
         if hard:
             return {
                 "reset": True,
