@@ -131,7 +131,7 @@ def get_tables(
     """
     try:
         engine = get_engine(database_url)
-        dialect = engine.dialect.name
+        dialect = engine.dialect.name.lower()
 
         tables = []
 
