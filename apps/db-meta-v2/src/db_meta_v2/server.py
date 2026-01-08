@@ -1,6 +1,13 @@
 """FastMCP server for db-meta-v2."""
 
 import logging
+import os
+
+# Configure logging before anything else
+logging.basicConfig(
+    level=os.environ.get("LOG_LEVEL", "INFO"),
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
 
 from fastmcp import FastMCP
 from starlette.requests import Request
