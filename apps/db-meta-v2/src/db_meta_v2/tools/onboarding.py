@@ -1,6 +1,10 @@
 """Onboarding MCP tools."""
 
+import logging
+
 from sg_models import OnboardingPhase, TableDescriptionStatus
+
+logger = logging.getLogger(__name__)
 
 from db_meta_v2.config import get_settings
 from db_meta_v2.db.connection import test_connection
@@ -380,13 +384,18 @@ async def _onboarding_discover(provider_id: str | None = None) -> dict:
 
     # Load ignore patterns
     ignore = load_ignore_patterns(provider_id)
+    logger.info(f"Loaded {len(ignore.patterns)} ignore patterns")
 
     # Discover catalogs first (for Trino 3-level hierarchy)
     try:
+        logger.info("Discovering catalogs...")
         catalogs = get_catalogs()
+        logger.info(f"Found catalogs (before filter): {catalogs}")
         catalogs = ignore.filter_catalogs(catalogs)
+        logger.info(f"Found catalogs (after filter): {catalogs}")
         state.catalogs_discovered = [c for c in catalogs if c is not None]
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error discovering catalogs: {e}")
         catalogs = [None]
         state.catalogs_discovered = []
 
@@ -394,13 +403,18 @@ async def _onboarding_discover(provider_id: str | None = None) -> dict:
     all_schemas = []
     try:
         for catalog in catalogs:
+            logger.info(f"Discovering schemas for catalog: {catalog}")
             schemas = get_schemas(catalog=catalog)
+            logger.info(f"Found schemas in {catalog} (before filter): {schemas}")
             schemas = ignore.filter_schemas(schemas)
+            logger.info(f"Found schemas in {catalog} (after filter): {schemas}")
             for schema in schemas:
                 if schema is not None:
                     all_schemas.append(schema)
         state.schemas_discovered = all_schemas
-    except Exception:
+        logger.info(f"Total schemas discovered: {len(all_schemas)}")
+    except Exception as e:
+        logger.error(f"Error discovering schemas: {e}")
         state.schemas_discovered = []
 
     # Discover tables with columns (iterate catalog -> schema -> table)
@@ -414,14 +428,18 @@ async def _onboarding_discover(provider_id: str | None = None) -> dict:
                 if schema is None:
                     continue
 
+                logger.info(f"Discovering tables for {catalog}.{schema}...")
                 tables = get_tables(schema=schema, catalog=catalog)
+                logger.info(f"Found {len(tables)} tables in {catalog}.{schema} (before filter)")
                 tables = ignore.filter_tables(tables)
+                logger.info(f"Found {len(tables)} tables in {catalog}.{schema} (after filter)")
 
                 for t in tables:
                     # Get columns for each table
                     try:
                         columns = get_columns(t["name"], schema=schema, catalog=catalog)
-                    except Exception:
+                    except Exception as e:
+                        logger.warning(f"Error getting columns for {t['name']}: {e}")
                         columns = []
 
                     all_tables.append(
@@ -436,7 +454,9 @@ async def _onboarding_discover(provider_id: str | None = None) -> dict:
 
         state.tables_discovered = [t["full_name"] for t in all_tables]
         state.tables_total = len(all_tables)
-    except Exception:
+        logger.info(f"Total tables discovered: {len(all_tables)}")
+    except Exception as e:
+        logger.error(f"Error discovering tables: {e}")
         state.tables_discovered = []
         state.tables_total = 0
 
