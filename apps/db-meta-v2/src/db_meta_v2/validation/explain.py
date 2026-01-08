@@ -41,14 +41,22 @@ class ExplainResult(BaseModel):
     tier_reason: str | None = Field(default=None, description="Reason for cost tier assignment")
 
 
-# Cost tier thresholds (configurable)
-COST_THRESHOLDS = {
-    "auto_max_rows": 100_000,  # Auto-execute up to 100K rows
-    "auto_max_cost": 1000,  # Auto-execute up to cost 1000
-    "confirm_max_rows": 10_000_000,  # Confirm up to 10M rows
-    "confirm_max_cost": 100_000,  # Confirm up to cost 100K
-    # Above confirm thresholds -> REJECT
-}
+import os
+
+
+def _get_cost_thresholds() -> dict[str, int | float]:
+    """Get cost thresholds from environment or defaults."""
+    return {
+        "auto_max_rows": int(os.environ.get("COST_AUTO_MAX_ROWS", 100_000)),
+        "auto_max_cost": float(os.environ.get("COST_AUTO_MAX_COST", 1000)),
+        "confirm_max_rows": int(os.environ.get("COST_CONFIRM_MAX_ROWS", 100_000_000)),
+        "confirm_max_cost": float(os.environ.get("COST_CONFIRM_MAX_COST", 1_000_000)),
+        # Above confirm thresholds -> REJECT (unless allow_override is True)
+    }
+
+
+# For backwards compatibility
+COST_THRESHOLDS = _get_cost_thresholds()
 
 
 def get_explain_command(dialect: str) -> str:

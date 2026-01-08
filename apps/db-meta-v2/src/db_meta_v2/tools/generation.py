@@ -442,7 +442,7 @@ Generate the SQL query that implements this plan.
                 "estimated_rows": explain_result.estimated_rows,
                 "sql": generated_sql,
                 "plan": plan.model_dump(),
-                "message": "Use run_sql(sql, force_execute=True) to proceed.",
+                "message": "Use run_sql(sql, confirmed=true) to proceed.",
             }
 
     # ==========================================================================
@@ -478,21 +478,21 @@ async def _run_sql(
     ctx: Context,
     sql: str,
     skip_validation: bool = False,
-    force_execute: bool = False,
+    confirmed: bool = False,
 ) -> dict:
     """Validate and execute a SQL query.
 
     This is the direct SQL entry point. It:
     1. Validates SQL is read-only
     2. Runs EXPLAIN to check cost
-    3. Elicits confirmation if CONFIRM tier (unless force_execute)
+    3. Elicits confirmation if CONFIRM tier (unless already confirmed)
     4. Executes and returns results
 
     Args:
         ctx: MCP Context for elicitation
         sql: SQL query to execute
         skip_validation: Skip EXPLAIN validation (not recommended)
-        force_execute: Execute even if CONFIRM tier
+        confirmed: User has already confirmed execution of high-cost query
 
     Returns:
         Dict with validation result and/or query results
@@ -520,17 +520,20 @@ async def _run_sql(
 
         # Step 3: Cost tier check
         if explain_result.cost_tier == CostTier.REJECT:
-            return {
-                "status": "rejected",
-                "cost_tier": "reject",
-                "reason": explain_result.tier_reason,
-                "estimated_rows": explain_result.estimated_rows,
-                "estimated_cost": explain_result.estimated_cost,
-                "sql": sql,
-                "suggestion": "Narrow your query with filters or a smaller date range.",
-            }
+            if not confirmed:
+                return {
+                    "status": "rejected",
+                    "cost_tier": "reject",
+                    "reason": explain_result.tier_reason,
+                    "estimated_rows": explain_result.estimated_rows,
+                    "estimated_cost": explain_result.estimated_cost,
+                    "sql": sql,
+                    "suggestion": "Narrow your query with filters or a smaller date range.",
+                    "override": "Use confirmed=true to execute anyway (may be slow/expensive).",
+                }
+            # User confirmed - proceed with warning logged
 
-        if explain_result.cost_tier == CostTier.CONFIRM and not force_execute:
+        if explain_result.cost_tier == CostTier.CONFIRM and not confirmed:
             # Try to elicit confirmation
             try:
                 confirm_result = await ctx.elicit(
@@ -562,7 +565,7 @@ async def _run_sql(
                     "estimated_cost": explain_result.estimated_cost,
                     "estimated_size_gb": explain_result.estimated_size_gb,
                     "sql": sql,
-                    "message": "Query requires confirmation. Use force_execute=True.",
+                    "message": "Query requires confirmation. Use confirmed=true to proceed.",
                 }
 
     # Step 4: Execute
