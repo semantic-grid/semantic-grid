@@ -1487,14 +1487,20 @@ const Page = withPageAuthRequired(
       [],
     );
 
-    const rows = useMemo(
-      () =>
-        (data || []).map((q: QueryExplorerItem) => ({
+    const rows = useMemo(() => {
+      // Deduplicate by query_id to prevent MUI tree data path conflicts
+      const seen = new Set<string>();
+      return (data || [])
+        .filter((q: QueryExplorerItem) => {
+          if (seen.has(q.query_id)) return false;
+          seen.add(q.query_id);
+          return true;
+        })
+        .map((q: QueryExplorerItem) => ({
           ...q,
           id: q.query_id,
-        })),
-      [data],
-    );
+        }));
+    }, [data]);
 
     return (
       <Box
@@ -1623,7 +1629,7 @@ const Page = withPageAuthRequired(
             }}
             treeData={groupBySession}
             getTreeDataPath={(row) =>
-              groupBySession ? [row.session_id, row.query_id] : [row.query_id]
+              groupBySession ? [row.session_id, row.id] : [row.id]
             }
             groupingColDef={
               groupBySession
