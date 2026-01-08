@@ -14,6 +14,8 @@ spec:
       labels:
         app.kubernetes.io/name: db-meta-v2
     spec:
+      securityContext:
+        fsGroup: 65534 # nobody group - makes PVC writable
       containers:
         - name: db-meta-v2
           image: db-meta-v2
