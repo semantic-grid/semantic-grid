@@ -384,18 +384,18 @@ async def _onboarding_discover(provider_id: str | None = None) -> dict:
 
     # Load ignore patterns
     ignore = load_ignore_patterns(provider_id)
-    logger.info(f"Loaded {len(ignore.patterns)} ignore patterns")
+    print(f"[DISCOVERY] Loaded {len(ignore.patterns)} ignore patterns", flush=True)
 
     # Discover catalogs first (for Trino 3-level hierarchy)
     try:
-        logger.info("Discovering catalogs...")
+        print("[DISCOVERY] Discovering catalogs...", flush=True)
         catalogs = get_catalogs()
-        logger.info(f"Found catalogs (before filter): {catalogs}")
+        print(f"[DISCOVERY] Found catalogs (before filter): {catalogs}", flush=True)
         catalogs = ignore.filter_catalogs(catalogs)
-        logger.info(f"Found catalogs (after filter): {catalogs}")
+        print(f"[DISCOVERY] Found catalogs (after filter): {catalogs}", flush=True)
         state.catalogs_discovered = [c for c in catalogs if c is not None]
     except Exception as e:
-        logger.error(f"Error discovering catalogs: {e}")
+        print(f"[DISCOVERY] Error discovering catalogs: {e}", flush=True)
         catalogs = [None]
         state.catalogs_discovered = []
 
@@ -403,18 +403,18 @@ async def _onboarding_discover(provider_id: str | None = None) -> dict:
     all_schemas = []
     try:
         for catalog in catalogs:
-            logger.info(f"Discovering schemas for catalog: {catalog}")
+            print(f"[DISCOVERY] Discovering schemas for catalog: {catalog}", flush=True)
             schemas = get_schemas(catalog=catalog)
-            logger.info(f"Found schemas in {catalog} (before filter): {schemas}")
+            print(f"[DISCOVERY] Found schemas in {catalog} (before filter): {schemas}", flush=True)
             schemas = ignore.filter_schemas(schemas)
-            logger.info(f"Found schemas in {catalog} (after filter): {schemas}")
+            print(f"[DISCOVERY] Found schemas in {catalog} (after filter): {schemas}", flush=True)
             for schema in schemas:
                 if schema is not None:
                     all_schemas.append(schema)
         state.schemas_discovered = all_schemas
-        logger.info(f"Total schemas discovered: {len(all_schemas)}")
+        print(f"[DISCOVERY] Total schemas discovered: {len(all_schemas)}", flush=True)
     except Exception as e:
-        logger.error(f"Error discovering schemas: {e}")
+        print(f"[DISCOVERY] Error discovering schemas: {e}", flush=True)
         state.schemas_discovered = []
 
     # Discover tables with columns (iterate catalog -> schema -> table)
@@ -428,18 +428,26 @@ async def _onboarding_discover(provider_id: str | None = None) -> dict:
                 if schema is None:
                     continue
 
-                logger.info(f"Discovering tables for {catalog}.{schema}...")
+                print(f"[DISCOVERY] Discovering tables for {catalog}.{schema}...", flush=True)
                 tables = get_tables(schema=schema, catalog=catalog)
-                logger.info(f"Found {len(tables)} tables in {catalog}.{schema} (before filter)")
+                print(
+                    f"[DISCOVERY] Found {len(tables)} tables in {catalog}.{schema} (before filter)",
+                    flush=True,
+                )
                 tables = ignore.filter_tables(tables)
-                logger.info(f"Found {len(tables)} tables in {catalog}.{schema} (after filter)")
+                print(
+                    f"[DISCOVERY] Found {len(tables)} tables in {catalog}.{schema} (after filter)",
+                    flush=True,
+                )
 
                 for t in tables:
                     # Get columns for each table
                     try:
                         columns = get_columns(t["name"], schema=schema, catalog=catalog)
                     except Exception as e:
-                        logger.warning(f"Error getting columns for {t['name']}: {e}")
+                        print(
+                            f"[DISCOVERY] Error getting columns for {t['name']}: {e}", flush=True
+                        )
                         columns = []
 
                     all_tables.append(
@@ -454,9 +462,9 @@ async def _onboarding_discover(provider_id: str | None = None) -> dict:
 
         state.tables_discovered = [t["full_name"] for t in all_tables]
         state.tables_total = len(all_tables)
-        logger.info(f"Total tables discovered: {len(all_tables)}")
+        print(f"[DISCOVERY] Total tables discovered: {len(all_tables)}", flush=True)
     except Exception as e:
-        logger.error(f"Error discovering tables: {e}")
+        print(f"[DISCOVERY] Error discovering tables: {e}", flush=True)
         state.tables_discovered = []
         state.tables_total = 0
 
