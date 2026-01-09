@@ -206,6 +206,8 @@ def _configure_observability():
             service_name="db-meta-v2",
             environment=os.environ.get("ENVIRONMENT", "development"),
         )
+        # Instrument MCP server (all tool calls)
+        logfire.instrument_mcp()
         # Instrument all PydanticAI agents automatically
         Agent.instrument_all()
         logging.getLogger(__name__).info("Logfire observability enabled")
