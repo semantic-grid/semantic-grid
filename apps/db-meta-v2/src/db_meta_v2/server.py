@@ -74,9 +74,25 @@ class HealthCheckFilter(logging.Filter):
 # Apply filter to uvicorn access logger
 logging.getLogger("uvicorn.access").addFilter(HealthCheckFilter())
 
-# Create MCP server
+
+def _get_auth_provider():
+    """Get auth provider based on config."""
+    settings = get_settings()
+    if settings.auth0_enabled and settings.auth0_domain:
+        from fastmcp.server.auth.providers.jwt import JWTVerifier
+
+        return JWTVerifier(
+            jwks_uri=f"https://{settings.auth0_domain}/.well-known/jwks.json",
+            issuer=f"https://{settings.auth0_domain}/",
+            audience=settings.auth0_audience,
+        )
+    return None
+
+
+# Create MCP server with optional auth
 mcp = FastMCP(
     name="db-meta-v2",
+    auth=_get_auth_provider(),
     instructions="""
     Database metadata and query intelligence server.
 

@@ -84,6 +84,24 @@ class Settings(BaseSettings):
         description="Pydantic Logfire token for observability (optional)",
     )
 
+    # Auth0 OAuth configuration
+    auth0_enabled: bool = Field(
+        default=False,
+        description="Enable Auth0 JWT validation for MCP requests",
+    )
+    auth0_domain: str = Field(
+        default="",
+        description="Auth0 domain (e.g., 'your-tenant.auth0.com')",
+    )
+    auth0_audience: str = Field(
+        default="",
+        description="Auth0 API audience/identifier",
+    )
+    auth0_algorithms: str = Field(
+        default="RS256",
+        description="JWT signing algorithms (comma-separated)",
+    )
+
     # MCP server configuration
     mcp_transport: str = Field(
         default="stdio",
