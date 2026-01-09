@@ -3,13 +3,8 @@
 import logging
 import os
 
-# Configure logging before anything else
-logging.basicConfig(
-    level=os.environ.get("LOG_LEVEL", "INFO"),
-    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-)
-
 from fastmcp import FastMCP
+from pydantic_ai import Agent
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
@@ -192,8 +187,35 @@ test_elicitation = mcp.tool(name="test_elicitation")(_test_elicitation)
 test_sampling = mcp.tool(name="test_sampling")(_test_sampling)
 
 
+def _configure_logging():
+    """Configure logging before anything else."""
+    logging.basicConfig(
+        level=os.environ.get("LOG_LEVEL", "INFO"),
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
+
+
+def _configure_observability():
+    """Configure Logfire observability if token is set."""
+    settings = get_settings()
+    if settings.logfire_token:
+        import logfire
+
+        logfire.configure(
+            token=settings.logfire_token,
+            service_name="db-meta-v2",
+            environment=os.environ.get("ENVIRONMENT", "development"),
+        )
+        # Instrument all PydanticAI agents automatically
+        Agent.instrument_all()
+        logging.getLogger(__name__).info("Logfire observability enabled")
+
+
 def main():
     """Run the MCP server."""
+    _configure_logging()
+    _configure_observability()
+
     settings = get_settings()
 
     if settings.mcp_transport == "http":

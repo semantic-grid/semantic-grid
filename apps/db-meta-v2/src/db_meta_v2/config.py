@@ -78,6 +78,12 @@ class Settings(BaseSettings):
         description="OpenAI API key for embeddings",
     )
 
+    # Observability
+    logfire_token: str = Field(
+        default="",
+        description="Pydantic Logfire token for observability (optional)",
+    )
+
     # MCP server configuration
     mcp_transport: str = Field(
         default="stdio",
