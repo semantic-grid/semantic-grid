@@ -3,10 +3,14 @@
 import urllib.parse
 from functools import lru_cache
 
+import urllib3
 from sqlalchemy import Engine, create_engine, text
 from trino.auth import BasicAuthentication
 
 from db_meta_v2.config import get_settings
+
+# Disable urllib3 SSL warnings for Trino connections with verify=False
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 class DatabaseError(Exception):

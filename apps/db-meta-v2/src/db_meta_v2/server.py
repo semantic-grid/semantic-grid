@@ -26,6 +26,7 @@ from db_meta_v2.tools.domain import (
     _domain_status,
 )
 from db_meta_v2.tools.generation import (
+    _export_results,
     _get_data,
     _get_result,
     _run_sql,
@@ -183,6 +184,7 @@ get_data = mcp.tool(name="get_data")(_get_data)
 run_sql = mcp.tool(name="run_sql")(_run_sql)
 validate_sql = mcp.tool(name="validate_sql")(_validate_sql)
 get_result = mcp.tool(name="get_result")(_get_result)
+export_results = mcp.tool(name="export_results")(_export_results)
 test_elicitation = mcp.tool(name="test_elicitation")(_test_elicitation)
 test_sampling = mcp.tool(name="test_sampling")(_test_sampling)
 

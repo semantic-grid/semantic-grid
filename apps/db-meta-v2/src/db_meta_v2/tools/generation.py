@@ -13,10 +13,13 @@ Gracefully degrades when sampling/elicitation aren't supported:
 - No elicitation: Auto-approves or returns confirmation_required status
 """
 
+import csv
 import hashlib
+import io
 import time
 import uuid
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 
 from mcp.server.fastmcp import Context
@@ -573,13 +576,16 @@ async def _run_sql(
         query_uuid = _generate_query_uuid(sql)
         result = _execute_query(sql)
 
+        rows_returned = result["rows_returned"]
+        is_large = rows_returned > 100
+
         return {
             "status": "success",
             "query_uuid": query_uuid,
             "sql": sql,
             "data": result["data"],
             "columns": result["columns"],
-            "rows_returned": result["rows_returned"],
+            "rows_returned": rows_returned,
             "duration_ms": result["duration_ms"],
             "provider_id": result["provider_id"],
             "cost_tier": (
@@ -587,15 +593,39 @@ async def _run_sql(
                 if skip_validation
                 else (explain_result.cost_tier.value if explain_result else "unknown")
             ),
+            "presentation_hints": {
+                "downloadable": True,
+                "suggested_filename": f"query_{query_uuid[:8]}_{datetime.now():%Y%m%d_%H%M%S}",
+                "suggested_formats": ["csv", "xlsx"],
+                "large_result": is_large,
+                "display_recommendation": "export" if is_large else "table",
+                "hint": (
+                    f"Result has {rows_returned} rows. Consider exporting to CSV/Excel "
+                    "for better viewing."
+                    if is_large
+                    else "Result is small enough to display as a table."
+                ),
+            },
             "guidance": {
-                "summary": f"Query returned {result['rows_returned']} rows.",
-                "next_steps": [
-                    "Present the data in a clear table format",
-                    "Offer to refine the query if needed",
-                    "Suggest follow-up analyses",
-                ],
+                "summary": f"Query returned {rows_returned} rows.",
+                "next_steps": (
+                    [
+                        "Export results using export_results(query_uuid, format='csv')",
+                        "Create a downloadable file for the user",
+                        "Offer to refine the query if needed",
+                    ]
+                    if is_large
+                    else [
+                        "Present the data in a clear table format",
+                        "Offer to refine the query if needed",
+                        "Suggest follow-up analyses",
+                    ]
+                ),
                 "suggested_response": (
-                    "Present the data above in a nice table format. "
+                    f"Result has {rows_returned} rows - too large for inline display. "
+                    "Exporting to CSV for download..."
+                    if is_large
+                    else "Present the data above in a nice table format. "
                     "Summarize key insights from the results."
                 ),
             },
@@ -661,6 +691,115 @@ async def _get_result(query_uuid: str) -> dict:
         "status": "not_found",
         "query_uuid": query_uuid,
         "message": "Query store not yet implemented. Use run_sql to execute queries.",
+    }
+
+
+async def _export_results(
+    ctx: Context,
+    sql: str,
+    format: str = "csv",
+    filename: str | None = None,
+) -> dict:
+    """Export query results as CSV or other formats.
+
+    Executes the query and returns the results formatted for export.
+    The agent can use this to create downloadable files.
+
+    Args:
+        ctx: MCP Context
+        sql: SQL query to execute and export
+        format: Export format - 'csv' (default), 'json', or 'markdown'
+        filename: Optional filename (without extension)
+
+    Returns:
+        Dict with formatted content and file metadata
+    """
+    # Validate read-only
+    is_read_only, error = validate_read_only(sql)
+    if not is_read_only:
+        return {
+            "status": "rejected",
+            "error": error,
+        }
+
+    # Execute query
+    try:
+        result = _execute_query(sql, limit=10000)  # Higher limit for exports
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": f"Query execution failed: {e}",
+        }
+
+    data = result["data"]
+    columns = result["columns"]
+    rows_returned = result["rows_returned"]
+
+    # Generate filename if not provided
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    if not filename:
+        query_hash = hashlib.sha256(sql.encode()).hexdigest()[:8]
+        filename = f"export_{query_hash}_{timestamp}"
+
+    # Format the content based on requested format
+    if format == "csv":
+        output = io.StringIO()
+        writer = csv.DictWriter(output, fieldnames=columns)
+        writer.writeheader()
+        writer.writerows(data)
+        content = output.getvalue()
+        mime_type = "text/csv"
+        extension = "csv"
+
+    elif format == "json":
+        import json
+
+        content = json.dumps(data, indent=2, default=str)
+        mime_type = "application/json"
+        extension = "json"
+
+    elif format == "markdown":
+        # Create markdown table
+        lines = []
+        # Header
+        lines.append("| " + " | ".join(columns) + " |")
+        lines.append("| " + " | ".join(["---"] * len(columns)) + " |")
+        # Rows
+        for row in data:
+            values = [str(row.get(col, "")) for col in columns]
+            lines.append("| " + " | ".join(values) + " |")
+        content = "\n".join(lines)
+        mime_type = "text/markdown"
+        extension = "md"
+
+    else:
+        return {
+            "status": "error",
+            "error": f"Unsupported format: {format}. Use 'csv', 'json', or 'markdown'.",
+        }
+
+    full_filename = f"{filename}.{extension}"
+
+    return {
+        "status": "success",
+        "format": format,
+        "filename": full_filename,
+        "mime_type": mime_type,
+        "content": content,
+        "rows_exported": rows_returned,
+        "columns": columns,
+        "file_size_bytes": len(content.encode("utf-8")),
+        "instructions": {
+            "hint": (
+                f"Export ready: {full_filename} ({rows_returned} rows). "
+                "Save this content as a file and present to user for download."
+            ),
+            "for_chatgpt": (
+                "Use create_file tool to write content to /mnt/user-data/outputs/, "
+                "then use present_files to create download link."
+            ),
+            "for_claude": ("Create a downloadable artifact with this content."),
+        },
     }
 
 
