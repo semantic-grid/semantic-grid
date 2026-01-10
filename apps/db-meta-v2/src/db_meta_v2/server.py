@@ -76,10 +76,21 @@ logging.getLogger("uvicorn.access").addFilter(HealthCheckFilter())
 
 
 def _get_auth_provider():
-    """Get auth provider based on config."""
+    """Get auth provider based on config.
+
+    Uses DiskStore on the providers PVC for OAuth client storage, which
+    persists sessions across restarts. For HA deployments with multiple
+    replicas, consider using RedisStore with FernetEncryptionWrapper.
+    """
     settings = get_settings()
     if settings.auth0_enabled and settings.auth0_domain:
+        from pathlib import Path
+
         from fastmcp.server.auth.providers.auth0 import Auth0Provider
+        from key_value.aio.stores.disk import DiskStore
+
+        # Use the providers PVC directory for OAuth session storage
+        oauth_storage_path = Path(settings.providers_dir) / ".oauth"
 
         return Auth0Provider(
             config_url=f"https://{settings.auth0_domain}/.well-known/openid-configuration",
@@ -87,6 +98,7 @@ def _get_auth_provider():
             client_secret=settings.auth0_client_secret,
             audience=settings.auth0_audience,
             base_url=settings.auth0_base_url,
+            client_storage=DiskStore(directory=oauth_storage_path),
         )
     return None
 
