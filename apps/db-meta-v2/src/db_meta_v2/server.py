@@ -92,7 +92,7 @@ def _get_auth_provider():
         # Use the providers PVC directory for OAuth session storage
         oauth_storage_path = Path(settings.providers_dir) / ".oauth"
 
-        return Auth0Provider(
+        provider = Auth0Provider(
             config_url=f"https://{settings.auth0_domain}/.well-known/openid-configuration",
             client_id=settings.auth0_client_id,
             client_secret=settings.auth0_client_secret,
@@ -100,6 +100,14 @@ def _get_auth_provider():
             base_url=settings.auth0_base_url,
             client_storage=DiskStore(directory=oauth_storage_path),
         )
+        # Allow Claude's redirect URI for DCR compatibility
+        # See: https://github.com/jlowin/fastmcp/issues/1564
+        provider._allowed_client_redirect_uris = [
+            "https://claude.ai/api/mcp/auth_callback",
+            "http://localhost:*",
+            "http://127.0.0.1:*",
+        ]
+        return provider
     return None
 
 
