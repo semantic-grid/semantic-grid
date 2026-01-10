@@ -84,22 +84,30 @@ class Settings(BaseSettings):
         description="Pydantic Logfire token for observability (optional)",
     )
 
-    # Auth0 OAuth configuration
+    # Auth0 OAuth configuration (uses OIDC Proxy for full OAuth 2.1 flow)
     auth0_enabled: bool = Field(
         default=False,
-        description="Enable Auth0 JWT validation for MCP requests",
+        description="Enable Auth0 OAuth for MCP requests",
     )
     auth0_domain: str = Field(
         default="",
         description="Auth0 domain (e.g., 'your-tenant.auth0.com')",
     )
+    auth0_client_id: str = Field(
+        default="",
+        description="Auth0 application client ID",
+    )
+    auth0_client_secret: str = Field(
+        default="",
+        description="Auth0 application client secret",
+    )
     auth0_audience: str = Field(
         default="",
         description="Auth0 API audience/identifier",
     )
-    auth0_algorithms: str = Field(
-        default="RS256",
-        description="JWT signing algorithms (comma-separated)",
+    auth0_base_url: str = Field(
+        default="",
+        description="Public URL of this MCP server (for OAuth callbacks)",
     )
 
     # MCP server configuration

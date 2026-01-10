@@ -79,12 +79,14 @@ def _get_auth_provider():
     """Get auth provider based on config."""
     settings = get_settings()
     if settings.auth0_enabled and settings.auth0_domain:
-        from fastmcp.server.auth.providers.jwt import JWTVerifier
+        from fastmcp.server.auth.providers.auth0 import Auth0Provider
 
-        return JWTVerifier(
-            jwks_uri=f"https://{settings.auth0_domain}/.well-known/jwks.json",
-            issuer=f"https://{settings.auth0_domain}/",
+        return Auth0Provider(
+            config_url=f"https://{settings.auth0_domain}/.well-known/openid-configuration",
+            client_id=settings.auth0_client_id,
+            client_secret=settings.auth0_client_secret,
             audience=settings.auth0_audience,
+            base_url=settings.auth0_base_url,
         )
     return None
 
