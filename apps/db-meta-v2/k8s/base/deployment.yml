@@ -6,6 +6,8 @@ metadata:
     app.kubernetes.io/name: db-meta-v2
 spec:
   replicas: 1
+  strategy:
+    type: Recreate # Required for single-replica with PVC (can't multi-attach)
   selector:
     matchLabels:
       app.kubernetes.io/name: db-meta-v2
