@@ -179,30 +179,31 @@ sample_table = mcp.tool(name="sample_table")(_sample_table)
 get_dialect_rules = mcp.tool(name="get_dialect_rules")(_get_dialect_rules)
 get_connection_dialect = mcp.tool(name="get_connection_dialect")(_get_connection_dialect)
 
-# Register onboarding tools
-onboarding_status = mcp.tool(name="onboarding_status")(_onboarding_status)
-onboarding_start = mcp.tool(name="onboarding_start")(_onboarding_start)
-onboarding_add_ignore_pattern = mcp.tool(name="onboarding_add_ignore_pattern")(
+# Register MCP setup tools (schema discovery wizard)
+# Prefixed with mcp_setup_ to avoid confusion with business "onboarding" queries
+mcp_setup_status = mcp.tool(name="mcp_setup_status")(_onboarding_status)
+mcp_setup_start = mcp.tool(name="mcp_setup_start")(_onboarding_start)
+mcp_setup_add_ignore_pattern = mcp.tool(name="mcp_setup_add_ignore_pattern")(
     _onboarding_add_ignore_pattern
 )
-onboarding_remove_ignore_pattern = mcp.tool(name="onboarding_remove_ignore_pattern")(
+mcp_setup_remove_ignore_pattern = mcp.tool(name="mcp_setup_remove_ignore_pattern")(
     _onboarding_remove_ignore_pattern
 )
-onboarding_import_ignore_patterns = mcp.tool(name="onboarding_import_ignore_patterns")(
+mcp_setup_import_ignore_patterns = mcp.tool(name="mcp_setup_import_ignore_patterns")(
     _onboarding_import_ignore_patterns
 )
-onboarding_discover = mcp.tool(name="onboarding_discover")(_onboarding_discover)
-onboarding_reset = mcp.tool(name="onboarding_reset")(_onboarding_reset)
-onboarding_next = mcp.tool(name="onboarding_next")(_onboarding_next)
-onboarding_approve = mcp.tool(name="onboarding_approve")(_onboarding_approve)
-onboarding_skip = mcp.tool(name="onboarding_skip")(_onboarding_skip)
-onboarding_bulk_approve = mcp.tool(name="onboarding_bulk_approve")(_onboarding_bulk_approve)
+mcp_setup_discover = mcp.tool(name="mcp_setup_discover")(_onboarding_discover)
+mcp_setup_reset = mcp.tool(name="mcp_setup_reset")(_onboarding_reset)
+mcp_setup_next = mcp.tool(name="mcp_setup_next")(_onboarding_next)
+mcp_setup_approve = mcp.tool(name="mcp_setup_approve")(_onboarding_approve)
+mcp_setup_skip = mcp.tool(name="mcp_setup_skip")(_onboarding_skip)
+mcp_setup_bulk_approve = mcp.tool(name="mcp_setup_bulk_approve")(_onboarding_bulk_approve)
 
-# Register domain tools
-domain_status = mcp.tool(name="domain_status")(_domain_status)
-domain_generate = mcp.tool(name="domain_generate")(_domain_generate)
-domain_approve = mcp.tool(name="domain_approve")(_domain_approve)
-domain_skip = mcp.tool(name="domain_skip")(_domain_skip)
+# Register MCP domain tools (domain model generation)
+mcp_domain_status = mcp.tool(name="mcp_domain_status")(_domain_status)
+mcp_domain_generate = mcp.tool(name="mcp_domain_generate")(_domain_generate)
+mcp_domain_approve = mcp.tool(name="mcp_domain_approve")(_domain_approve)
+mcp_domain_skip = mcp.tool(name="mcp_domain_skip")(_domain_skip)
 
 # Register query training tools
 query_status = mcp.tool(name="query_status")(_query_status)
