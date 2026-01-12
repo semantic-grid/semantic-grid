@@ -8,6 +8,7 @@ from db_meta_v2.db.introspection import (
     get_table_sample,
     get_tables,
 )
+from db_meta_v2.tools.shell import inject_protocol
 
 
 async def _test_connection(database_url: str | None = None) -> dict:
@@ -112,21 +113,25 @@ async def _list_tables(
     """
     try:
         tables = get_tables(schema=schema, catalog=catalog, database_url=database_url)
-        return {
-            "tables": tables,
-            "count": len(tables),
-            "schema": schema,
-            "catalog": catalog,
-            "error": None,
-        }
+        return inject_protocol(
+            {
+                "tables": tables,
+                "count": len(tables),
+                "schema": schema,
+                "catalog": catalog,
+                "error": None,
+            }
+        )
     except Exception as e:
-        return {
-            "tables": [],
-            "count": 0,
-            "schema": schema,
-            "catalog": catalog,
-            "error": str(e),
-        }
+        return inject_protocol(
+            {
+                "tables": [],
+                "count": 0,
+                "schema": schema,
+                "catalog": catalog,
+                "error": str(e),
+            }
+        )
 
 
 def _make_full_name(table_name: str, schema: str | None, catalog: str | None) -> str:

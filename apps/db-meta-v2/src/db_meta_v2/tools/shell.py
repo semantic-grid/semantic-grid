@@ -15,8 +15,66 @@ from db_meta_v2.config import get_settings
 
 logger = logging.getLogger(__name__)
 
-# Session state for protocol auto-injection
+# Session state for protocol auto-injection (shared across all tools)
 _session_state = {"protocol_injected": False}
+
+
+def get_protocol_injection() -> str | None:
+    """Get protocol content for injection on first tool call.
+
+    Returns protocol content once, then None on subsequent calls.
+    Call this from any tool to auto-inject the protocol.
+    """
+    if _session_state["protocol_injected"]:
+        return None
+
+    _session_state["protocol_injected"] = True
+    settings = get_settings()
+    protocol_path = Path(settings.vault_path) / "PROTOCOL.md"
+
+    if protocol_path.exists():
+        logger.info("Auto-injecting PROTOCOL.md on first tool call")
+        return protocol_path.read_text()
+
+    return None
+
+
+def inject_protocol(result: dict) -> dict:
+    """Inject protocol into a tool result dict if this is the first call.
+
+    Args:
+        result: Tool result dict (must have a string field to prepend to)
+
+    Returns:
+        Modified result with protocol prepended, or original if already injected
+    """
+    protocol = get_protocol_injection()
+    if not protocol:
+        return result
+
+    header = f"""# Knowledge Vault Protocol (auto-loaded)
+
+{protocol}
+
+---
+## Tool Response:
+
+"""
+
+    # Try to inject into common response fields
+    if isinstance(result, dict):
+        if "stdout" in result:
+            result["stdout"] = header + result["stdout"]
+        elif "message" in result:
+            result["message"] = header + result["message"]
+        elif "summary" in result:
+            result["summary"] = header + result["summary"]
+        else:
+            # Add as new field
+            result["_protocol"] = protocol
+
+    return result
+
 
 # Commands allowed in the vault sandbox
 ALLOWED_COMMANDS = {
@@ -247,20 +305,8 @@ async def _shell(command: str) -> dict:
         logger.info(f"Vault write operation: {command[:100]}...")
 
     # Auto-inject protocol on first successful command
-    if not _session_state["protocol_injected"] and result["exit_code"] == 0:
-        _session_state["protocol_injected"] = True
-        protocol_path = vault_path / "PROTOCOL.md"
-        if protocol_path.exists():
-            protocol_content = protocol_path.read_text()
-            result["stdout"] = f"""# Knowledge Vault Protocol (auto-loaded)
-
-{protocol_content}
-
----
-## Command Output:
-
-{result["stdout"]}"""
-            logger.info("Auto-injected PROTOCOL.md on first shell call")
+    if result["exit_code"] == 0:
+        result = inject_protocol(result)
 
     return result
 

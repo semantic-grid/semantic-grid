@@ -32,6 +32,7 @@ from sqlalchemy import text
 from db_meta_v2.config import get_settings
 from db_meta_v2.db.connection import get_engine
 from db_meta_v2.onboarding.schema_store import load_schema_descriptions
+from db_meta_v2.tools.shell import inject_protocol
 from db_meta_v2.training.store import load_examples, load_instructions
 from db_meta_v2.validation.explain import (
     CostTier,
@@ -280,47 +281,30 @@ Database Dialect: {schema.dialect or "unknown"}
         plan = plan_result.output
         plan.intent = intent
     except Exception:
-        # Sampling not supported - return context for client to generate SQL
-        return {
-            "status": "ready_for_generation",
-            "mode": "client_generation",
-            "intent": intent,
-            "dialect": schema.dialect,
-            "context": {
-                "schema": schema_context,
-                "examples": examples_context,
-                "rules": rules_context,
-                "tables_available": len(schema.tables),
-            },
-            "instructions": """Generate SQL for the user's intent using the schema above.
-
-Steps:
-1. Identify the tables needed based on the intent
-2. Determine JOIN conditions if multiple tables
-3. Add appropriate WHERE filters
-4. Include GROUP BY for aggregations
-5. Add ORDER BY and LIMIT
-
-IMPORTANT: After generating SQL, you MUST call run_sql(sql) to execute it.
-Do NOT just show the SQL - the user wants DATA, not SQL code.
-
-Important:
-- Only use tables and columns from the schema
-- Follow any business rules provided
-- Default LIMIT to 100 if not specified""",
-            "guidance": {
-                "summary": "Generate SQL and execute it to return data.",
-                "next_steps": [
-                    "Generate SQL based on schema and intent",
-                    "Call run_sql(sql) to execute and get results",
-                    "Show the data to the user",
-                ],
-                "important": (
-                    "The user asked for DATA, not SQL. After generating SQL, "
-                    "you MUST call run_sql() to execute it and return the actual data."
-                ),
-            },
-        }
+        # Sampling not supported - guide the agent to explore manually
+        return inject_protocol(
+            {
+                "status": "error",
+                "error": "MCP Sampling not available. Use manual exploration.",
+                "guidance": {
+                    "summary": "This tool requires MCP Sampling (not supported here).",
+                    "what_to_do": [
+                        "1. Read PROTOCOL.md: shell(command='cat PROTOCOL.md')",
+                        "2. Explore catalogs: list_catalogs()",
+                        "3. Explore schemas: list_schemas(catalog='...')",
+                        "4. List tables: list_tables(catalog='...', schema='...')",
+                        "5. Describe tables: describe_table(...)",
+                        "6. Search examples: shell(command='grep -ri \"keyword\" examples/')",
+                        "7. Generate SQL yourself based on what you learned",
+                        "8. Execute: run_sql(sql='SELECT ...')",
+                    ],
+                    "important": (
+                        "Do NOT skip steps. Start with list_catalogs() to understand "
+                        "the database hierarchy before writing any SQL."
+                    ),
+                },
+            }
+        )
 
     # ==========================================================================
     # Try elicitation for plan approval
