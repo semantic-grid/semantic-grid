@@ -15,6 +15,9 @@ from db_meta_v2.config import get_settings
 
 logger = logging.getLogger(__name__)
 
+# Session state for protocol auto-injection
+_session_state = {"protocol_injected": False}
+
 # Commands allowed in the vault sandbox
 ALLOWED_COMMANDS = {
     # Read operations
@@ -243,4 +246,40 @@ async def _shell(command: str) -> dict:
     if validation.is_write:
         logger.info(f"Vault write operation: {command[:100]}...")
 
+    # Auto-inject protocol on first successful command
+    if not _session_state["protocol_injected"] and result["exit_code"] == 0:
+        _session_state["protocol_injected"] = True
+        protocol_path = vault_path / "PROTOCOL.md"
+        if protocol_path.exists():
+            protocol_content = protocol_path.read_text()
+            result["stdout"] = f"""# Knowledge Vault Protocol (auto-loaded)
+
+{protocol_content}
+
+---
+## Command Output:
+
+{result["stdout"]}"""
+            logger.info("Auto-injected PROTOCOL.md on first shell call")
+
     return result
+
+
+async def _protocol() -> str:
+    """Re-read the knowledge vault protocol.
+
+    Use this if you need a reminder about:
+    - Database hierarchy rules
+    - How to save examples and learnings
+    - User transparency requirements
+
+    Returns:
+        The full PROTOCOL.md content
+    """
+    settings = get_settings()
+    protocol_path = Path(settings.vault_path) / "PROTOCOL.md"
+
+    if protocol_path.exists():
+        return protocol_path.read_text()
+
+    return "PROTOCOL.md not found. Vault may not be initialized."

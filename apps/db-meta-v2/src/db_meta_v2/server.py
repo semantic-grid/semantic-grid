@@ -48,7 +48,7 @@ from db_meta_v2.tools.onboarding import (
     _onboarding_start,
     _onboarding_status,
 )
-from db_meta_v2.tools.shell import _shell
+from db_meta_v2.tools.shell import _protocol, _shell
 from db_meta_v2.tools.training import (
     _import_examples,
     _import_instructions,
@@ -295,6 +295,7 @@ test_sampling = mcp.tool(name="test_sampling")(_test_sampling)
 
 # Register knowledge vault tool
 shell = mcp.tool(name="shell")(_shell)
+protocol = mcp.tool(name="protocol")(_protocol)
 
 
 def _configure_logging():
