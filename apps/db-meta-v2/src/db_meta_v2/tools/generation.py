@@ -180,45 +180,51 @@ def _generate_query_uuid(sql: str) -> str:
     return str(uuid.UUID(bytes=hash_bytes))
 
 
-def _execute_query(sql: str, limit: int | None = 1000) -> dict[str, Any]:
+def _execute_query(
+    sql: str, limit: int | None = 1000, query_id: str | None = None
+) -> dict[str, Any]:
     """Execute a SQL query and return results."""
     engine = get_engine()
     settings = get_settings()
 
+    # Build log prefix with query_id for tracing
+    qid = query_id[:8] if query_id else "adhoc"
+    log_prefix = f"[WH_QUERY:{qid}]"
+
     # Log query start with truncated SQL
     sql_preview = sql[:200] + "..." if len(sql) > 200 else sql
-    logger.info(f"[WH_QUERY] Starting execution: {sql_preview}")
-    logger.debug(f"[WH_QUERY] Full SQL: {sql}")
+    logger.info(f"{log_prefix} Starting execution: {sql_preview}")
+    logger.debug(f"{log_prefix} Full SQL: {sql}")
 
     start_time = time.time()
 
     try:
         with engine.connect() as conn:
-            logger.info("[WH_QUERY] Connection established, executing...")
+            logger.info(f"{log_prefix} Connection established, executing...")
 
             result = conn.execute(text(sql))
             columns = list(result.keys())
 
-            logger.info(f"[WH_QUERY] Query executed, fetching rows (limit={limit})...")
+            logger.info(f"{log_prefix} Query executed, fetching rows (limit={limit})...")
 
             rows = []
             fetch_start = time.time()
             for i, row in enumerate(result):
                 if limit and i >= limit:
-                    logger.info(f"[WH_QUERY] Reached row limit ({limit}), stopping fetch")
+                    logger.info(f"{log_prefix} Reached row limit ({limit}), stopping fetch")
                     break
                 rows.append(dict(zip(columns, row)))
 
                 # Log progress every 100 rows
                 if (i + 1) % 100 == 0:
                     elapsed = time.time() - fetch_start
-                    logger.debug(f"[WH_QUERY] Fetched {i + 1} rows ({elapsed:.1f}s)")
+                    logger.debug(f"{log_prefix} Fetched {i + 1} rows ({elapsed:.1f}s)")
 
             fetch_duration_ms = (time.time() - fetch_start) * 1000
             total_duration_ms = (time.time() - start_time) * 1000
 
         logger.info(
-            f"[WH_QUERY] Complete: {len(rows)} rows, "
+            f"{log_prefix} Complete: {len(rows)} rows, "
             f"fetch={fetch_duration_ms:.0f}ms, total={total_duration_ms:.0f}ms"
         )
 
@@ -232,7 +238,7 @@ def _execute_query(sql: str, limit: int | None = 1000) -> dict[str, Any]:
 
     except Exception as e:
         elapsed = (time.time() - start_time) * 1000
-        logger.error(f"[WH_QUERY] FAILED after {elapsed:.0f}ms: {type(e).__name__}: {e}")
+        logger.error(f"{log_prefix} FAILED after {elapsed:.0f}ms: {type(e).__name__}: {e}")
         raise
 
 
@@ -250,7 +256,9 @@ async def _execute_query_background(query_id: str, sql: str) -> None:
 
         # Run the blocking query in a thread pool
         loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(None, _execute_query, sql, 1000)
+        from functools import partial
+
+        result = await loop.run_in_executor(None, partial(_execute_query, sql, 1000, query_id))
 
         await store.update_status(
             query_id,
@@ -275,6 +283,20 @@ def _check_sampling_support(ctx: Context) -> bool:
         return ctx.session is not None and hasattr(ctx.session, "create_message")
     except Exception:
         return False
+
+
+async def _report_progress(ctx: Context | None, progress: float, total: float = 100) -> None:
+    """Report progress if context supports it.
+
+    Safe to call even if ctx is None or doesn't support progress.
+    """
+    if ctx is None:
+        return
+    try:
+        await ctx.report_progress(progress=progress, total=total)
+    except Exception:
+        # Progress reporting not supported, ignore
+        pass
 
 
 # =============================================================================
@@ -510,7 +532,7 @@ Generate the SQL query that implements this plan.
     # ==========================================================================
     try:
         query_uuid = _generate_query_uuid(generated_sql)
-        result = _execute_query(generated_sql)
+        result = _execute_query(generated_sql, query_id=query_uuid)
 
         return {
             "status": "success",
@@ -537,6 +559,7 @@ Generate the SQL query that implements this plan.
 async def _run_sql(
     query_id: str,
     confirmed: bool = False,
+    ctx: Context | None = None,
 ) -> dict:
     """Execute a previously validated SQL query.
 
@@ -556,6 +579,7 @@ async def _run_sql(
     Args:
         query_id: Query ID from validate_sql (required)
         confirmed: Override for high-cost queries (cost_tier='reject')
+        ctx: MCP Context for progress reporting (optional)
 
     Returns:
         Dict with query results or error
@@ -670,10 +694,12 @@ async def _run_sql(
 
     # Step 4: Execute synchronously (fast queries)
     try:
-        # Mark as running
+        # Mark as running and report progress
         await store.update_status(query_id, QueryStatus.RUNNING)
+        await _report_progress(ctx, 10, 100)  # 10% - Starting
 
-        result = _execute_query(sql)
+        result = _execute_query(sql, query_id=query_id)
+        await _report_progress(ctx, 80, 100)  # 80% - Query done, processing
 
         # Mark as complete
         await store.update_status(
@@ -682,6 +708,7 @@ async def _run_sql(
             result=result,
             rows_returned=result["rows_returned"],
         )
+        await _report_progress(ctx, 100, 100)  # 100% - Complete
 
         rows_returned = result["rows_returned"]
         is_large = rows_returned > 100
