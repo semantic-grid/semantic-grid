@@ -13,6 +13,21 @@ PROTOCOL_MD = """# Knowledge Vault Protocol
 This vault stores query examples, learnings, and instructions for SQL generation.
 Use the `shell` tool to interact with it via bash commands.
 
+## CRITICAL: Database Hierarchy
+
+**ALWAYS start discovery at the CATALOG level, not schema level.**
+
+Many databases use 3-level hierarchy: `catalog.schema.table`
+- WRONG: `list_tables(schema="radius")` - misses the catalog
+- RIGHT: `list_catalogs()` first, then drill down
+
+Before ANY query work:
+1. Check `instructions/sql_rules.md` for hierarchy rules
+2. Use `list_catalogs()` if available
+3. Only then explore schemas within the correct catalog
+
+Failing to do this will cause "table not found" errors.
+
 ## IMPORTANT: User Transparency
 
 **ALWAYS inform the user when you save or discover knowledge.**
@@ -29,9 +44,14 @@ This helps users understand what the system is learning and builds trust.
 
 ## On Session Start
 
-Read this protocol:
+1. Read this protocol:
 ```bash
 cat PROTOCOL.md
+```
+
+2. Check database structure rules:
+```bash
+cat instructions/sql_rules.md
 ```
 
 ## Before Generating SQL
@@ -150,10 +170,42 @@ VAULT_DIRS = [
     "schema",
 ]
 
-# Initial files to create (path -> content)
-VAULT_FILES = {
+# Files to always overwrite (system-controlled, shipped with each deploy)
+VAULT_SYSTEM_FILES = {
     "PROTOCOL.md": PROTOCOL_MD,
-    "instructions/sql_rules.md": "# SQL Generation Rules\n\nAdd general SQL rules here.\n",
+}
+
+# Initial files to create only if missing (user-editable templates)
+VAULT_TEMPLATE_FILES = {
+    "instructions/sql_rules.md": """# SQL Generation Rules
+
+## Database Hierarchy
+
+Check the database dialect to understand the naming hierarchy:
+
+- **Trino/Presto**: 3-level → `catalog.schema.table` (e.g., `iceberg.radius.wifi_qm_v2`)
+- **PostgreSQL**: 2-level → `schema.table` (e.g., `public.users`)
+- **MySQL**: 2-level → `database.table`
+- **ClickHouse**: 2-level → `database.table`
+
+**ALWAYS verify the hierarchy before writing queries.**
+
+Use `list_catalogs()` first if available. If it returns catalogs, you MUST include
+the catalog in all table references.
+
+## Common Mistakes
+
+1. Using 2-level path when 3-level is required
+   - WRONG: `SELECT * FROM radius.wifi_qm_v2`
+   - RIGHT: `SELECT * FROM iceberg.radius.wifi_qm_v2`
+
+2. Assuming schema names without checking
+   - Always use `list_schemas(catalog="...")` to discover actual schema names
+
+Add domain-specific SQL rules below this line.
+---
+
+""",
     "instructions/domain.md": "# Domain Knowledge\n\nAdd domain-specific guidance here.\n",
     "learnings/patterns.md": "# Query Patterns\n\nDocument successful patterns here.\n",
     "learnings/schema_gotchas.md": "# Schema Gotchas\n\nDocument schema quirks here.\n",
@@ -187,12 +239,19 @@ def ensure_vault_structure() -> bool:
             logger.info(f"Created vault subdirectory: {subdir}")
             created = True
 
-    # Create initial files if missing
-    for file_path, content in VAULT_FILES.items():
+    # Always overwrite system-controlled files (e.g., PROTOCOL.md)
+    for file_path, content in VAULT_SYSTEM_FILES.items():
+        full_path = vault_path / file_path
+        full_path.write_text(content)
+        logger.info(f"Updated system file: {file_path}")
+        created = True
+
+    # Create template files only if missing (user-editable)
+    for file_path, content in VAULT_TEMPLATE_FILES.items():
         full_path = vault_path / file_path
         if not full_path.exists():
             full_path.write_text(content)
-            logger.info(f"Created vault file: {file_path}")
+            logger.info(f"Created template file: {file_path}")
             created = True
 
     if created:

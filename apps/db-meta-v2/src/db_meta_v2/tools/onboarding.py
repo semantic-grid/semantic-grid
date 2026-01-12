@@ -112,7 +112,7 @@ def _build_status_guidance(state, tables_described: int) -> dict:
             ),
         }
 
-    elif phase == OnboardingPhase.TRAINING:
+    elif phase == OnboardingPhase.QUERY_TRAINING:
         return {
             "summary": "In query training phase.",
             "next_steps": [
