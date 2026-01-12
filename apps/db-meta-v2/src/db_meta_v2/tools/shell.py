@@ -34,22 +34,30 @@ Before writing SQL:
 
 
 def inject_protocol(result: dict, session_id: str | None = None) -> dict:
-    """Inject critical reminder into every tool response.
+    """Inject critical reminder directly into tool output.
 
     Args:
         result: Tool result dict
         session_id: Unused, kept for API compatibility
 
     Returns:
-        Modified result with reminder prepended
+        Modified result with reminder as first field
     """
     if not isinstance(result, dict):
         return result
 
-    # Add reminder as a top-level field that will be visible
-    result["_reminder"] = CRITICAL_REMINDER.strip()
+    reminder = CRITICAL_REMINDER.strip()
 
-    return result
+    # For shell commands, prepend to stdout
+    if "stdout" in result and isinstance(result["stdout"], str):
+        result["stdout"] = f"{reminder}\n\n{result['stdout']}"
+        return result
+
+    # For other tools, create a new dict with IMPORTANT_INSTRUCTIONS as FIRST key
+    # Dict ordering is preserved in Python 3.7+, so Claude sees this first
+    new_result = {"IMPORTANT_INSTRUCTIONS": reminder}
+    new_result.update(result)
+    return new_result
 
 
 # Commands allowed in the vault sandbox

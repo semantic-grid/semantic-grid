@@ -78,10 +78,14 @@ cat instructions/domain.md
 
 ## After Successful Query
 
-Save as example for future use:
+Save as example for future use. First generate a UUID:
 ```bash
-cat > examples/$(uuidgen).yaml << 'EOF'
-created: $(date -Iseconds)
+uuidgen
+```
+
+Then use that UUID in the filename (replace YOUR_UUID with the output):
+```bash
+cat >> examples/YOUR_UUID.yaml << 'EOF'
 intent: "description of what user asked"
 keywords:
   - keyword1
@@ -98,10 +102,14 @@ EOF
 
 ## After Failed Query
 
-Record the failure for learning:
+Record the failure for learning. First generate a UUID:
 ```bash
-cat > learnings/failures/$(uuidgen).yaml << 'EOF'
-created: $(date -Iseconds)
+uuidgen
+```
+
+Then save the failure:
+```bash
+cat >> learnings/failures/YOUR_UUID.yaml << 'EOF'
 intent: "what user asked"
 sql: |
   SELECT ...
@@ -130,10 +138,14 @@ EOF
 
 ## Correcting a Mistake
 
-Create new entry that supersedes the old:
+Create new entry that supersedes the old. First generate a UUID:
 ```bash
-cat > examples/$(uuidgen).yaml << 'EOF'
-created: $(date -Iseconds)
+uuidgen
+```
+
+Then create the corrected entry:
+```bash
+cat >> examples/YOUR_UUID.yaml << 'EOF'
 supersedes: {old_uuid}
 reason: "why the old one was wrong"
 intent: "..."
