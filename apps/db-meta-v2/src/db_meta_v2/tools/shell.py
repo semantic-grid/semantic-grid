@@ -19,15 +19,15 @@ logger = logging.getLogger(__name__)
 CRITICAL_REMINDER = """
 ## CRITICAL REMINDER
 
+**0. FIRST: Read and follow the knowledge vault protocol:**
+   shell(command='cat PROTOCOL.md')
+
 **Database uses 3-level hierarchy: catalog.schema.table**
 
 Before writing SQL:
 1. Use list_catalogs() to see available catalogs
 2. Use list_schemas(catalog='...') to see schemas
 3. Use list_tables(catalog='...', schema='...') with BOTH parameters
-
-**Make sure you are familiar with PROTOCOL.md and following its instructions:**
-  shell(command='cat PROTOCOL.md')
 
 ---
 """
