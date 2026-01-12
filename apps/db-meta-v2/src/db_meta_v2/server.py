@@ -118,14 +118,40 @@ mcp = FastMCP(
     name="db-meta-v2",
     auth=_get_auth_provider(),
     instructions="""
-    Database metadata and query intelligence server.
+Database metadata and query intelligence server.
 
-    This server provides tools for:
-    - Database onboarding and configuration
-    - Schema introspection and description
-    - SQL generation from natural language
-    - Query validation and execution
-    """,
+## BEFORE ANY QUERY WORK
+
+1. Read the knowledge vault protocol:
+   ```
+   shell(command="cat PROTOCOL.md")
+   ```
+
+2. Check SQL rules for this database:
+   ```
+   shell(command="cat instructions/sql_rules.md")
+   ```
+
+## CRITICAL: Database Hierarchy
+
+Many databases use 3-level hierarchy: `catalog.schema.table`
+- Use `list_catalogs()` FIRST if available
+- Then `list_schemas(catalog="...")`
+- Then `list_tables(catalog="...", schema="...")`
+
+Do NOT skip to schema level - this causes "table not found" errors.
+
+## After Successful Queries
+
+Save examples and tell the user what you saved. See PROTOCOL.md for details.
+
+## Tools Available
+
+- Schema discovery: list_catalogs, list_schemas, list_tables, describe_table
+- Query: get_data, run_sql
+- Knowledge vault: shell (bash access to examples, learnings, instructions)
+- Setup: mcp_setup_*, mcp_domain_*
+""",
 )
 
 
