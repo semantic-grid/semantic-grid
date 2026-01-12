@@ -26,7 +26,8 @@ Before writing SQL:
 2. Use list_schemas(catalog='...') to see schemas
 3. Use list_tables(catalog='...', schema='...') with BOTH parameters
 
-For examples and rules: shell(command='cat PROTOCOL.md')
+**Make sure you are familiar with PROTOCOL.md and following its instructions:**
+  shell(command='cat PROTOCOL.md')
 
 ---
 """
