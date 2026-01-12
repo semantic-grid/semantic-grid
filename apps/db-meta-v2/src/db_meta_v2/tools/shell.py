@@ -33,31 +33,40 @@ Before writing SQL:
 """
 
 
-def inject_protocol(result: dict, session_id: str | None = None) -> dict:
-    """Inject critical reminder directly into tool output.
+def inject_protocol(result: dict, session_id: str | None = None) -> str:
+    """Inject critical reminder directly into tool output as plain text.
 
     Args:
         result: Tool result dict
         session_id: Unused, kept for API compatibility
 
     Returns:
-        Modified result with reminder as first field
+        String with reminder prepended, then JSON data
     """
-    if not isinstance(result, dict):
-        return result
+    import json
 
     reminder = CRITICAL_REMINDER.strip()
 
-    # For shell commands, prepend to stdout
-    if "stdout" in result and isinstance(result["stdout"], str):
-        result["stdout"] = f"{reminder}\n\n{result['stdout']}"
-        return result
+    # For shell commands, prepend to stdout and return as string
+    if isinstance(result, dict) and "stdout" in result:
+        stdout = result.get("stdout", "")
+        stderr = result.get("stderr", "")
+        exit_code = result.get("exit_code", 0)
 
-    # For other tools, create a new dict with IMPORTANT_INSTRUCTIONS as FIRST key
-    # Dict ordering is preserved in Python 3.7+, so Claude sees this first
-    new_result = {"IMPORTANT_INSTRUCTIONS": reminder}
-    new_result.update(result)
-    return new_result
+        output_parts = [reminder, "", "--- TOOL OUTPUT ---", ""]
+        if stdout:
+            output_parts.append(stdout)
+        if stderr:
+            output_parts.append(f"STDERR: {stderr}")
+        if exit_code != 0:
+            output_parts.append(f"EXIT CODE: {exit_code}")
+
+        return "\n".join(output_parts)
+
+    # For other tools, return instructions + JSON as plain text
+    # This ensures the model sees instructions as text, not buried in JSON
+    json_output = json.dumps(result, indent=2, default=str)
+    return f"{reminder}\n\n--- TOOL OUTPUT ---\n\n{json_output}"
 
 
 # Commands allowed in the vault sandbox
