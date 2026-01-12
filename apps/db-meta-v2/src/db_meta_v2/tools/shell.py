@@ -33,40 +33,35 @@ Before writing SQL:
 """
 
 
-def inject_protocol(result: dict, session_id: str | None = None) -> str:
-    """Inject critical reminder directly into tool output as plain text.
+def inject_protocol(result: dict, session_id: str | None = None):
+    """Inject critical reminder as TextContent alongside structured data.
 
     Args:
         result: Tool result dict
         session_id: Unused, kept for API compatibility
 
     Returns:
-        String with reminder prepended, then JSON data
+        CallToolResult with both text content (instructions) and structured data
     """
     import json
 
+    from mcp.types import CallToolResult, TextContent
+
+    if not isinstance(result, dict):
+        return result
+
     reminder = CRITICAL_REMINDER.strip()
 
-    # For shell commands, prepend to stdout and return as string
-    if isinstance(result, dict) and "stdout" in result:
-        stdout = result.get("stdout", "")
-        stderr = result.get("stderr", "")
-        exit_code = result.get("exit_code", 0)
+    # Create text content with instructions FIRST, then JSON data
+    json_data = json.dumps(result, indent=2, default=str)
+    text_output = f"{reminder}\n\n--- DATA ---\n\n{json_data}"
 
-        output_parts = [reminder, "", "--- TOOL OUTPUT ---", ""]
-        if stdout:
-            output_parts.append(stdout)
-        if stderr:
-            output_parts.append(f"STDERR: {stderr}")
-        if exit_code != 0:
-            output_parts.append(f"EXIT CODE: {exit_code}")
-
-        return "\n".join(output_parts)
-
-    # For other tools, return instructions + JSON as plain text
-    # This ensures the model sees instructions as text, not buried in JSON
-    json_output = json.dumps(result, indent=2, default=str)
-    return f"{reminder}\n\n--- TOOL OUTPUT ---\n\n{json_output}"
+    # Return CallToolResult with both text (model sees this) and structured data
+    return CallToolResult(
+        content=[TextContent(type="text", text=text_output)],
+        structuredContent=result,
+        isError=False,
+    )
 
 
 # Commands allowed in the vault sandbox
