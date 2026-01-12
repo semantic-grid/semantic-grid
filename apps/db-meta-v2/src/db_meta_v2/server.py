@@ -2,6 +2,8 @@
 
 import logging
 import os
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastmcp import FastMCP
@@ -10,6 +12,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from db_meta_v2.config import get_settings
+from db_meta_v2.tasks.store import get_task_store
 from db_meta_v2.tools.database import (
     _describe_table,
     _detect_dialect,
@@ -114,10 +117,29 @@ def _get_auth_provider():
     return None
 
 
-# Create MCP server with optional auth
+@asynccontextmanager
+async def server_lifespan(server: FastMCP) -> AsyncIterator[None]:
+    """Server lifespan for startup/shutdown tasks."""
+    logger = logging.getLogger(__name__)
+
+    # Startup: Start background task cleanup loop
+    task_store = get_task_store()
+    await task_store.start_cleanup_loop(interval_seconds=300)  # Every 5 minutes
+    logger.info("Task store cleanup loop started")
+
+    try:
+        yield
+    finally:
+        # Shutdown: Stop cleanup loop
+        await task_store.stop_cleanup_loop()
+        logger.info("Task store cleanup loop stopped")
+
+
+# Create MCP server with optional auth and lifespan
 mcp = FastMCP(
     name="db-meta-v2",
     auth=_get_auth_provider(),
+    lifespan=server_lifespan,
     instructions="""
 Database metadata and query intelligence server.
 

@@ -13,9 +13,11 @@ Gracefully degrades when sampling/elicitation aren't supported:
 - No elicitation: Auto-approves or returns confirmation_required status
 """
 
+import asyncio
 import csv
 import hashlib
 import io
+import logging
 import time
 import uuid
 from dataclasses import dataclass
@@ -32,6 +34,7 @@ from sqlalchemy import text
 from db_meta_v2.config import get_settings
 from db_meta_v2.db.connection import get_engine
 from db_meta_v2.onboarding.schema_store import load_schema_descriptions
+from db_meta_v2.tasks.store import QueryStatus, get_query_store
 from db_meta_v2.tools.shell import inject_protocol
 from db_meta_v2.training.store import load_examples, load_instructions
 from db_meta_v2.validation.explain import (
@@ -40,6 +43,12 @@ from db_meta_v2.validation.explain import (
     explain_sql,
     validate_read_only,
 )
+
+logger = logging.getLogger(__name__)
+
+# Threshold for async execution (rows estimated to scan)
+# Queries above this go async to avoid timeout
+ASYNC_ROW_THRESHOLD = 50_000
 
 # =============================================================================
 # Elicitation Models
@@ -176,27 +185,88 @@ def _execute_query(sql: str, limit: int | None = 1000) -> dict[str, Any]:
     engine = get_engine()
     settings = get_settings()
 
+    # Log query start with truncated SQL
+    sql_preview = sql[:200] + "..." if len(sql) > 200 else sql
+    logger.info(f"[WH_QUERY] Starting execution: {sql_preview}")
+    logger.debug(f"[WH_QUERY] Full SQL: {sql}")
+
     start_time = time.time()
 
-    with engine.connect() as conn:
-        result = conn.execute(text(sql))
-        columns = list(result.keys())
+    try:
+        with engine.connect() as conn:
+            logger.info("[WH_QUERY] Connection established, executing...")
 
-        rows = []
-        for i, row in enumerate(result):
-            if limit and i >= limit:
-                break
-            rows.append(dict(zip(columns, row)))
+            result = conn.execute(text(sql))
+            columns = list(result.keys())
 
-        duration_ms = (time.time() - start_time) * 1000
+            logger.info(f"[WH_QUERY] Query executed, fetching rows (limit={limit})...")
 
-    return {
-        "data": rows,
-        "columns": columns,
-        "rows_returned": len(rows),
-        "duration_ms": round(duration_ms, 2),
-        "provider_id": settings.provider_id,
-    }
+            rows = []
+            fetch_start = time.time()
+            for i, row in enumerate(result):
+                if limit and i >= limit:
+                    logger.info(f"[WH_QUERY] Reached row limit ({limit}), stopping fetch")
+                    break
+                rows.append(dict(zip(columns, row)))
+
+                # Log progress every 100 rows
+                if (i + 1) % 100 == 0:
+                    elapsed = time.time() - fetch_start
+                    logger.debug(f"[WH_QUERY] Fetched {i + 1} rows ({elapsed:.1f}s)")
+
+            fetch_duration_ms = (time.time() - fetch_start) * 1000
+            total_duration_ms = (time.time() - start_time) * 1000
+
+        logger.info(
+            f"[WH_QUERY] Complete: {len(rows)} rows, "
+            f"fetch={fetch_duration_ms:.0f}ms, total={total_duration_ms:.0f}ms"
+        )
+
+        return {
+            "data": rows,
+            "columns": columns,
+            "rows_returned": len(rows),
+            "duration_ms": round(total_duration_ms, 2),
+            "provider_id": settings.provider_id,
+        }
+
+    except Exception as e:
+        elapsed = (time.time() - start_time) * 1000
+        logger.error(f"[WH_QUERY] FAILED after {elapsed:.0f}ms: {type(e).__name__}: {e}")
+        raise
+
+
+async def _execute_query_background(query_id: str, sql: str) -> None:
+    """Execute query in background and update query store.
+
+    This runs in an asyncio task, allowing the MCP tool to return immediately
+    while the query executes.
+    """
+    store = get_query_store()
+
+    try:
+        await store.update_status(query_id, QueryStatus.RUNNING)
+        logger.info(f"Query {query_id}: Starting background execution")
+
+        # Run the blocking query in a thread pool
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, _execute_query, sql, 1000)
+
+        await store.update_status(
+            query_id,
+            QueryStatus.COMPLETE,
+            result=result,
+            rows_returned=result["rows_returned"],
+        )
+        logger.info(f"Query {query_id}: Complete, {result['rows_returned']} rows")
+
+    except Exception as e:
+        logger.exception(f"Query {query_id}: Failed with error: {e}")
+        await store.update_status(
+            query_id,
+            QueryStatus.ERROR,
+            error=str(e),
+        )
 
 
 def _check_sampling_support(ctx: Context) -> bool:
@@ -465,12 +535,15 @@ Generate the SQL query that implements this plan.
 
 
 async def _run_sql(
-    sql: str,
-    skip_validation: bool = False,
+    query_id: str,
     confirmed: bool = False,
-    ctx: Context | None = None,
 ) -> dict:
-    """Validate and execute a SQL query.
+    """Execute a previously validated SQL query.
+
+    REQUIRES a query_id from validate_sql. This ensures:
+    1. All queries are validated before execution
+    2. User/agent has seen the query plan
+    3. Query can't be modified between validation and execution
 
     BEFORE generating SQL:
         1. Search existing examples: shell(command='grep -ri "keyword" examples/')
@@ -478,109 +551,137 @@ async def _run_sql(
 
     AFTER successful query:
         Save for future reuse: shell(command='cat >> examples/new.yaml << EOF...')
-        See PROTOCOL.md for format: shell(command='cat PROTOCOL.md')
-
-    This database uses 3-level hierarchy: catalog.schema.table
-    Example: iceberg.radius.wifi_hotspots (NOT just radius.wifi_hotspots)
+        See PROTOCOL.md for format.
 
     Args:
-        sql: SQL query to execute (must use full catalog.schema.table names)
-        skip_validation: Skip EXPLAIN validation (not recommended)
-        confirmed: User has already confirmed execution of high-cost query
-        ctx: MCP Context for elicitation (optional, enables confirmation dialogs)
+        query_id: Query ID from validate_sql (required)
+        confirmed: Override for high-cost queries (cost_tier='reject')
 
     Returns:
-        Dict with validation result and/or query results
+        Dict with query results or error
     """
-    # Step 1: Validate read-only
-    is_read_only, error = validate_read_only(sql)
-    if not is_read_only:
+    from db_meta_v2.tasks.store import QueryStatus, get_query_store
+
+    store = get_query_store()
+
+    # Step 1: Get validated query
+    query = await store.get(query_id)
+
+    if query is None:
         return inject_protocol(
             {
-                "status": "rejected",
-                "error": error,
-                "sql": sql,
+                "status": "error",
+                "error": "Query not found. Use validate_sql first to get a query_id.",
+                "query_id": query_id,
+                "guidance": {
+                    "next_steps": [
+                        "1. Call validate_sql(sql='YOUR SQL HERE')",
+                        "2. Use the returned query_id with run_sql(query_id='...')",
+                    ],
+                },
             }
         )
 
-    # Step 2: EXPLAIN validation
-    explain_result: ExplainResult | None = None
-    if not skip_validation:
-        explain_result = explain_sql(sql)
+    if query.status == QueryStatus.EXPIRED:
+        return inject_protocol(
+            {
+                "status": "error",
+                "error": "Query validation has expired. Please re-validate.",
+                "query_id": query_id,
+                "guidance": {
+                    "next_steps": [
+                        "Call validate_sql again with your SQL",
+                        "Query IDs expire after 30 minutes",
+                    ],
+                },
+            }
+        )
 
-        if not explain_result.valid:
+    if not query.can_execute:
+        return inject_protocol(
+            {
+                "status": "error",
+                "error": f"Query cannot be executed. Status: {query.status.value}",
+                "query_id": query_id,
+            }
+        )
+
+    sql = query.sql
+
+    # Step 2: Check cost tier
+    if query.cost_tier == "reject" and not confirmed:
+        return inject_protocol(
+            {
+                "status": "rejected",
+                "cost_tier": "reject",
+                "query_id": query_id,
+                "sql": sql,
+                "estimated_rows": query.estimated_rows,
+                "estimated_cost": query.estimated_cost,
+                "message": "Query is too expensive. Add filters or use confirmed=true.",
+                "guidance": {
+                    "next_steps": [
+                        "Add WHERE clauses to narrow the query",
+                        "Or use run_sql(query_id='...', confirmed=true) to force execution",
+                    ],
+                },
+            }
+        )
+
+    # Step 3: Check if query should run async
+    should_run_async = query.estimated_rows and query.estimated_rows > ASYNC_ROW_THRESHOLD
+
+    if should_run_async:
+        # Mark as pending and start background execution
+        started = await store.start_execution(query_id)
+        if not started:
             return inject_protocol(
                 {
-                    "status": "invalid",
-                    "error": explain_result.error,
-                    "sql": sql,
+                    "status": "error",
+                    "error": "Failed to start query execution",
+                    "query_id": query_id,
                 }
             )
 
-        # Step 3: Cost tier check
-        if explain_result.cost_tier == CostTier.REJECT:
-            if not confirmed:
-                return inject_protocol(
-                    {
-                        "status": "rejected",
-                        "cost_tier": "reject",
-                        "reason": explain_result.tier_reason,
-                        "estimated_rows": explain_result.estimated_rows,
-                        "estimated_cost": explain_result.estimated_cost,
-                        "sql": sql,
-                        "suggestion": "Narrow your query with filters or a smaller date range.",
-                        "override": "Use confirmed=true to execute anyway (may be slow).",
-                    }
-                )
-            # User confirmed - proceed with warning logged
+        # Start background execution
+        asyncio.create_task(_execute_query_background(query_id, sql))
 
-        if explain_result.cost_tier == CostTier.CONFIRM and not confirmed:
-            # Try to elicit confirmation if context is available
-            if ctx is not None:
-                try:
-                    confirm_result = await ctx.elicit(
-                        message=(
-                            f"Query Execution Confirmation\n\n"
-                            f"Reason: {explain_result.tier_reason}\n"
-                            f"Estimated rows: {explain_result.estimated_rows:,}\n\n"
-                            f"SQL:\n{sql}\n\n"
-                            f"Execute this query?"
-                        ),
-                        response_type=ExecutionConfirmation,
-                    )
+        return inject_protocol(
+            {
+                "status": "submitted",
+                "mode": "async",
+                "query_id": query_id,
+                "sql": sql,
+                "estimated_rows": query.estimated_rows,
+                "message": (
+                    f"Query submitted for background execution. "
+                    f"Estimated ~{query.estimated_rows:,} rows to scan. "
+                    f"Use get_result('{query_id}') to check status."
+                ),
+                "poll_interval_seconds": 10,
+                "guidance": {
+                    "next_steps": [
+                        f"Poll status with: get_result('{query_id}')",
+                        "Check every 10-30 seconds until status is 'complete'",
+                    ],
+                },
+            }
+        )
 
-                    if confirm_result.action != "accept" or not confirm_result.data.confirmed:
-                        return inject_protocol(
-                            {
-                                "status": "cancelled",
-                                "message": "Query execution not confirmed",
-                                "cost_tier": "confirm",
-                                "sql": sql,
-                            }
-                        )
-
-                except Exception:
-                    # Elicitation not supported, fall through to confirm_required
-                    pass
-
-            # No ctx or elicitation failed - require explicit confirmation
-            return inject_protocol(
-                {
-                    "status": "confirm_required",
-                    "cost_tier": "confirm",
-                    "reason": explain_result.tier_reason,
-                    "estimated_rows": explain_result.estimated_rows,
-                    "estimated_cost": explain_result.estimated_cost,
-                    "estimated_size_gb": explain_result.estimated_size_gb,
-                    "sql": sql,
-                    "message": "Query requires confirmation. Use confirmed=true to proceed.",
-                }
-            )
-
-    # Step 4: Execute
+    # Step 4: Execute synchronously (fast queries)
     try:
-        query_uuid = _generate_query_uuid(sql)
+        # Mark as running
+        await store.update_status(query_id, QueryStatus.RUNNING)
+
         result = _execute_query(sql)
+
+        # Mark as complete
+        await store.update_status(
+            query_id,
+            QueryStatus.COMPLETE,
+            result=result,
+            rows_returned=result["rows_returned"],
+        )
 
         rows_returned = result["rows_returned"]
         is_large = rows_returned > 100
@@ -588,120 +689,253 @@ async def _run_sql(
         return inject_protocol(
             {
                 "status": "success",
-                "query_uuid": query_uuid,
+                "query_id": query_id,
                 "sql": sql,
                 "data": result["data"],
                 "columns": result["columns"],
                 "rows_returned": rows_returned,
                 "duration_ms": result["duration_ms"],
                 "provider_id": result["provider_id"],
-                "cost_tier": (
-                    "auto"
-                    if skip_validation
-                    else (explain_result.cost_tier.value if explain_result else "unknown")
-                ),
+                "cost_tier": query.cost_tier,
                 "presentation_hints": {
                     "downloadable": True,
-                    "suggested_filename": f"query_{query_uuid[:8]}_{datetime.now():%Y%m%d_%H%M%S}",
+                    "suggested_filename": f"query_{query_id[:8]}_{datetime.now():%Y%m%d_%H%M%S}",
                     "suggested_formats": ["csv", "xlsx"],
                     "large_result": is_large,
                     "display_recommendation": "export" if is_large else "table",
-                    "hint": (
-                        f"Result has {rows_returned} rows. Consider exporting to CSV/Excel "
-                        "for better viewing."
-                        if is_large
-                        else "Result is small enough to display as a table."
-                    ),
                 },
                 "guidance": {
                     "summary": f"Query returned {rows_returned} rows.",
                     "next_steps": (
-                        [
-                            "Export results using export_results(query_uuid, format='csv')",
-                            "Create a downloadable file for the user",
-                            "Offer to refine the query if needed",
-                        ]
+                        ["Export results to CSV for the user"]
                         if is_large
-                        else [
-                            "Present the data in a clear table format",
-                            "Offer to refine the query if needed",
-                            "Suggest follow-up analyses",
-                        ]
-                    ),
-                    "suggested_response": (
-                        f"Result has {rows_returned} rows - too large for inline display. "
-                        "Exporting to CSV for download..."
-                        if is_large
-                        else "Present the data above in a nice table format. "
-                        "Summarize key insights from the results."
+                        else ["Present data in a table", "Summarize key insights"]
                     ),
                 },
             }
         )
 
     except Exception as e:
+        await store.update_status(query_id, QueryStatus.ERROR, error=str(e))
         return inject_protocol(
             {
                 "status": "error",
                 "error": f"Execution failed: {e}",
+                "query_id": query_id,
                 "sql": sql,
             }
         )
 
 
 async def _validate_sql(sql: str) -> dict:
-    """Validate SQL without executing it.
+    """Validate SQL and register it for execution.
 
-    Use this to check if SQL is valid before execution.
+    REQUIRED before run_sql - validates the query and returns a query_id
+    that must be passed to run_sql for execution.
+
+    This ensures:
+    1. All queries are validated before execution
+    2. User/agent sees the query plan before committing
+    3. Queries can't be modified between validation and execution
 
     Args:
         sql: SQL query to validate
 
     Returns:
-        Dict with validation results
+        Dict with validation results and query_id (if valid)
     """
+    from db_meta_v2.tasks.store import get_query_store
+
     # Check read-only
     is_read_only, error = validate_read_only(sql)
     if not is_read_only:
-        return {
-            "valid": False,
-            "error": error,
-            "sql": sql,
-        }
+        return inject_protocol(
+            {
+                "valid": False,
+                "error": error,
+                "sql": sql,
+                "query_id": None,
+            }
+        )
 
     # Run EXPLAIN
     explain_result = explain_sql(sql)
 
-    return {
-        "valid": explain_result.valid,
-        "error": explain_result.error,
-        "sql": sql,
-        "cost_tier": explain_result.cost_tier.value,
-        "tier_reason": explain_result.tier_reason,
-        "estimated_rows": explain_result.estimated_rows,
-        "estimated_cost": explain_result.estimated_cost,
-        "estimated_size_gb": explain_result.estimated_size_gb,
-        "explanation": (explain_result.explanation[:5] if explain_result.explanation else []),
-    }
+    if not explain_result.valid:
+        return inject_protocol(
+            {
+                "valid": False,
+                "error": explain_result.error,
+                "sql": sql,
+                "query_id": None,
+            }
+        )
+
+    # Register validated query
+    store = get_query_store()
+    query = await store.register_validated(
+        sql=sql,
+        estimated_rows=explain_result.estimated_rows,
+        estimated_cost=explain_result.estimated_cost,
+        cost_tier=explain_result.cost_tier.value,
+        explanation=explain_result.explanation[:5] if explain_result.explanation else [],
+    )
+
+    return inject_protocol(
+        {
+            "valid": True,
+            "query_id": query.query_id,
+            "sql": sql,
+            "cost_tier": explain_result.cost_tier.value,
+            "tier_reason": explain_result.tier_reason,
+            "estimated_rows": explain_result.estimated_rows,
+            "estimated_cost": explain_result.estimated_cost,
+            "estimated_size_gb": explain_result.estimated_size_gb,
+            "explanation": query.explanation,
+            "message": (
+                f"Query validated successfully. "
+                f"Use run_sql(query_id='{query.query_id}') to execute. "
+                f"Query ID expires in 30 minutes."
+            ),
+            "guidance": {
+                "next_steps": [
+                    f"Execute with: run_sql(query_id='{query.query_id}')",
+                    "Review the cost_tier and estimated_rows before executing",
+                    "If cost_tier is 'confirm' or 'reject', consider adding filters",
+                ],
+            },
+        }
+    )
 
 
-async def _get_result(query_uuid: str) -> dict:
-    """Get result for a previously executed query.
+async def _get_result(query_id: str) -> dict:
+    """Get status and results for a query.
 
-    This fetches results from cache or re-executes a stored query.
+    Use this to poll for results after run_sql returns status='submitted'.
+    Call repeatedly until status is 'complete' or 'error'.
 
     Args:
-        query_uuid: UUID of the query
+        query_id: Query ID from validate_sql or run_sql
 
     Returns:
-        Dict with query results or error
+        Dict with query status and results (when complete)
     """
-    # TODO: Implement query store and caching
-    return {
-        "status": "not_found",
-        "query_uuid": query_uuid,
-        "message": "Query store not yet implemented. Use run_sql to execute queries.",
-    }
+    store = get_query_store()
+    query = await store.get(query_id)
+
+    if query is None:
+        return inject_protocol(
+            {
+                "status": "not_found",
+                "query_id": query_id,
+                "message": "Query not found. It may have expired or the ID is invalid.",
+            }
+        )
+
+    if query.status == QueryStatus.VALIDATED:
+        return inject_protocol(
+            {
+                "status": "validated",
+                "query_id": query_id,
+                "sql": query.sql,
+                "estimated_rows": query.estimated_rows,
+                "cost_tier": query.cost_tier,
+                "message": "Query is validated but not yet executed.",
+                "guidance": {"next_steps": [f"Execute with: run_sql(query_id='{query_id}')"]},
+            }
+        )
+
+    if query.status == QueryStatus.PENDING:
+        return inject_protocol(
+            {
+                "status": "pending",
+                "query_id": query_id,
+                "elapsed_seconds": round(query.elapsed_seconds, 1),
+                "message": "Query is queued and will start shortly.",
+                "guidance": {"next_steps": [f"Poll again in 5 seconds: get_result('{query_id}')"]},
+            }
+        )
+
+    if query.status == QueryStatus.RUNNING:
+        return inject_protocol(
+            {
+                "status": "running",
+                "query_id": query_id,
+                "elapsed_seconds": round(query.elapsed_seconds, 1),
+                "running_seconds": round(query.running_seconds, 1)
+                if query.running_seconds
+                else None,
+                "message": f"Query is executing ({query.elapsed_seconds:.0f}s elapsed).",
+                "guidance": {
+                    "next_steps": [
+                        f"Poll again in 10-30 seconds: get_result('{query_id}')",
+                        "Tell the user the query is still running",
+                    ]
+                },
+            }
+        )
+
+    if query.status == QueryStatus.ERROR:
+        return inject_protocol(
+            {
+                "status": "error",
+                "query_id": query_id,
+                "elapsed_seconds": round(query.elapsed_seconds, 1),
+                "error": query.error,
+                "sql": query.sql,
+                "message": f"Query failed: {query.error}",
+            }
+        )
+
+    if query.status == QueryStatus.EXPIRED:
+        return inject_protocol(
+            {
+                "status": "expired",
+                "query_id": query_id,
+                "message": "Query has expired. Please re-validate with validate_sql.",
+            }
+        )
+
+    if query.status == QueryStatus.COMPLETE:
+        result = query.result or {}
+        rows_returned = result.get("rows_returned", 0)
+        is_large = rows_returned > 100
+
+        return inject_protocol(
+            {
+                "status": "complete",
+                "query_id": query_id,
+                "elapsed_seconds": round(query.elapsed_seconds, 1),
+                "sql": query.sql,
+                "data": result.get("data", []),
+                "columns": result.get("columns", []),
+                "rows_returned": rows_returned,
+                "duration_ms": result.get("duration_ms"),
+                "provider_id": result.get("provider_id"),
+                "presentation_hints": {
+                    "downloadable": True,
+                    "large_result": is_large,
+                    "display_recommendation": "export" if is_large else "table",
+                },
+                "guidance": {
+                    "summary": f"Query completed successfully. {rows_returned} rows returned.",
+                    "next_steps": (
+                        ["Export results to CSV for the user", "Offer to refine the query"]
+                        if is_large
+                        else ["Present data in a table", "Summarize key insights"]
+                    ),
+                },
+            }
+        )
+
+    # Fallback for unknown status
+    return inject_protocol(
+        {
+            "status": query.status.value,
+            "query_id": query_id,
+            "message": f"Query in unexpected state: {query.status.value}",
+        }
+    )
 
 
 async def _export_results(
