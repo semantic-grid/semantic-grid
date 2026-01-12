@@ -465,10 +465,10 @@ Generate the SQL query that implements this plan.
 
 
 async def _run_sql(
-    ctx: Context,
     sql: str,
     skip_validation: bool = False,
     confirmed: bool = False,
+    ctx: Context | None = None,
 ) -> dict:
     """Validate and execute a SQL query.
 
@@ -484,10 +484,10 @@ async def _run_sql(
     Example: iceberg.radius.wifi_hotspots (NOT just radius.wifi_hotspots)
 
     Args:
-        ctx: MCP Context for elicitation
         sql: SQL query to execute (must use full catalog.schema.table names)
         skip_validation: Skip EXPLAIN validation (not recommended)
         confirmed: User has already confirmed execution of high-cost query
+        ctx: MCP Context for elicitation (optional, enables confirmation dialogs)
 
     Returns:
         Dict with validation result and/or query results
@@ -535,43 +535,47 @@ async def _run_sql(
             # User confirmed - proceed with warning logged
 
         if explain_result.cost_tier == CostTier.CONFIRM and not confirmed:
-            # Try to elicit confirmation
-            try:
-                confirm_result = await ctx.elicit(
-                    message=(
-                        f"Query Execution Confirmation\n\n"
-                        f"Reason: {explain_result.tier_reason}\n"
-                        f"Estimated rows: {explain_result.estimated_rows:,}\n\n"
-                        f"SQL:\n{sql}\n\n"
-                        f"Execute this query?"
-                    ),
-                    response_type=ExecutionConfirmation,
-                )
-
-                if confirm_result.action != "accept" or not confirm_result.data.confirmed:
-                    return inject_protocol(
-                        {
-                            "status": "cancelled",
-                            "message": "Query execution not confirmed",
-                            "cost_tier": "confirm",
-                            "sql": sql,
-                        }
+            # Try to elicit confirmation if context is available
+            if ctx is not None:
+                try:
+                    confirm_result = await ctx.elicit(
+                        message=(
+                            f"Query Execution Confirmation\n\n"
+                            f"Reason: {explain_result.tier_reason}\n"
+                            f"Estimated rows: {explain_result.estimated_rows:,}\n\n"
+                            f"SQL:\n{sql}\n\n"
+                            f"Execute this query?"
+                        ),
+                        response_type=ExecutionConfirmation,
                     )
 
-            except Exception:
-                # Elicitation not supported
-                return inject_protocol(
-                    {
-                        "status": "confirm_required",
-                        "cost_tier": "confirm",
-                        "reason": explain_result.tier_reason,
-                        "estimated_rows": explain_result.estimated_rows,
-                        "estimated_cost": explain_result.estimated_cost,
-                        "estimated_size_gb": explain_result.estimated_size_gb,
-                        "sql": sql,
-                        "message": "Query requires confirmation. Use confirmed=true to proceed.",
-                    }
-                )
+                    if confirm_result.action != "accept" or not confirm_result.data.confirmed:
+                        return inject_protocol(
+                            {
+                                "status": "cancelled",
+                                "message": "Query execution not confirmed",
+                                "cost_tier": "confirm",
+                                "sql": sql,
+                            }
+                        )
+
+                except Exception:
+                    # Elicitation not supported, fall through to confirm_required
+                    pass
+
+            # No ctx or elicitation failed - require explicit confirmation
+            return inject_protocol(
+                {
+                    "status": "confirm_required",
+                    "cost_tier": "confirm",
+                    "reason": explain_result.tier_reason,
+                    "estimated_rows": explain_result.estimated_rows,
+                    "estimated_cost": explain_result.estimated_cost,
+                    "estimated_size_gb": explain_result.estimated_size_gb,
+                    "sql": sql,
+                    "message": "Query requires confirmation. Use confirmed=true to proceed.",
+                }
+            )
 
     # Step 4: Execute
     try:
