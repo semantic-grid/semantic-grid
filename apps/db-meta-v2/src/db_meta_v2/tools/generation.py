@@ -587,9 +587,11 @@ async def _run_sql(
     from db_meta_v2.tasks.store import QueryStatus, get_query_store
 
     store = get_query_store()
+    await _report_progress(ctx, 0, 100)  # 0% - Starting
 
     # Step 1: Get validated query
     query = await store.get(query_id)
+    await _report_progress(ctx, 5, 100)  # 5% - Query retrieved
 
     if query is None:
         return inject_protocol(
