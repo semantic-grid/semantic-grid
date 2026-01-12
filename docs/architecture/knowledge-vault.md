@@ -507,6 +507,103 @@ AWS_SECRET_ACCESS_KEY=...
 6. **No secrets in vault** - Connection strings stay in env vars
 7. **OAuth isolation** - `.oauth/` directory contains encrypted tokens, completely inaccessible to bash tool
 
+## K8s Migration Guide
+
+When upgrading an existing db-meta-v2 deployment to use the knowledge vault.
+
+### Pre-Migration State
+
+```
+PVC mounted at /data/providers:
+/data/providers/
+├── .oauth/                        # OAuth session storage
+└── wifiqm/                        # Provider data
+    ├── schema_descriptions.yaml
+    ├── onboarding_state.yaml
+    ├── query_examples.yaml
+    ├── domain_model.md
+    └── feedback_log.yaml
+```
+
+### Post-Migration State
+
+```
+PVC mounted at /data:
+/data/
+├── .oauth/                        # OAuth session storage (unchanged)
+├── wifiqm/                        # Original provider data (unchanged, used as migration source)
+│   └── (original files preserved)
+├── schema_descriptions.yaml       # Migrated from wifiqm/
+├── onboarding_state.yaml          # Migrated from wifiqm/
+└── vault/
+    ├── PROTOCOL.md
+    ├── instructions/
+    │   └── domain.md              # Migrated from domain_model.md
+    ├── examples/
+    │   └── *.yaml                 # Migrated from query_examples.yaml
+    └── learnings/
+        └── failures/              # Migrated from feedback_log.yaml
+```
+
+### Migration Steps
+
+**Step 1: Deploy new code**
+
+No manual data movement required. The PVC mount point changes from `/data/providers` to `/data`, 
+so existing data at `/data/providers/wifiqm` becomes `/data/wifiqm` automatically.
+
+The new deployment:
+- Mounts PVC at `/data` (was `/data/providers`)
+- Sets `PROVIDERS_DIR=/data/wifiqm` (migration source)
+- Sets `VAULT_PATH=/data/vault`
+
+```bash
+# Deploy
+./apps/db-meta-v2/k8s/wifiqm/deploy.sh
+```
+
+**Step 2: Verify migration**
+
+```bash
+# Check logs for migration
+kubectl logs -n semantic-grid-production deploy/semantic-grid-db-meta-v2 | grep -i migrat
+
+# Verify vault structure
+kubectl exec -n semantic-grid-production deploy/semantic-grid-db-meta-v2 -- ls -la /data/vault/
+
+# Verify examples migrated
+kubectl exec -n semantic-grid-production deploy/semantic-grid-db-meta-v2 -- ls -la /data/vault/examples/
+```
+
+**Step 3: Test shell tool**
+
+```bash
+# Via MCP or direct test
+kubectl exec -n semantic-grid-production deploy/semantic-grid-db-meta-v2 -- \
+  python -c "
+import asyncio
+from db_meta_v2.tools.shell import _shell
+result = asyncio.run(_shell('ls -la'))
+print(result['stdout'])
+"
+```
+
+### Rollback
+
+If issues occur, the original data is preserved in `/data/wifiqm/`. To rollback:
+
+1. Revert deployment to previous image
+2. Change PVC mount back to `/data/providers`
+3. Data will be back at `/data/providers/wifiqm/`
+
+### Config Changes Summary
+
+| Setting | Old Value | New Value |
+|---------|-----------|-----------|
+| PVC mountPath | `/data/providers` | `/data` |
+| PROVIDERS_DIR | `/data/providers` | `/data/wifiqm` |
+| VAULT_PATH | (not set) | `/data/vault` |
+
 ## Future Enhancements
 
 1. **Compaction job** - Periodic consolidation of superseded entries

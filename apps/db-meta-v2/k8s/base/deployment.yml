@@ -32,7 +32,7 @@ spec:
                 name: semantic-grid-db-meta # Existing db-meta secret (full name, not managed by this kustomize)
           volumeMounts:
             - name: providers-data
-              mountPath: /data/providers
+              mountPath: /data
           resources:
             requests:
               memory: "256Mi"

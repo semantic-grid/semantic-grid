@@ -1,5 +1,7 @@
 """Configuration for db-meta-v2."""
 
+from typing import Literal
+
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -126,6 +128,40 @@ class Settings(BaseSettings):
     mcp_path: str = Field(
         default="/mcp",
         description="Path for MCP HTTP endpoint",
+    )
+
+    # Knowledge Vault configuration
+    vault_backend: Literal["local", "s3"] = Field(
+        default="local",
+        description="Vault storage backend: 'local' for filesystem, 's3' for AWS S3",
+    )
+    vault_path: str = Field(
+        default="/data/vault",
+        description="Local path for vault storage (also used as cache for S3 backend)",
+    )
+    vault_s3_bucket: str = Field(
+        default="",
+        description="S3 bucket name for vault storage (only used if vault_backend='s3')",
+    )
+    vault_s3_prefix: str = Field(
+        default="knowledge/",
+        description="S3 key prefix for vault files",
+    )
+    vault_s3_region: str = Field(
+        default="us-east-1",
+        description="AWS region for S3 bucket",
+    )
+    vault_sync_on_startup: bool = Field(
+        default=True,
+        description="Sync vault from S3 on startup (only if vault_backend='s3')",
+    )
+    vault_sync_interval_seconds: int = Field(
+        default=300,
+        description="Interval for background vault sync in seconds (0 to disable)",
+    )
+    vault_migrate_legacy: bool = Field(
+        default=True,
+        description="Auto-migrate data from legacy providers/{id}/ structure on startup",
     )
 
 

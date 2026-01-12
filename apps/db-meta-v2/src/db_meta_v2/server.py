@@ -47,6 +47,7 @@ from db_meta_v2.tools.onboarding import (
     _onboarding_start,
     _onboarding_status,
 )
+from db_meta_v2.tools.shell import _shell
 from db_meta_v2.tools.training import (
     _import_examples,
     _import_instructions,
@@ -58,6 +59,7 @@ from db_meta_v2.tools.training import (
     _query_list_rules,
     _query_status,
 )
+from db_meta_v2.vault import ensure_vault_structure, migrate_legacy_provider_data
 
 
 class HealthCheckFilter(logging.Filter):
@@ -227,6 +229,9 @@ export_results = mcp.tool(name="export_results")(_export_results)
 test_elicitation = mcp.tool(name="test_elicitation")(_test_elicitation)
 test_sampling = mcp.tool(name="test_sampling")(_test_sampling)
 
+# Register knowledge vault tool
+shell = mcp.tool(name="shell")(_shell)
+
 
 def _configure_logging():
     """Configure logging before anything else."""
@@ -258,6 +263,12 @@ def main():
     """Run the MCP server."""
     _configure_logging()
     _configure_observability()
+
+    # Ensure vault directory structure exists
+    ensure_vault_structure()
+
+    # Migrate legacy provider data if present
+    migrate_legacy_provider_data()
 
     settings = get_settings()
 
