@@ -15,40 +15,52 @@ from db_meta_v2.config import get_settings
 
 logger = logging.getLogger(__name__)
 
-# Session state for protocol auto-injection (shared across all tools)
-_session_state = {"protocol_injected": False}
+# Per-session state for protocol auto-injection (keyed by session_id)
+_sessions_injected: set[str] = set()
 
 
-def get_protocol_injection() -> str | None:
-    """Get protocol content for injection on first tool call.
+def get_protocol_injection(session_id: str | None = None) -> str | None:
+    """Get protocol content for injection on first tool call per session.
 
-    Returns protocol content once, then None on subsequent calls.
-    Call this from any tool to auto-inject the protocol.
+    Args:
+        session_id: MCP session ID (from ctx.session_id). If None, always injects.
+
+    Returns:
+        Protocol content on first call per session, None on subsequent calls.
     """
-    if _session_state["protocol_injected"]:
+    # If no session_id, use a default key (will inject once per pod lifecycle)
+    key = session_id or "_no_session_"
+
+    if key in _sessions_injected:
         return None
 
-    _session_state["protocol_injected"] = True
+    _sessions_injected.add(key)
+
+    # Limit memory - keep only last 1000 sessions
+    if len(_sessions_injected) > 1000:
+        _sessions_injected.pop()
+
     settings = get_settings()
     protocol_path = Path(settings.vault_path) / "PROTOCOL.md"
 
     if protocol_path.exists():
-        logger.info("Auto-injecting PROTOCOL.md on first tool call")
+        logger.info(f"Auto-injecting PROTOCOL.md for session {key[:8]}...")
         return protocol_path.read_text()
 
     return None
 
 
-def inject_protocol(result: dict) -> dict:
+def inject_protocol(result: dict, session_id: str | None = None) -> dict:
     """Inject protocol into a tool result dict if this is the first call.
 
     Args:
         result: Tool result dict (must have a string field to prepend to)
+        session_id: MCP session ID for per-session tracking
 
     Returns:
         Modified result with protocol prepended, or original if already injected
     """
-    protocol = get_protocol_injection()
+    protocol = get_protocol_injection(session_id)
     if not protocol:
         return result
 

@@ -282,6 +282,8 @@ Database Dialect: {schema.dialect or "unknown"}
         plan.intent = intent
     except Exception:
         # Sampling not supported - guide the agent to explore manually
+        # Use session_id for per-session protocol injection
+        session_id = getattr(ctx, "session_id", None)
         return inject_protocol(
             {
                 "status": "error",
@@ -303,7 +305,8 @@ Database Dialect: {schema.dialect or "unknown"}
                         "the database hierarchy before writing any SQL."
                     ),
                 },
-            }
+            },
+            session_id=session_id,
         )
 
     # ==========================================================================
