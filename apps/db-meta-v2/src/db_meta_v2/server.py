@@ -2,6 +2,7 @@
 
 import logging
 import os
+from pathlib import Path
 
 from fastmcp import FastMCP
 from pydantic_ai import Agent
@@ -153,6 +154,43 @@ Save examples and tell the user what you saved. See PROTOCOL.md for details.
 - Setup: mcp_setup_*, mcp_domain_*
 """,
 )
+
+
+# =============================================================================
+# MCP Resources - automatically exposed to clients
+# =============================================================================
+
+
+@mcp.resource("protocol://knowledge-vault")
+def get_protocol() -> str:
+    """Knowledge vault protocol - READ THIS FIRST before any query work.
+
+    Contains critical instructions for:
+    - Database hierarchy (catalog.schema.table)
+    - How to search and save examples
+    - User transparency requirements
+    """
+    settings = get_settings()
+    protocol_path = Path(settings.vault_path) / "PROTOCOL.md"
+    if protocol_path.exists():
+        return protocol_path.read_text()
+    return "PROTOCOL.md not found. Run vault initialization."
+
+
+@mcp.resource("protocol://sql-rules")
+def get_sql_rules() -> str:
+    """SQL generation rules for this database.
+
+    Contains:
+    - Database hierarchy rules (2-level vs 3-level)
+    - Common mistakes to avoid
+    - Dialect-specific guidance
+    """
+    settings = get_settings()
+    rules_path = Path(settings.vault_path) / "instructions" / "sql_rules.md"
+    if rules_path.exists():
+        return rules_path.read_text()
+    return "sql_rules.md not found."
 
 
 # Health check endpoint for k8s probes

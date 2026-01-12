@@ -431,7 +431,7 @@ async def _onboarding_discover(provider_id: str | None = None) -> dict:
                 print(f"[DISCOVERY] Discovering tables for {catalog}.{schema}...", flush=True)
                 tables = get_tables(schema=schema, catalog=catalog)
                 print(
-                    f"[DISCOVERY] Found {len(tables)} tables in {catalog}.{schema} (before filter)",
+                    f"[DISCOVERY] Found {len(tables)} tables in {catalog}.{schema} (pre-filter)",
                     flush=True,
                 )
                 tables = ignore.filter_tables(tables)
