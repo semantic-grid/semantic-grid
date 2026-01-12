@@ -13,6 +13,20 @@ PROTOCOL_MD = """# Knowledge Vault Protocol
 This vault stores query examples, learnings, and instructions for SQL generation.
 Use the `shell` tool to interact with it via bash commands.
 
+## IMPORTANT: User Transparency
+
+**ALWAYS inform the user when you save or discover knowledge.**
+
+After saving anything to the vault, add a footnote to your response:
+
+> **Knowledge saved**: Saved this query as example `{uuid}` for future reference.
+
+When you find and use existing knowledge, mention it:
+
+> **Using prior knowledge**: Found similar query in `examples/{file}`.
+
+This helps users understand what the system is learning and builds trust.
+
 ## On Session Start
 
 Read this protocol:
@@ -60,6 +74,8 @@ validated: true
 EOF
 ```
 
+**Then tell the user**: "Saved this query as example `{uuid}` for future reference."
+
 ## After Failed Query
 
 Record the failure for learning:
@@ -75,6 +91,8 @@ resolution: "what should be done instead"
 EOF
 ```
 
+**Then tell the user**: "Recorded this issue in `failures/{uuid}` to avoid repeating it."
+
 ## When Discovering a Pattern
 
 Append to patterns file:
@@ -87,6 +105,8 @@ cat >> learnings/patterns.md << 'EOF'
 - **Example**: `code snippet`
 EOF
 ```
+
+**Then tell the user**: "Added pattern '{name}' to learnings for future queries."
 
 ## Correcting a Mistake
 
@@ -101,6 +121,8 @@ sql: |
   SELECT ...
 EOF
 ```
+
+**Then tell the user**: "Corrected example `{old_uuid}` with new version `{new_uuid}`."
 
 ## Useful Commands
 
