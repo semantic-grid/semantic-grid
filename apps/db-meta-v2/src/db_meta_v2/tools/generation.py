@@ -490,11 +490,13 @@ async def _run_sql(
     # Step 1: Validate read-only
     is_read_only, error = validate_read_only(sql)
     if not is_read_only:
-        return {
-            "status": "rejected",
-            "error": error,
-            "sql": sql,
-        }
+        return inject_protocol(
+            {
+                "status": "rejected",
+                "error": error,
+                "sql": sql,
+            }
+        )
 
     # Step 2: EXPLAIN validation
     explain_result: ExplainResult | None = None
@@ -502,25 +504,29 @@ async def _run_sql(
         explain_result = explain_sql(sql)
 
         if not explain_result.valid:
-            return {
-                "status": "invalid",
-                "error": explain_result.error,
-                "sql": sql,
-            }
+            return inject_protocol(
+                {
+                    "status": "invalid",
+                    "error": explain_result.error,
+                    "sql": sql,
+                }
+            )
 
         # Step 3: Cost tier check
         if explain_result.cost_tier == CostTier.REJECT:
             if not confirmed:
-                return {
-                    "status": "rejected",
-                    "cost_tier": "reject",
-                    "reason": explain_result.tier_reason,
-                    "estimated_rows": explain_result.estimated_rows,
-                    "estimated_cost": explain_result.estimated_cost,
-                    "sql": sql,
-                    "suggestion": "Narrow your query with filters or a smaller date range.",
-                    "override": "Use confirmed=true to execute anyway (may be slow/expensive).",
-                }
+                return inject_protocol(
+                    {
+                        "status": "rejected",
+                        "cost_tier": "reject",
+                        "reason": explain_result.tier_reason,
+                        "estimated_rows": explain_result.estimated_rows,
+                        "estimated_cost": explain_result.estimated_cost,
+                        "sql": sql,
+                        "suggestion": "Narrow your query with filters or a smaller date range.",
+                        "override": "Use confirmed=true to execute anyway (may be slow).",
+                    }
+                )
             # User confirmed - proceed with warning logged
 
         if explain_result.cost_tier == CostTier.CONFIRM and not confirmed:
@@ -538,25 +544,29 @@ async def _run_sql(
                 )
 
                 if confirm_result.action != "accept" or not confirm_result.data.confirmed:
-                    return {
-                        "status": "cancelled",
-                        "message": "Query execution not confirmed",
-                        "cost_tier": "confirm",
-                        "sql": sql,
-                    }
+                    return inject_protocol(
+                        {
+                            "status": "cancelled",
+                            "message": "Query execution not confirmed",
+                            "cost_tier": "confirm",
+                            "sql": sql,
+                        }
+                    )
 
             except Exception:
                 # Elicitation not supported
-                return {
-                    "status": "confirm_required",
-                    "cost_tier": "confirm",
-                    "reason": explain_result.tier_reason,
-                    "estimated_rows": explain_result.estimated_rows,
-                    "estimated_cost": explain_result.estimated_cost,
-                    "estimated_size_gb": explain_result.estimated_size_gb,
-                    "sql": sql,
-                    "message": "Query requires confirmation. Use confirmed=true to proceed.",
-                }
+                return inject_protocol(
+                    {
+                        "status": "confirm_required",
+                        "cost_tier": "confirm",
+                        "reason": explain_result.tier_reason,
+                        "estimated_rows": explain_result.estimated_rows,
+                        "estimated_cost": explain_result.estimated_cost,
+                        "estimated_size_gb": explain_result.estimated_size_gb,
+                        "sql": sql,
+                        "message": "Query requires confirmation. Use confirmed=true to proceed.",
+                    }
+                )
 
     # Step 4: Execute
     try:
@@ -566,64 +576,68 @@ async def _run_sql(
         rows_returned = result["rows_returned"]
         is_large = rows_returned > 100
 
-        return {
-            "status": "success",
-            "query_uuid": query_uuid,
-            "sql": sql,
-            "data": result["data"],
-            "columns": result["columns"],
-            "rows_returned": rows_returned,
-            "duration_ms": result["duration_ms"],
-            "provider_id": result["provider_id"],
-            "cost_tier": (
-                "auto"
-                if skip_validation
-                else (explain_result.cost_tier.value if explain_result else "unknown")
-            ),
-            "presentation_hints": {
-                "downloadable": True,
-                "suggested_filename": f"query_{query_uuid[:8]}_{datetime.now():%Y%m%d_%H%M%S}",
-                "suggested_formats": ["csv", "xlsx"],
-                "large_result": is_large,
-                "display_recommendation": "export" if is_large else "table",
-                "hint": (
-                    f"Result has {rows_returned} rows. Consider exporting to CSV/Excel "
-                    "for better viewing."
-                    if is_large
-                    else "Result is small enough to display as a table."
+        return inject_protocol(
+            {
+                "status": "success",
+                "query_uuid": query_uuid,
+                "sql": sql,
+                "data": result["data"],
+                "columns": result["columns"],
+                "rows_returned": rows_returned,
+                "duration_ms": result["duration_ms"],
+                "provider_id": result["provider_id"],
+                "cost_tier": (
+                    "auto"
+                    if skip_validation
+                    else (explain_result.cost_tier.value if explain_result else "unknown")
                 ),
-            },
-            "guidance": {
-                "summary": f"Query returned {rows_returned} rows.",
-                "next_steps": (
-                    [
-                        "Export results using export_results(query_uuid, format='csv')",
-                        "Create a downloadable file for the user",
-                        "Offer to refine the query if needed",
-                    ]
-                    if is_large
-                    else [
-                        "Present the data in a clear table format",
-                        "Offer to refine the query if needed",
-                        "Suggest follow-up analyses",
-                    ]
-                ),
-                "suggested_response": (
-                    f"Result has {rows_returned} rows - too large for inline display. "
-                    "Exporting to CSV for download..."
-                    if is_large
-                    else "Present the data above in a nice table format. "
-                    "Summarize key insights from the results."
-                ),
-            },
-        }
+                "presentation_hints": {
+                    "downloadable": True,
+                    "suggested_filename": f"query_{query_uuid[:8]}_{datetime.now():%Y%m%d_%H%M%S}",
+                    "suggested_formats": ["csv", "xlsx"],
+                    "large_result": is_large,
+                    "display_recommendation": "export" if is_large else "table",
+                    "hint": (
+                        f"Result has {rows_returned} rows. Consider exporting to CSV/Excel "
+                        "for better viewing."
+                        if is_large
+                        else "Result is small enough to display as a table."
+                    ),
+                },
+                "guidance": {
+                    "summary": f"Query returned {rows_returned} rows.",
+                    "next_steps": (
+                        [
+                            "Export results using export_results(query_uuid, format='csv')",
+                            "Create a downloadable file for the user",
+                            "Offer to refine the query if needed",
+                        ]
+                        if is_large
+                        else [
+                            "Present the data in a clear table format",
+                            "Offer to refine the query if needed",
+                            "Suggest follow-up analyses",
+                        ]
+                    ),
+                    "suggested_response": (
+                        f"Result has {rows_returned} rows - too large for inline display. "
+                        "Exporting to CSV for download..."
+                        if is_large
+                        else "Present the data above in a nice table format. "
+                        "Summarize key insights from the results."
+                    ),
+                },
+            }
+        )
 
     except Exception as e:
-        return {
-            "status": "error",
-            "error": f"Execution failed: {e}",
-            "sql": sql,
-        }
+        return inject_protocol(
+            {
+                "status": "error",
+                "error": f"Execution failed: {e}",
+                "sql": sql,
+            }
+        )
 
 
 async def _validate_sql(sql: str) -> dict:

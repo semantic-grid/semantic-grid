@@ -15,75 +15,38 @@ from db_meta_v2.config import get_settings
 
 logger = logging.getLogger(__name__)
 
-# Per-session state for protocol auto-injection (keyed by session_id)
-_sessions_injected: set[str] = set()
+# Critical reminder injected into every tool response
+CRITICAL_REMINDER = """
+## CRITICAL REMINDER
 
+**Database uses 3-level hierarchy: catalog.schema.table**
 
-def get_protocol_injection(session_id: str | None = None) -> str | None:
-    """Get protocol content for injection on first tool call per session.
+Before writing SQL:
+1. Use list_catalogs() to see available catalogs
+2. Use list_schemas(catalog='...') to see schemas
+3. Use list_tables(catalog='...', schema='...') with BOTH parameters
 
-    Args:
-        session_id: MCP session ID (from ctx.session_id). If None, always injects.
+For examples and rules: shell(command='cat PROTOCOL.md')
 
-    Returns:
-        Protocol content on first call per session, None on subsequent calls.
-    """
-    # If no session_id, use a default key (will inject once per pod lifecycle)
-    key = session_id or "_no_session_"
-
-    if key in _sessions_injected:
-        return None
-
-    _sessions_injected.add(key)
-
-    # Limit memory - keep only last 1000 sessions
-    if len(_sessions_injected) > 1000:
-        _sessions_injected.pop()
-
-    settings = get_settings()
-    protocol_path = Path(settings.vault_path) / "PROTOCOL.md"
-
-    if protocol_path.exists():
-        logger.info(f"Auto-injecting PROTOCOL.md for session {key[:8]}...")
-        return protocol_path.read_text()
-
-    return None
+---
+"""
 
 
 def inject_protocol(result: dict, session_id: str | None = None) -> dict:
-    """Inject protocol into a tool result dict if this is the first call.
+    """Inject critical reminder into every tool response.
 
     Args:
-        result: Tool result dict (must have a string field to prepend to)
-        session_id: MCP session ID for per-session tracking
+        result: Tool result dict
+        session_id: Unused, kept for API compatibility
 
     Returns:
-        Modified result with protocol prepended, or original if already injected
+        Modified result with reminder prepended
     """
-    protocol = get_protocol_injection(session_id)
-    if not protocol:
+    if not isinstance(result, dict):
         return result
 
-    header = f"""# Knowledge Vault Protocol (auto-loaded)
-
-{protocol}
-
----
-## Tool Response:
-
-"""
-
-    # Try to inject into common response fields
-    if isinstance(result, dict):
-        if "stdout" in result:
-            result["stdout"] = header + result["stdout"]
-        elif "message" in result:
-            result["message"] = header + result["message"]
-        elif "summary" in result:
-            result["summary"] = header + result["summary"]
-        else:
-            # Add as new field
-            result["_protocol"] = protocol
+    # Add reminder as a top-level field that will be visible
+    result["_reminder"] = CRITICAL_REMINDER.strip()
 
     return result
 

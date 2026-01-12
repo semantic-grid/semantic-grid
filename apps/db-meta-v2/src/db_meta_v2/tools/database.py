@@ -52,19 +52,23 @@ async def _list_catalogs(database_url: str | None = None) -> dict:
         catalogs = get_catalogs(database_url)
         # Filter out None values for display
         catalogs_list = [c for c in catalogs if c is not None]
-        return {
-            "catalogs": catalogs_list,
-            "count": len(catalogs_list),
-            "has_catalogs": len(catalogs_list) > 0,
-            "error": None,
-        }
+        return inject_protocol(
+            {
+                "catalogs": catalogs_list,
+                "count": len(catalogs_list),
+                "has_catalogs": len(catalogs_list) > 0,
+                "error": None,
+            }
+        )
     except Exception as e:
-        return {
-            "catalogs": [],
-            "count": 0,
-            "has_catalogs": False,
-            "error": str(e),
-        }
+        return inject_protocol(
+            {
+                "catalogs": [],
+                "count": 0,
+                "has_catalogs": False,
+                "error": str(e),
+            }
+        )
 
 
 async def _list_schemas(catalog: str | None = None, database_url: str | None = None) -> dict:
@@ -81,19 +85,23 @@ async def _list_schemas(catalog: str | None = None, database_url: str | None = N
         schemas = get_schemas(database_url, catalog=catalog)
         # Filter out None values for display
         schemas_list = [s for s in schemas if s is not None]
-        return {
-            "schemas": schemas_list,
-            "count": len(schemas_list),
-            "catalog": catalog,
-            "error": None,
-        }
+        return inject_protocol(
+            {
+                "schemas": schemas_list,
+                "count": len(schemas_list),
+                "catalog": catalog,
+                "error": None,
+            }
+        )
     except Exception as e:
-        return {
-            "schemas": [],
-            "count": 0,
-            "catalog": catalog,
-            "error": str(e),
-        }
+        return inject_protocol(
+            {
+                "schemas": [],
+                "count": 0,
+                "catalog": catalog,
+                "error": str(e),
+            }
+        )
 
 
 async def _list_tables(
@@ -165,25 +173,29 @@ async def _describe_table(
         columns = get_columns(
             table_name, schema=schema, catalog=catalog, database_url=database_url
         )
-        return {
-            "table_name": table_name,
-            "schema": schema,
-            "catalog": catalog,
-            "full_name": full_name,
-            "columns": columns,
-            "column_count": len(columns),
-            "error": None,
-        }
+        return inject_protocol(
+            {
+                "table_name": table_name,
+                "schema": schema,
+                "catalog": catalog,
+                "full_name": full_name,
+                "columns": columns,
+                "column_count": len(columns),
+                "error": None,
+            }
+        )
     except Exception as e:
-        return {
-            "table_name": table_name,
-            "schema": schema,
-            "catalog": catalog,
-            "full_name": full_name,
-            "columns": [],
-            "column_count": 0,
-            "error": str(e),
-        }
+        return inject_protocol(
+            {
+                "table_name": table_name,
+                "schema": schema,
+                "catalog": catalog,
+                "full_name": full_name,
+                "columns": [],
+                "column_count": 0,
+                "error": str(e),
+            }
+        )
 
 
 async def _sample_table(
@@ -217,24 +229,28 @@ async def _sample_table(
             limit=limit,
             database_url=database_url,
         )
-        return {
-            "table_name": table_name,
-            "schema": schema,
-            "catalog": catalog,
-            "full_name": full_name,
-            "rows": rows,
-            "row_count": len(rows),
-            "limit": limit,
-            "error": None,
-        }
+        return inject_protocol(
+            {
+                "table_name": table_name,
+                "schema": schema,
+                "catalog": catalog,
+                "full_name": full_name,
+                "rows": rows,
+                "row_count": len(rows),
+                "limit": limit,
+                "error": None,
+            }
+        )
     except Exception as e:
-        return {
-            "table_name": table_name,
-            "schema": schema,
-            "catalog": catalog,
-            "full_name": full_name,
-            "rows": [],
-            "row_count": 0,
-            "limit": limit,
-            "error": str(e),
-        }
+        return inject_protocol(
+            {
+                "table_name": table_name,
+                "schema": schema,
+                "catalog": catalog,
+                "full_name": full_name,
+                "rows": [],
+                "row_count": 0,
+                "limit": limit,
+                "error": str(e),
+            }
+        )
