@@ -111,9 +111,15 @@ async def _list_tables(
 ) -> dict:
     """List all tables in a schema (and catalog for Trino).
 
+    IMPORTANT: This database uses 3-level hierarchy (catalog.schema.table).
+    Always use list_catalogs() first, then list_schemas(catalog='...').
+
+    Before generating SQL, check for existing examples:
+        shell(command='grep -ri "keyword" examples/')
+
     Args:
         schema: Schema name. If None, uses default schema.
-        catalog: Optional catalog name (for Trino 3-level hierarchy).
+        catalog: Catalog name - REQUIRED for Trino databases.
         database_url: Optional database URL.
 
     Returns:
@@ -159,10 +165,15 @@ async def _describe_table(
 ) -> dict:
     """Get detailed information about a table.
 
+    Before writing SQL, search for existing examples:
+        shell(command='grep -ri "table_name" examples/')
+
+    This database uses 3-level hierarchy: catalog.schema.table
+
     Args:
         table_name: Name of the table
         schema: Schema name. If None, uses default schema.
-        catalog: Optional catalog name (for Trino 3-level hierarchy).
+        catalog: Catalog name - REQUIRED for Trino databases.
         database_url: Optional database URL.
 
     Returns:

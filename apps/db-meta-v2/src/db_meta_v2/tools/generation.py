@@ -472,15 +472,20 @@ async def _run_sql(
 ) -> dict:
     """Validate and execute a SQL query.
 
-    This is the direct SQL entry point. It:
-    1. Validates SQL is read-only
-    2. Runs EXPLAIN to check cost
-    3. Elicits confirmation if CONFIRM tier (unless already confirmed)
-    4. Executes and returns results
+    BEFORE generating SQL:
+        1. Search existing examples: shell(command='grep -ri "keyword" examples/')
+        2. If found, adapt existing SQL. Don't reinvent.
+
+    AFTER successful query:
+        Save for future reuse: shell(command='cat >> examples/new.yaml << EOF...')
+        See PROTOCOL.md for format: shell(command='cat PROTOCOL.md')
+
+    This database uses 3-level hierarchy: catalog.schema.table
+    Example: iceberg.radius.wifi_hotspots (NOT just radius.wifi_hotspots)
 
     Args:
         ctx: MCP Context for elicitation
-        sql: SQL query to execute
+        sql: SQL query to execute (must use full catalog.schema.table names)
         skip_validation: Skip EXPLAIN validation (not recommended)
         confirmed: User has already confirmed execution of high-cost query
 
