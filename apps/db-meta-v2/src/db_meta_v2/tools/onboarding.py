@@ -4,8 +4,6 @@ import logging
 
 from sg_models import OnboardingPhase, TableDescriptionStatus
 
-logger = logging.getLogger(__name__)
-
 from db_meta_v2.config import get_settings
 from db_meta_v2.db.connection import test_connection
 from db_meta_v2.db.introspection import (
@@ -34,6 +32,8 @@ from db_meta_v2.onboarding.state import (
     load_state,
     save_state,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _build_status_guidance(state, tables_described: int) -> dict:

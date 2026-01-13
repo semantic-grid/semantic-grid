@@ -1,5 +1,6 @@
 """SQL validation using EXPLAIN for different database dialects."""
 
+import os
 import re
 from enum import Enum
 from typing import Any
@@ -39,9 +40,6 @@ class ExplainResult(BaseModel):
     # Cost tier evaluation
     cost_tier: CostTier = Field(default=CostTier.AUTO, description="Execution tier")
     tier_reason: str | None = Field(default=None, description="Reason for cost tier assignment")
-
-
-import os
 
 
 def _get_cost_thresholds() -> dict[str, int | float]:

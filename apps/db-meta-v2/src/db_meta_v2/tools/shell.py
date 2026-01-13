@@ -34,14 +34,17 @@ Before writing SQL:
 
 
 def inject_protocol(result: dict, session_id: str | None = None):
-    """Inject critical reminder as TextContent alongside structured data.
+    """Inject critical reminder into tool response.
+
+    For small results: includes reminder + JSON in text content
+    For large results: includes reminder + summary only (data in structuredContent)
 
     Args:
         result: Tool result dict
         session_id: Unused, kept for API compatibility
 
     Returns:
-        CallToolResult with both text content (instructions) and structured data
+        CallToolResult with text content and structured data
     """
     import json
 
@@ -52,11 +55,26 @@ def inject_protocol(result: dict, session_id: str | None = None):
 
     reminder = CRITICAL_REMINDER.strip()
 
-    # Create text content with instructions FIRST, then JSON data
-    json_data = json.dumps(result, indent=2, default=str)
-    text_output = f"{reminder}\n\n--- DATA ---\n\n{json_data}"
+    # Check if result has large data (e.g., query results)
+    data = result.get("data", [])
+    is_large = isinstance(data, list) and len(data) > 20
 
-    # Return CallToolResult with both text (model sees this) and structured data
+    if is_large:
+        # For large results, only show summary in text (full data in structuredContent)
+        rows = len(data)
+        status = result.get("status", "unknown")
+        summary = f"Status: {status}, Rows: {rows}"
+        if "columns" in result:
+            summary += f", Columns: {result['columns']}"
+        text_output = (
+            f"{reminder}\n\n--- RESULT SUMMARY ---\n{summary}\n\n"
+            "(Full data in structured response)"
+        )
+    else:
+        # For small results, include full JSON
+        json_data = json.dumps(result, indent=2, default=str)
+        text_output = f"{reminder}\n\n--- DATA ---\n\n{json_data}"
+
     return CallToolResult(
         content=[TextContent(type="text", text=text_output)],
         structuredContent=result,
