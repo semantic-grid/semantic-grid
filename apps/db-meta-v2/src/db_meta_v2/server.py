@@ -338,12 +338,15 @@ def _configure_observability():
             token=settings.logfire_token,
             service_name="db-meta-v2",
             environment=os.environ.get("ENVIRONMENT", "development"),
+            # Disable scrubbing to preserve SQL queries and user input in logs
+            # Default patterns would scrub 'password', 'secret', 'auth', 'session', etc.
+            scrubbing=False,
         )
         # Instrument MCP server (all tool calls)
         logfire.instrument_mcp()
         # Instrument all PydanticAI agents automatically
         Agent.instrument_all()
-        logging.getLogger(__name__).info("Logfire observability enabled")
+        logging.getLogger(__name__).info("Logfire observability enabled (scrubbing disabled)")
 
 
 def main():

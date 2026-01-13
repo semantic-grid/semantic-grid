@@ -183,7 +183,10 @@ def _generate_query_uuid(sql: str) -> str:
 def _execute_query(
     sql: str, limit: int | None = 1000, query_id: str | None = None
 ) -> dict[str, Any]:
-    """Execute a SQL query and return results."""
+    """Execute a SQL query and return results.
+
+    Uses Logfire spans for OpenTelemetry tracing when available.
+    """
     engine = get_engine()
     settings = get_settings()
 
@@ -198,9 +201,35 @@ def _execute_query(
 
     start_time = time.time()
 
+    # Try to use Logfire for structured tracing
     try:
+        import logfire
+    except ImportError:
+        logfire = None
+
+    # Create span context manager if logfire is available
+    span_ctx = (
+        logfire.span(
+            "warehouse_query",
+            query_id=query_id or "adhoc",
+            sql=sql,
+            sql_preview=sql_preview,
+            limit=limit,
+            provider_id=settings.provider_id,
+        )
+        if logfire
+        else None
+    )
+
+    try:
+        # Enter span if available
+        if span_ctx:
+            span_ctx.__enter__()
+
         with engine.connect() as conn:
             logger.info(f"{log_prefix} Connection established, executing...")
+            if logfire:
+                logfire.info("DB connection established", query_id=qid)
 
             result = conn.execute(text(sql))
             columns = list(result.keys())
@@ -228,6 +257,22 @@ def _execute_query(
             f"fetch={fetch_duration_ms:.0f}ms, total={total_duration_ms:.0f}ms"
         )
 
+        # Log success to Logfire with full metrics
+        if logfire:
+            logfire.info(
+                "Warehouse query complete",
+                query_id=qid,
+                rows_returned=len(rows),
+                columns=columns,
+                fetch_duration_ms=round(fetch_duration_ms, 2),
+                total_duration_ms=round(total_duration_ms, 2),
+                provider_id=settings.provider_id,
+            )
+
+        # Exit span successfully
+        if span_ctx:
+            span_ctx.__exit__(None, None, None)
+
         return {
             "data": rows,
             "columns": columns,
@@ -239,6 +284,22 @@ def _execute_query(
     except Exception as e:
         elapsed = (time.time() - start_time) * 1000
         logger.error(f"{log_prefix} FAILED after {elapsed:.0f}ms: {type(e).__name__}: {e}")
+
+        # Log failure to Logfire
+        if logfire:
+            logfire.error(
+                "Warehouse query failed",
+                query_id=qid,
+                error_type=type(e).__name__,
+                error_message=str(e),
+                elapsed_ms=round(elapsed, 2),
+                sql_preview=sql_preview,
+            )
+
+        # Exit span with exception
+        if span_ctx:
+            span_ctx.__exit__(type(e), e, e.__traceback__)
+
         raise
 
 

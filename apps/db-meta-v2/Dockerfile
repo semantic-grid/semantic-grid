@@ -32,6 +32,11 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 FROM python:3.13-slim-bookworm
 
+# Install shell utilities needed by knowledge vault sandbox
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    uuid-runtime \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copy built app (includes .venv with all dependencies)
 COPY --from=builder --chown=nobody:nogroup /build/apps/db-meta-v2 /app
 # Copy sg-models (local dependency)
