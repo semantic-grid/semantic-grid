@@ -51,7 +51,12 @@ from db_meta_v2.tools.onboarding import (
     _onboarding_start,
     _onboarding_status,
 )
-from db_meta_v2.tools.shell import _protocol, _shell
+from db_meta_v2.tools.shell import (
+    SHELL_DESCRIPTION_DETAILED,
+    SHELL_DESCRIPTION_SHELL_MODE,
+    _protocol,
+    _shell,
+)
 from db_meta_v2.tools.training import (
     _import_examples,
     _import_instructions,
@@ -135,12 +140,11 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[None]:
         logger.info("Task store cleanup loop stopped")
 
 
-# Create MCP server with optional auth and lifespan
-mcp = FastMCP(
-    name="db-meta-v2",
-    auth=_get_auth_provider(),
-    lifespan=server_lifespan,
-    instructions="""
+# =============================================================================
+# Server Instructions by Mode
+# =============================================================================
+
+INSTRUCTIONS_DETAILED = """
 Database metadata and query intelligence server.
 
 ## BEFORE ANY QUERY WORK
@@ -174,150 +178,209 @@ Save examples and tell the user what you saved. See PROTOCOL.md for details.
 - Query: get_data, run_sql
 - Knowledge vault: shell (bash access to examples, learnings, instructions)
 - Setup: mcp_setup_*, mcp_domain_*
-""",
-)
+"""
+
+INSTRUCTIONS_SHELL_MODE = """
+Database query server - SHELL-FIRST MODE
+
+## YOU HAVE ONE PRIMARY TOOL: shell
+
+Use `shell` for ALL query preparation. It gives you access to a knowledge vault
+containing everything you need: examples, schema, rules, learnings.
+
+## IMMEDIATE FIRST STEP
+
+```
+shell(command="cat PROTOCOL.md")
+```
+
+This tells you exactly how to:
+- Find existing query examples
+- Understand the database schema
+- Follow SQL rules for this database
+- Save successful queries for reuse
+
+## QUERY WORKFLOW
+
+1. shell(command="cat PROTOCOL.md")           # Read the rules
+2. shell(command="grep -ri 'keyword' examples/")  # Find similar queries
+3. shell(command="cat schema/tables.yaml")    # Understand tables
+4. Write SQL based on what you found
+5. validate_sql(sql="...")                    # Validate before running
+6. run_sql(query_id="...")                    # Execute
+7. Save successful queries back to examples/
+
+## OTHER TOOLS
+
+- validate_sql / run_sql / get_result - Query execution (required for running SQL)
+- export_results - Export data to CSV/JSON
+- mcp_setup_* / mcp_domain_* - Admin setup (not for regular queries)
+
+DO NOT look for other schema discovery tools. Use `shell` to explore the vault.
+"""
 
 
 # =============================================================================
-# MCP Resources - automatically exposed to clients
+# Server Creation
 # =============================================================================
 
 
-@mcp.resource("protocol://knowledge-vault")
-def get_protocol() -> str:
-    """Knowledge vault protocol - READ THIS FIRST before any query work.
-
-    Contains critical instructions for:
-    - Database hierarchy (catalog.schema.table)
-    - How to search and save examples
-    - User transparency requirements
-    """
+def _create_server() -> FastMCP:
+    """Create and configure the MCP server based on tool_mode setting."""
     settings = get_settings()
-    protocol_path = Path(settings.vault_path) / "PROTOCOL.md"
-    if protocol_path.exists():
-        return protocol_path.read_text()
-    return "PROTOCOL.md not found. Run vault initialization."
+    is_shell_mode = settings.tool_mode == "shell"
 
+    instructions = INSTRUCTIONS_SHELL_MODE if is_shell_mode else INSTRUCTIONS_DETAILED
 
-@mcp.resource("protocol://sql-rules")
-def get_sql_rules() -> str:
-    """SQL generation rules for this database.
-
-    Contains:
-    - Database hierarchy rules (2-level vs 3-level)
-    - Common mistakes to avoid
-    - Dialect-specific guidance
-    """
-    settings = get_settings()
-    rules_path = Path(settings.vault_path) / "instructions" / "sql_rules.md"
-    if rules_path.exists():
-        return rules_path.read_text()
-    return "sql_rules.md not found."
-
-
-# Health check endpoint for k8s probes
-@mcp.custom_route("/health", methods=["GET"])
-async def health_check(request: Request) -> JSONResponse:
-    """Health check endpoint for load balancers and k8s probes."""
-    settings = get_settings()
-    return JSONResponse(
-        {
-            "status": "healthy",
-            "service": "db-meta-v2",
-            "provider_id": settings.provider_id,
-        }
+    server = FastMCP(
+        name="db-meta-v2",
+        auth=_get_auth_provider(),
+        lifespan=server_lifespan,
+        instructions=instructions,
     )
 
+    # =========================================================================
+    # MCP Resources - always exposed
+    # =========================================================================
 
-async def _ping() -> dict:
-    """Health check - verify server is running."""
-    settings = get_settings()
-    return {
-        "status": "ok",
-        "provider_id": settings.provider_id,
-        "database_configured": bool(settings.database_url),
-    }
+    @server.resource("protocol://knowledge-vault")
+    def get_protocol() -> str:
+        """Knowledge vault protocol - READ THIS FIRST before any query work."""
+        protocol_path = Path(settings.vault_path) / "PROTOCOL.md"
+        if protocol_path.exists():
+            return protocol_path.read_text()
+        return "PROTOCOL.md not found. Run vault initialization."
+
+    @server.resource("protocol://sql-rules")
+    def get_sql_rules() -> str:
+        """SQL generation rules for this database."""
+        rules_path = Path(settings.vault_path) / "instructions" / "sql_rules.md"
+        if rules_path.exists():
+            return rules_path.read_text()
+        return "sql_rules.md not found."
+
+    # Health check endpoint for k8s probes
+    @server.custom_route("/health", methods=["GET"])
+    async def health_check(request: Request) -> JSONResponse:
+        """Health check endpoint for load balancers and k8s probes."""
+        return JSONResponse(
+            {
+                "status": "healthy",
+                "service": "db-meta-v2",
+                "provider_id": settings.provider_id,
+                "tool_mode": settings.tool_mode,
+            }
+        )
+
+    # =========================================================================
+    # Core tools - always available
+    # =========================================================================
+
+    async def _ping() -> dict:
+        """Health check - verify server is running."""
+        return {
+            "status": "ok",
+            "provider_id": settings.provider_id,
+            "tool_mode": settings.tool_mode,
+            "database_configured": bool(settings.database_url),
+        }
+
+    async def _get_config() -> dict:
+        """Get current server configuration (non-sensitive)."""
+        return {
+            "provider_id": settings.provider_id,
+            "tool_mode": settings.tool_mode,
+            "resources_dir": settings.resources_dir,
+            "providers_dir": settings.providers_dir,
+            "database_configured": bool(settings.database_url),
+        }
+
+    server.tool(name="ping")(_ping)
+    server.tool(name="get_config")(_get_config)
+
+    # =========================================================================
+    # Shell tool - with mode-specific description
+    # =========================================================================
+
+    shell_description = (
+        SHELL_DESCRIPTION_SHELL_MODE if is_shell_mode else SHELL_DESCRIPTION_DETAILED
+    )
+    server.tool(name="shell", description=shell_description)(_shell)
+    server.tool(name="protocol")(_protocol)
+
+    # =========================================================================
+    # SQL execution tools - always available
+    # =========================================================================
+
+    server.tool(name="validate_sql")(_validate_sql)
+    server.tool(name="run_sql")(_run_sql)
+    server.tool(name="get_result")(_get_result)
+    server.tool(name="export_results")(_export_results)
+
+    # =========================================================================
+    # Admin/Setup tools - always available (not for casual query use)
+    # =========================================================================
+
+    # MCP setup tools (schema discovery wizard)
+    server.tool(name="mcp_setup_status")(_onboarding_status)
+    server.tool(name="mcp_setup_start")(_onboarding_start)
+    server.tool(name="mcp_setup_add_ignore_pattern")(_onboarding_add_ignore_pattern)
+    server.tool(name="mcp_setup_remove_ignore_pattern")(_onboarding_remove_ignore_pattern)
+    server.tool(name="mcp_setup_import_ignore_patterns")(_onboarding_import_ignore_patterns)
+    server.tool(name="mcp_setup_discover")(_onboarding_discover)
+    server.tool(name="mcp_setup_reset")(_onboarding_reset)
+    server.tool(name="mcp_setup_next")(_onboarding_next)
+    server.tool(name="mcp_setup_approve")(_onboarding_approve)
+    server.tool(name="mcp_setup_skip")(_onboarding_skip)
+    server.tool(name="mcp_setup_bulk_approve")(_onboarding_bulk_approve)
+
+    # MCP domain tools (domain model generation)
+    server.tool(name="mcp_domain_status")(_domain_status)
+    server.tool(name="mcp_domain_generate")(_domain_generate)
+    server.tool(name="mcp_domain_approve")(_domain_approve)
+    server.tool(name="mcp_domain_skip")(_domain_skip)
+
+    # Import tools (bulk import from legacy format)
+    server.tool(name="import_instructions")(_import_instructions)
+    server.tool(name="import_examples")(_import_examples)
+
+    # =========================================================================
+    # Detailed mode ONLY - schema discovery and query helper tools
+    # =========================================================================
+
+    if not is_shell_mode:
+        # Database introspection tools
+        server.tool(name="test_connection")(_test_connection)
+        server.tool(name="detect_dialect")(_detect_dialect)
+        server.tool(name="list_catalogs")(_list_catalogs)
+        server.tool(name="list_schemas")(_list_schemas)
+        server.tool(name="list_tables")(_list_tables)
+        server.tool(name="describe_table")(_describe_table)
+        server.tool(name="sample_table")(_sample_table)
+
+        # Dialect tools
+        server.tool(name="get_dialect_rules")(_get_dialect_rules)
+        server.tool(name="get_connection_dialect")(_get_connection_dialect)
+
+        # Query training tools
+        server.tool(name="query_status")(_query_status)
+        server.tool(name="query_generate")(_query_generate)
+        server.tool(name="query_approve")(_query_approve)
+        server.tool(name="query_feedback")(_query_feedback)
+        server.tool(name="query_add_rule")(_query_add_rule)
+        server.tool(name="query_list_examples")(_query_list_examples)
+        server.tool(name="query_list_rules")(_query_list_rules)
+
+        # Advanced generation tools
+        server.tool(name="get_data")(_get_data)
+        server.tool(name="test_elicitation")(_test_elicitation)
+        server.tool(name="test_sampling")(_test_sampling)
+
+    return server
 
 
-async def _get_config() -> dict:
-    """Get current server configuration (non-sensitive)."""
-    settings = get_settings()
-    return {
-        "provider_id": settings.provider_id,
-        "resources_dir": settings.resources_dir,
-        "providers_dir": settings.providers_dir,
-        "database_configured": bool(settings.database_url),
-    }
-
-
-# Register core tools
-ping = mcp.tool(name="ping")(_ping)
-get_config = mcp.tool(name="get_config")(_get_config)
-
-# Register database tools
-test_connection = mcp.tool(name="test_connection")(_test_connection)
-detect_dialect = mcp.tool(name="detect_dialect")(_detect_dialect)
-list_catalogs = mcp.tool(name="list_catalogs")(_list_catalogs)
-list_schemas = mcp.tool(name="list_schemas")(_list_schemas)
-list_tables = mcp.tool(name="list_tables")(_list_tables)
-describe_table = mcp.tool(name="describe_table")(_describe_table)
-sample_table = mcp.tool(name="sample_table")(_sample_table)
-
-# Register dialect tools
-get_dialect_rules = mcp.tool(name="get_dialect_rules")(_get_dialect_rules)
-get_connection_dialect = mcp.tool(name="get_connection_dialect")(_get_connection_dialect)
-
-# Register MCP setup tools (schema discovery wizard)
-# Prefixed with mcp_setup_ to avoid confusion with business "onboarding" queries
-mcp_setup_status = mcp.tool(name="mcp_setup_status")(_onboarding_status)
-mcp_setup_start = mcp.tool(name="mcp_setup_start")(_onboarding_start)
-mcp_setup_add_ignore_pattern = mcp.tool(name="mcp_setup_add_ignore_pattern")(
-    _onboarding_add_ignore_pattern
-)
-mcp_setup_remove_ignore_pattern = mcp.tool(name="mcp_setup_remove_ignore_pattern")(
-    _onboarding_remove_ignore_pattern
-)
-mcp_setup_import_ignore_patterns = mcp.tool(name="mcp_setup_import_ignore_patterns")(
-    _onboarding_import_ignore_patterns
-)
-mcp_setup_discover = mcp.tool(name="mcp_setup_discover")(_onboarding_discover)
-mcp_setup_reset = mcp.tool(name="mcp_setup_reset")(_onboarding_reset)
-mcp_setup_next = mcp.tool(name="mcp_setup_next")(_onboarding_next)
-mcp_setup_approve = mcp.tool(name="mcp_setup_approve")(_onboarding_approve)
-mcp_setup_skip = mcp.tool(name="mcp_setup_skip")(_onboarding_skip)
-mcp_setup_bulk_approve = mcp.tool(name="mcp_setup_bulk_approve")(_onboarding_bulk_approve)
-
-# Register MCP domain tools (domain model generation)
-mcp_domain_status = mcp.tool(name="mcp_domain_status")(_domain_status)
-mcp_domain_generate = mcp.tool(name="mcp_domain_generate")(_domain_generate)
-mcp_domain_approve = mcp.tool(name="mcp_domain_approve")(_domain_approve)
-mcp_domain_skip = mcp.tool(name="mcp_domain_skip")(_domain_skip)
-
-# Register query training tools
-query_status = mcp.tool(name="query_status")(_query_status)
-query_generate = mcp.tool(name="query_generate")(_query_generate)
-query_approve = mcp.tool(name="query_approve")(_query_approve)
-query_feedback = mcp.tool(name="query_feedback")(_query_feedback)
-query_add_rule = mcp.tool(name="query_add_rule")(_query_add_rule)
-query_list_examples = mcp.tool(name="query_list_examples")(_query_list_examples)
-query_list_rules = mcp.tool(name="query_list_rules")(_query_list_rules)
-
-# Register import tools (bulk import from legacy format)
-import_instructions = mcp.tool(name="import_instructions")(_import_instructions)
-import_examples = mcp.tool(name="import_examples")(_import_examples)
-
-# Register SQL generation tools (main entry points)
-get_data = mcp.tool(name="get_data")(_get_data)
-run_sql = mcp.tool(name="run_sql")(_run_sql)
-validate_sql = mcp.tool(name="validate_sql")(_validate_sql)
-get_result = mcp.tool(name="get_result")(_get_result)
-export_results = mcp.tool(name="export_results")(_export_results)
-test_elicitation = mcp.tool(name="test_elicitation")(_test_elicitation)
-test_sampling = mcp.tool(name="test_sampling")(_test_sampling)
-
-# Register knowledge vault tool
-shell = mcp.tool(name="shell")(_shell)
-protocol = mcp.tool(name="protocol")(_protocol)
+# Create the server instance
+mcp = _create_server()
 
 
 def _configure_logging():
@@ -361,6 +424,8 @@ def main():
     migrate_legacy_provider_data()
 
     settings = get_settings()
+    logger = logging.getLogger(__name__)
+    logger.info(f"Starting db-meta-v2 in {settings.tool_mode} mode")
 
     if settings.mcp_transport == "http":
         mcp.run(

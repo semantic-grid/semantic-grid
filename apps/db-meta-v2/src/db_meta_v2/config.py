@@ -113,6 +113,14 @@ class Settings(BaseSettings):
     )
 
     # MCP server configuration
+    tool_mode: Literal["detailed", "shell"] = Field(
+        default="detailed",
+        description=(
+            "Tool exposure mode: "
+            "'detailed' exposes all tools (schema discovery, query helpers, etc.), "
+            "'shell' exposes only the shell tool for query work (agent uses vault filesystem)"
+        ),
+    )
     mcp_transport: str = Field(
         default="stdio",
         description="MCP transport: 'stdio' for local, 'http' for remote",

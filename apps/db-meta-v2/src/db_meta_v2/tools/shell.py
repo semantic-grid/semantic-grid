@@ -236,51 +236,72 @@ async def run_sandboxed(command: str, cwd: Path, timeout: int = 30) -> dict:
         }
 
 
+# Shell tool descriptions for different modes
+SHELL_DESCRIPTION_DETAILED = """Run bash command in the knowledge vault.
+
+A sandboxed bash interface for reading, searching, and appending knowledge.
+The working directory is the vault root. All operations are append-only
+(no deletions or overwrites allowed).
+
+Available commands:
+    - Read: cat, grep, find, ls, head, tail, wc, sort, uniq, diff
+    - Write: mkdir, touch, tee (append-only)
+    - Utils: echo, date, uuidgen
+
+Examples:
+    # Search for examples
+    grep -ri "venue" examples/
+
+    # Read instructions
+    cat instructions/sql_rules.md
+
+    # Find recent examples
+    find examples -name "*.yaml" -mtime -7
+
+Args:
+    command: Bash command to execute in the vault
+
+Returns:
+    dict with stdout, stderr, exit_code
+"""
+
+SHELL_DESCRIPTION_SHELL_MODE = """YOUR PRIMARY TOOL - Use this for ALL query preparation.
+
+START IMMEDIATELY with: cat PROTOCOL.md
+
+This shell is your Swiss Army knife. The vault contains everything you need:
+
+    vault/
+    ├── PROTOCOL.md          # READ THIS FIRST - critical instructions
+    ├── examples/            # Query examples (YAML) - search before writing SQL
+    ├── instructions/        # SQL rules, business rules for this database
+    ├── learnings/           # Patterns, common mistakes, tips
+    └── schema/              # Table descriptions, domain model
+
+WORKFLOW:
+    1. cat PROTOCOL.md                              # Understand the rules
+    2. grep -ri "keyword" examples/                 # Find similar queries
+    3. cat instructions/sql_rules.md                # Check SQL rules
+    4. cat schema/tables.yaml                       # Understand schema
+    5. Write SQL based on what you found
+    6. Use validate_sql() then run_sql() to execute
+    7. Save successful queries to examples/
+
+Available commands:
+    - Read: cat, grep, find, ls, head, tail, wc, sort, uniq, diff
+    - Write: mkdir, touch, tee (append-only)
+    - Utils: echo, date, uuidgen
+
+Args:
+    command: Bash command to execute in the vault
+
+Returns:
+    dict with stdout, stderr, exit_code
+"""
+
+
 async def _shell(command: str) -> dict:
-    """Run bash command in the knowledge vault.
-
-    A sandboxed bash interface for reading, searching, and appending knowledge.
-    The working directory is the vault root. All operations are append-only
-    (no deletions or overwrites allowed).
-
-    Available commands:
-        - Read: cat, grep, find, ls, head, tail, wc, sort, uniq, diff
-        - Write: mkdir, touch, tee (append-only)
-        - Utils: echo, date, uuidgen
-
-    Examples:
-        # Search for examples
-        grep -ri "venue" examples/
-
-        # Read instructions
-        cat instructions/sql_rules.md
-
-        # Find recent examples
-        find examples -name "*.yaml" -mtime -7
-
-        # Create new example (heredoc)
-        cat > examples/$(uuidgen).yaml << 'EOF'
-        id: ...
-        intent: "..."
-        sql: |
-          SELECT ...
-        EOF
-
-        # Append to patterns
-        cat >> learnings/patterns.md << 'EOF'
-        ## New Pattern
-        ...
-        EOF
-
-    Args:
-        command: Bash command to execute in the vault
-
-    Returns:
-        dict with:
-            - stdout: Command output
-            - stderr: Error output (if any)
-            - exit_code: Command exit code (0 = success)
-    """
+    """Run bash command in the knowledge vault - see SHELL_DESCRIPTION_* for docs."""
     settings = get_settings()
     vault_path = Path(settings.vault_path)
 
