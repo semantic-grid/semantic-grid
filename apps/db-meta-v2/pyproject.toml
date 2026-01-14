@@ -14,8 +14,13 @@ dependencies = [
     "clickhouse-sqlalchemy>=0.3.0",
     "psycopg2-binary>=2.9.0",
     "pyyaml>=6.0.0",
+    "click>=8.0.0",
+    "rich>=13.0.0",
     "sg-models",
 ]
+
+[project.scripts]
+dbmeta = "db_meta_v2.cli:main"
 
 [tool.uv.sources]
 sg-models = { path = "../../packages/sg-models", editable = true }
@@ -25,6 +30,7 @@ dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.24.0",
     "ruff>=0.8.0",
+    "pyinstaller>=6.0.0",
 ]
 
 [build-system]
