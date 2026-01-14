@@ -74,7 +74,10 @@ download_binary() {
     fi
 
     local filename="dbmeta-${platform}${ext}"
+    # Use v2 branch for testing
     local url="https://github.com/${REPO}/releases/download/dbmeta-v${version}/${filename}"
+    # Note: install script URL uses v2 branch:
+    # https://raw.githubusercontent.com/semantic-grid/semantic-grid/v2/apps/db-meta-v2/scripts/install.sh
 
     echo -e "${BLUE}Downloading dbmeta v${version} for ${platform}...${NC}"
     echo "  URL: ${url}"
