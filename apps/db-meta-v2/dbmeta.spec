@@ -94,6 +94,20 @@ a = Analysis(
         "lupa.luajit20",
         "lupa.luajit21",
         "fakeredis",
+        # OpenTelemetry (for console tracing)
+        "opentelemetry",
+        "opentelemetry.sdk",
+        "opentelemetry.sdk.trace",
+        "opentelemetry.sdk.trace.export",
+        "opentelemetry.trace",
+        # Console module
+        "db_meta_v2.console",
+        "db_meta_v2.console.collector",
+        "db_meta_v2.console.server",
+        "db_meta_v2.console.ui",
+        "db_meta_v2.console.exporter",
+        "db_meta_v2.console.http_exporter",
+        "db_meta_v2.console.instrument",
         # Other
         "email.mime.text",
         "email.mime.multipart",

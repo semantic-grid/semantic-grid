@@ -79,12 +79,31 @@ download_binary() {
     info "Downloading dbmeta v${version} for ${platform}..."
     printf '  URL: %s\n' "$url"
 
-    if ! curl -fsSL "$url" -o "$dest"; then
-        error "Failed to download from ${url}"
-        exit 1
-    fi
+    # On macOS, download to cache dir and symlink to avoid Gatekeeper issues
+    case "$platform" in
+        macos-*)
+            cache_dir="$HOME/.dbmeta/cache"
+            mkdir -p "$cache_dir"
+            cache_path="${cache_dir}/dbmeta-${version}${ext}"
 
-    chmod +x "$dest"
+            if ! curl -fsSL "$url" -o "$cache_path"; then
+                error "Failed to download from ${url}"
+                exit 1
+            fi
+            chmod +x "$cache_path"
+
+            # Remove old symlink/file and create new symlink
+            rm -f "$dest"
+            ln -s "$cache_path" "$dest"
+            ;;
+        *)
+            if ! curl -fsSL "$url" -o "$dest"; then
+                error "Failed to download from ${url}"
+                exit 1
+            fi
+            chmod +x "$dest"
+            ;;
+    esac
 }
 
 # Main installation
