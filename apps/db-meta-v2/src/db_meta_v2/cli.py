@@ -65,7 +65,7 @@ def get_dbmeta_binary_path() -> str:
 
 
 @click.group()
-@click.version_option(version="0.1.0")
+@click.version_option(version="0.1.1")
 def main():
     """dbmeta - Database metadata MCP server for Claude Desktop."""
     pass
