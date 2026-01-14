@@ -158,7 +158,7 @@ def launch_claude_desktop() -> None:
 
 
 @click.group()
-@click.version_option(version="0.1.2")
+@click.version_option(version="0.1.3")
 def main():
     """dbmeta - Database metadata MCP server for Claude Desktop."""
     pass
