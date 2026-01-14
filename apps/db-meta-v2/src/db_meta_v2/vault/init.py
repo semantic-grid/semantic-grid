@@ -13,7 +13,43 @@ PROTOCOL_MD = """# Knowledge Vault Protocol
 This vault stores query examples, learnings, and instructions for SQL generation.
 Use the `shell` tool to interact with it via bash commands.
 
-## CRITICAL: Database Hierarchy
+## CRITICAL: Use Cached Schema First
+
+**NEVER introspect the database directly if cached schema exists.**
+
+On first run, dbmeta discovers and caches the full database schema. This cache contains:
+- `schema_descriptions.yaml` - Complete table/column descriptions with semantic annotations
+- `instructions/domain.md` - Domain model explaining relationships and business logic
+
+**Before ANY database introspection:**
+1. Check if `schema_descriptions.yaml` exists
+2. If it exists, use it as your primary schema reference
+3. Only call `list_catalogs()`, `list_schemas()`, `list_tables()` if cache is missing
+
+```bash
+# Check for cached schema
+cat schema_descriptions.yaml 2>/dev/null | head -50
+```
+
+If the file exists and has content, USE IT instead of calling discovery tools.
+
+## CRITICAL: Read Domain Model
+
+**ALWAYS read the domain model before writing queries.**
+
+The domain model (`instructions/domain.md`) contains:
+- Business entity relationships
+- Key concepts and terminology
+- Important joins and aggregations
+- Common query patterns
+
+```bash
+cat instructions/domain.md
+```
+
+This is NOT optional - it contains critical context for correct SQL generation.
+
+## Database Hierarchy
 
 **ALWAYS start discovery at the CATALOG level, not schema level.**
 
@@ -22,9 +58,10 @@ Many databases use 3-level hierarchy: `catalog.schema.table`
 - RIGHT: `list_catalogs()` first, then drill down
 
 Before ANY query work:
-1. Check `instructions/sql_rules.md` for hierarchy rules
-2. Use `list_catalogs()` if available
-3. Only then explore schemas within the correct catalog
+1. Check cached schema first (`schema_descriptions.yaml`)
+2. Check `instructions/sql_rules.md` for hierarchy rules
+3. Check domain model (`instructions/domain.md`)
+4. Only if cache missing: use `list_catalogs()` to discover
 
 Failing to do this will cause "table not found" errors.
 
@@ -49,29 +86,47 @@ This helps users understand what the system is learning and builds trust.
 cat PROTOCOL.md
 ```
 
-2. Check database structure rules:
+2. Check for cached schema (USE THIS FIRST):
+```bash
+cat schema_descriptions.yaml 2>/dev/null | head -100
+```
+
+3. Read domain model (REQUIRED):
+```bash
+cat instructions/domain.md
+```
+
+4. Check database structure rules:
 ```bash
 cat instructions/sql_rules.md
 ```
 
 ## Before Generating SQL
 
-### 1. Search for existing examples
+### 1. Use cached schema (PRIMARY SOURCE)
+```bash
+# Search for relevant tables/columns in cache
+grep -i "keyword" schema_descriptions.yaml
+```
+
+### 2. Search for existing examples
 ```bash
 grep -ri "keyword1\\|keyword2" examples/
 ```
 
-### 2. If match found, read it
+### 3. If match found, read it
 ```bash
 cat examples/{matched_file}.yaml
 ```
 
-### 3. Check for relevant learnings
+### 4. Check for relevant learnings
 ```bash
 grep -i "table_name" learnings/patterns.md
 ```
 
-### 4. Check domain instructions
+### 5. Reference domain model for context
+The domain model should already be loaded from session start.
+If not, read it now:
 ```bash
 cat instructions/domain.md
 ```
