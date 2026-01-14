@@ -406,8 +406,21 @@ def _configure_logging():
 
 
 def _configure_observability():
-    """Configure Logfire observability if token is set."""
+    """Configure observability (Logfire and/or local console)."""
     settings = get_settings()
+    logger = logging.getLogger(__name__)
+
+    # Always try to set up HTTP tracing to console (silent if console not running)
+    try:
+        from db_meta_v2.console.http_exporter import setup_http_tracing
+
+        console_port = int(os.environ.get("DBMETA_CONSOLE_PORT", "8384"))
+        setup_http_tracing(console_port=console_port)
+        logger.debug(f"HTTP tracing configured (port {console_port})")
+    except Exception as e:
+        logger.debug(f"HTTP tracing not available: {e}")
+
+    # Also configure Logfire if token is set
     if settings.logfire_token:
         import logfire
 
@@ -423,7 +436,7 @@ def _configure_observability():
         logfire.instrument_mcp()
         # Instrument all PydanticAI agents automatically
         Agent.instrument_all()
-        logging.getLogger(__name__).info("Logfire observability enabled (scrubbing disabled)")
+        logger.info("Logfire observability enabled (scrubbing disabled)")
 
 
 def main():
@@ -440,6 +453,16 @@ def main():
     settings = get_settings()
     logger = logging.getLogger(__name__)
     logger.info(f"Starting db-meta-v2 in {settings.tool_mode} mode")
+
+    # Instrument tools if console tracing is enabled
+    if os.environ.get("DBMETA_CONSOLE"):
+        try:
+            from db_meta_v2.console.instrument import instrument_server
+
+            instrument_server(mcp)
+            logger.info("Tool instrumentation enabled for console")
+        except Exception as e:
+            logger.warning(f"Failed to instrument tools: {e}")
 
     if settings.mcp_transport == "http":
         mcp.run(

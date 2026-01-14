@@ -534,12 +534,14 @@ wheels = [
 
 [[package]]
 name = "db-meta-v2"
-version = "0.1.7"
+version = "0.1.9"
 source = { editable = "." }
 dependencies = [
     { name = "click" },
     { name = "clickhouse-sqlalchemy" },
     { name = "fastmcp" },
+    { name = "opentelemetry-api" },
+    { name = "opentelemetry-sdk" },
     { name = "psycopg2-binary" },
     { name = "pydantic-ai" },
     { name = "pydantic-graph" },
@@ -565,6 +567,8 @@ requires-dist = [
     { name = "click", specifier = ">=8.0.0" },
     { name = "clickhouse-sqlalchemy", specifier = ">=0.3.0" },
     { name = "fastmcp", specifier = ">=2.0.0" },
+    { name = "opentelemetry-api", specifier = ">=1.20.0" },
+    { name = "opentelemetry-sdk", specifier = ">=1.20.0" },
     { name = "psycopg2-binary", specifier = ">=2.9.0" },
     { name = "pydantic-ai", specifier = ">=0.1.0" },
     { name = "pydantic-graph", specifier = ">=0.1.0" },

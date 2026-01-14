@@ -395,6 +395,34 @@ def config():
         console.print("[yellow]Editor exited with error.[/yellow]")
 
 
+@main.command("console")
+@click.option("--port", "-p", default=8384, help="Port for console UI")
+@click.option("--no-browser", is_flag=True, help="Don't open browser automatically")
+def console_cmd(port: int, no_browser: bool):
+    """Start local trace console (view MCP server activity).
+
+    Run this in a separate terminal, then use Claude Desktop normally.
+    The MCP server will send traces here for visualization.
+
+    Example:
+        Terminal 1: dbmeta console
+        Terminal 2: Use Claude Desktop (which runs dbmeta start)
+    """
+    from db_meta_v2.console import start_console
+
+    console.print(
+        Panel.fit(
+            f"[bold blue]dbmeta console[/bold blue]\n\n"
+            f"Trace viewer at [cyan]http://localhost:{port}[/cyan]\n\n"
+            f"[dim]Waiting for traces from MCP server...[/dim]\n"
+            f"Press Ctrl+C to stop.",
+            border_style="blue",
+        )
+    )
+
+    start_console(port=port, open_browser=not no_browser, blocking=True)
+
+
 @main.command()
 def status():
     """Show current configuration status."""
