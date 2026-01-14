@@ -243,17 +243,31 @@ def _create_server() -> FastMCP:
     # MCP Resources - always exposed
     # =========================================================================
 
-    @server.resource("protocol://knowledge-vault")
-    def get_protocol() -> str:
-        """Knowledge vault protocol - READ THIS FIRST before any query work."""
+    @server.resource("dbmeta://ground-rules")
+    def get_ground_rules() -> str:
+        """Ground rules for working with this database - READ FIRST.
+
+        Contains critical instructions for:
+        - Database hierarchy (catalog.schema.table)
+        - How to search and save query examples
+        - User transparency requirements
+        - SQL generation workflow
+        """
         protocol_path = Path(settings.vault_path) / "PROTOCOL.md"
         if protocol_path.exists():
             return protocol_path.read_text()
         return "PROTOCOL.md not found. Run vault initialization."
 
-    @server.resource("protocol://sql-rules")
+    @server.resource("dbmeta://sql-rules")
     def get_sql_rules() -> str:
-        """SQL generation rules for this database."""
+        """SQL generation rules specific to this database.
+
+        Contains:
+        - Database hierarchy rules (2-level vs 3-level)
+        - Dialect-specific syntax guidance
+        - Common mistakes to avoid
+        - Query patterns and examples
+        """
         rules_path = Path(settings.vault_path) / "instructions" / "sql_rules.md"
         if rules_path.exists():
             return rules_path.read_text()

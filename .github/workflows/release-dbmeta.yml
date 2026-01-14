@@ -1,0 +1,147 @@
+name: Release dbmeta CLI
+
+on:
+  push:
+    tags:
+      - 'dbmeta-v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 0.1.0)'
+        required: true
+        type: string
+
+jobs:
+  build:
+    name: Build ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            platform: macos-arm64
+            binary: dbmeta
+          - os: macos-13
+            platform: macos-x64
+            binary: dbmeta
+          - os: ubuntu-latest
+            platform: linux-x64
+            binary: dbmeta
+          - os: windows-latest
+            platform: windows-x64
+            binary: dbmeta.exe
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "0.5.x"
+
+      - name: Install dependencies
+        working-directory: apps/db-meta-v2
+        run: |
+          uv sync --all-extras
+
+      - name: Build with PyInstaller
+        working-directory: apps/db-meta-v2
+        run: |
+          uv run pyinstaller --clean --noconfirm dbmeta.spec
+
+      - name: Rename binary with platform suffix
+        working-directory: apps/db-meta-v2
+        shell: bash
+        run: |
+          if [[ "${{ matrix.platform }}" == windows-* ]]; then
+            mv dist/dbmeta.exe dist/dbmeta-${{ matrix.platform }}.exe
+          else
+            mv dist/dbmeta dist/dbmeta-${{ matrix.platform }}
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dbmeta-${{ matrix.platform }}
+          path: |
+            apps/db-meta-v2/dist/dbmeta-${{ matrix.platform }}*
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: List artifacts
+        run: ls -la artifacts/
+
+      - name: Get version from tag
+        id: version
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
+            echo "tag=dbmeta-v${{ inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            VERSION=${GITHUB_REF#refs/tags/dbmeta-v}
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "tag=dbmeta-v$VERSION" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: dbmeta v${{ steps.version.outputs.version }}
+          draft: false
+          prerelease: false
+          files: |
+            artifacts/dbmeta-*
+          body: |
+            ## dbmeta v${{ steps.version.outputs.version }}
+
+            Database metadata MCP server for Claude Desktop.
+
+            ### Installation
+
+            **One-liner (macOS/Linux):**
+            ```bash
+            curl -fsSL https://semantic-grid.io/install.sh | sh
+            ```
+
+            **Manual download:**
+            - macOS (Apple Silicon): `dbmeta-macos-arm64`
+            - macOS (Intel): `dbmeta-macos-x64`
+            - Linux (x64): `dbmeta-linux-x64`
+            - Windows (x64): `dbmeta-windows-x64.exe`
+
+            ### Quick Start
+
+            ```bash
+            # Configure database and Claude Desktop
+            dbmeta init
+
+            # Check status
+            dbmeta status
+            ```
+
+            ### What's New
+
+            See [CHANGELOG](https://github.com/${{ github.repository }}/blob/main/apps/db-meta-v2/CHANGELOG.md) for details.
