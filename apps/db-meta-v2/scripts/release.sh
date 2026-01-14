@@ -90,8 +90,10 @@ if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
 fi
 
 echo -e "${BLUE}Pushing to origin...${NC}"
-git push origin main
+git push origin HEAD
 git push origin "$tag_name"
+
+current_branch=$(git rev-parse --abbrev-ref HEAD)
 
 echo ""
 echo -e "${GREEN}✓ Release ${new_version} triggered!${NC}"
@@ -100,4 +102,4 @@ echo "GitHub Actions will now build binaries for all platforms."
 echo "Check progress at: https://github.com/semantic-grid/semantic-grid/actions"
 echo ""
 echo "Once complete, users can install with:"
-echo -e "  ${BLUE}curl -fsSL https://raw.githubusercontent.com/semantic-grid/semantic-grid/main/apps/db-meta-v2/scripts/install.sh | sh${NC}"
+echo -e "  ${BLUE}curl -fsSL https://raw.githubusercontent.com/semantic-grid/semantic-grid/${current_branch}/apps/db-meta-v2/scripts/install.sh | sh${NC}"
