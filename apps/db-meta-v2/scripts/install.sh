@@ -1,6 +1,6 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # dbmeta installer
-# Usage: curl -fsSL https://semantic-grid.io/install.sh | sh
+# Usage: curl -fsSL https://semantic-grid.io/install.sh | bash
 #
 # Environment variables:
 #   DBMETA_VERSION  - Version to install (default: latest)
