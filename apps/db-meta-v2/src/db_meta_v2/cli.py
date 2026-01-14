@@ -1,10 +1,10 @@
 """dbmeta CLI - Standalone CLI for db-meta-v2 MCP server.
 
 Commands:
-    dbmeta init          - Interactive setup wizard
-    dbmeta start         - Start MCP server (stdio mode)
-    dbmeta config        - Open config in editor
-    dbmeta claude-desktop - Configure Claude Desktop
+    dbmeta init    - Interactive setup wizard (configures database + Claude Desktop)
+    dbmeta start   - Start MCP server (stdio mode)
+    dbmeta config  - Open config in editor
+    dbmeta status  - Show current configuration
 """
 
 import json
@@ -64,6 +64,99 @@ def get_dbmeta_binary_path() -> str:
     return "dbmeta"
 
 
+def load_claude_desktop_config() -> tuple[dict, Path]:
+    """Load Claude Desktop config.
+
+    Returns (config_dict, config_path).
+    """
+    config_path = get_claude_desktop_config_path()
+
+    if config_path.exists():
+        try:
+            with open(config_path) as f:
+                return json.load(f), config_path
+        except json.JSONDecodeError:
+            console.print(f"[red]Invalid JSON in {config_path}[/red]")
+            return {}, config_path
+
+    return {}, config_path
+
+
+def save_claude_desktop_config(config: dict, config_path: Path) -> None:
+    """Save Claude Desktop config."""
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(config_path, "w") as f:
+        json.dump(config, f, indent=2)
+
+
+def extract_database_url_from_claude_config(claude_config: dict) -> str | None:
+    """Extract DATABASE_URL from existing Claude Desktop MCP server configs."""
+    mcp_servers = claude_config.get("mcpServers", {})
+
+    # Check dbmeta entry first
+    if "dbmeta" in mcp_servers:
+        env = mcp_servers["dbmeta"].get("env", {})
+        if "DATABASE_URL" in env:
+            return env["DATABASE_URL"]
+
+    # Check legacy db-meta-v2 entry
+    if "db-meta-v2" in mcp_servers:
+        env = mcp_servers["db-meta-v2"].get("env", {})
+        if "DATABASE_URL" in env:
+            return env["DATABASE_URL"]
+
+    return None
+
+
+def is_claude_desktop_installed() -> bool:
+    """Check if Claude Desktop is installed."""
+    system = platform.system()
+
+    if system == "Darwin":  # macOS
+        app_path = Path("/Applications/Claude.app")
+        return app_path.exists()
+    elif system == "Windows":
+        # Check common install locations
+        local_app_data = os.environ.get("LOCALAPPDATA", "")
+        if local_app_data:
+            claude_path = Path(local_app_data) / "Programs" / "Claude" / "Claude.exe"
+            if claude_path.exists():
+                return True
+        program_files = os.environ.get("PROGRAMFILES", "")
+        if program_files:
+            claude_path = Path(program_files) / "Claude" / "Claude.exe"
+            if claude_path.exists():
+                return True
+        return False
+    else:  # Linux
+        # Check common locations
+        for path in [
+            "/usr/bin/claude",
+            "/usr/local/bin/claude",
+            Path.home() / ".local" / "bin" / "claude",
+        ]:
+            if Path(path).exists():
+                return True
+        return False
+
+
+def launch_claude_desktop() -> None:
+    """Launch Claude Desktop application."""
+    system = platform.system()
+    try:
+        if system == "Darwin":  # macOS
+            subprocess.run(["open", "-a", "Claude"], check=True)
+            console.print("[green]✓ Claude Desktop launched[/green]")
+        elif system == "Windows":
+            # Try common install locations
+            subprocess.run(["start", "claude"], shell=True, check=True)
+            console.print("[green]✓ Claude Desktop launched[/green]")
+        else:
+            console.print("[dim]Please launch Claude Desktop manually.[/dim]")
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        console.print("[dim]Could not auto-launch. Please start Claude Desktop manually.[/dim]")
+
+
 @click.group()
 @click.version_option(version="0.1.2")
 def main():
@@ -73,87 +166,138 @@ def main():
 
 @main.command()
 def init():
-    """Interactive setup wizard."""
+    """Interactive setup wizard - configure database and Claude Desktop."""
+    # Check if Claude Desktop is installed
+    if not is_claude_desktop_installed():
+        console.print(
+            Panel.fit(
+                "[bold red]Claude Desktop Not Found[/bold red]\n\n"
+                "dbmeta requires Claude Desktop to be installed.\n\n"
+                "Download from: [cyan]https://claude.ai/download[/cyan]",
+                border_style="red",
+            )
+        )
+        return
+
     console.print(
         Panel.fit(
-            "[bold blue]dbmeta Setup Wizard[/bold blue]\n\n"
-            "This will configure dbmeta to connect to your database\n"
-            "and optionally set up Claude Desktop integration.",
+            "[bold blue]dbmeta Setup[/bold blue]\n\n"
+            "Configure database connection for Claude Desktop.",
             border_style="blue",
         )
     )
 
-    # Check for existing config
-    if CONFIG_FILE.exists():
-        existing = load_config()
-        console.print(f"\n[yellow]Existing config found at {CONFIG_FILE}[/yellow]")
-        if not Confirm.ask("Overwrite existing configuration?", default=False):
+    # Load existing Claude Desktop config
+    claude_config, claude_config_path = load_claude_desktop_config()
+    mcp_servers = claude_config.get("mcpServers", {})
+
+    # Check for existing dbmeta or db-meta-v2 entry
+    existing_url = extract_database_url_from_claude_config(claude_config)
+    has_dbmeta = "dbmeta" in mcp_servers
+    has_legacy = "db-meta-v2" in mcp_servers
+
+    if has_dbmeta or has_legacy:
+        console.print("\n[yellow]Existing configuration found:[/yellow]")
+        if has_dbmeta:
+            console.print("  Entry: [cyan]dbmeta[/cyan]")
+        if has_legacy:
+            console.print("  Entry: [cyan]db-meta-v2[/cyan] (legacy)")
+        if existing_url:
+            # Mask password in URL for display
+            display_url = existing_url
+            if "@" in display_url:
+                # Simple password masking
+                parts = display_url.split("@")
+                prefix = parts[0]
+                if ":" in prefix:
+                    scheme_user = prefix.rsplit(":", 1)[0]
+                    display_url = f"{scheme_user}:****@{parts[1]}"
+            console.print(f"  Database: [cyan]{display_url}[/cyan]")
+        console.print()
+
+        if not Confirm.ask("Update configuration?", default=True):
             console.print("[dim]Setup cancelled.[/dim]")
             return
+    else:
+        console.print(f"\n[dim]Claude Desktop config: {claude_config_path}[/dim]")
+        if not claude_config_path.exists():
+            console.print("[dim]Will create new config file.[/dim]")
 
+    # Prompt for DATABASE_URL
     console.print("\n[bold]Database Connection[/bold]")
     console.print("[dim]Examples:[/dim]")
-    console.print("  Trino:      trino://user:pass@host:8443/catalog/schema?http_scheme=https")
-    console.print("  ClickHouse: clickhouse+native://user:pass@host:9000/database")
-    console.print("  PostgreSQL: postgresql://user:pass@host:5432/database")
+    console.print("  trino://user:pass@host:8443/catalog/schema?http_scheme=https")
+    console.print("  clickhouse+native://user:pass@host:9000/database")
+    console.print("  postgresql://user:pass@host:5432/database")
     console.print()
 
     database_url = Prompt.ask(
         "Database URL",
-        default=existing.get("database_url", "") if CONFIG_FILE.exists() else "",
+        default=existing_url or "",
     )
 
     if not database_url:
         console.print("[red]Database URL is required.[/red]")
         return
 
-    provider_id = Prompt.ask(
-        "Provider ID",
-        default="default",
-    )
-
-    console.print("\n[bold]Tool Mode[/bold]")
-    console.print("  [cyan]shell[/cyan]    - Shell-first mode (recommended for autonomous agents)")
-    console.print("  [cyan]detailed[/cyan] - Full toolset with schema discovery tools")
-    console.print()
-
-    tool_mode = Prompt.ask(
-        "Tool mode",
-        choices=["shell", "detailed"],
-        default="shell",
-    )
-
-    # Build config
+    # Build dbmeta config (saved to ~/.dbmeta/config.yaml)
     config = {
         "database_url": database_url,
-        "provider_id": provider_id,
-        "tool_mode": tool_mode,
+        "provider_id": "default",
+        "tool_mode": "shell",
         "vault_path": str(VAULT_DIR),
         "log_level": "INFO",
     }
 
-    # Save config
+    # Save dbmeta config
     save_config(config)
     console.print(f"\n[green]✓ Config saved to {CONFIG_FILE}[/green]")
 
     # Create vault directory
     VAULT_DIR.mkdir(parents=True, exist_ok=True)
-    console.print(f"[green]✓ Vault directory created at {VAULT_DIR}[/green]")
 
-    # Offer Claude Desktop setup
+    # Update Claude Desktop config
+    if "mcpServers" not in claude_config:
+        claude_config["mcpServers"] = {}
+
+    # Get binary path
+    binary_path = get_dbmeta_binary_path()
+
+    # Add/update dbmeta entry
+    claude_config["mcpServers"]["dbmeta"] = {
+        "command": binary_path,
+        "args": ["start"],
+    }
+
+    # Remove legacy entry if exists
+    if has_legacy:
+        del claude_config["mcpServers"]["db-meta-v2"]
+        console.print("[dim]Removed legacy 'db-meta-v2' entry.[/dim]")
+
+    # Save Claude Desktop config
+    save_claude_desktop_config(claude_config, claude_config_path)
+    console.print(f"[green]✓ Claude Desktop configured at {claude_config_path}[/green]")
+
+    # Show other MCP servers (kept intact)
+    other_servers = [k for k in claude_config["mcpServers"].keys() if k != "dbmeta"]
+    if other_servers:
+        console.print(f"[dim]Other MCP servers (unchanged): {', '.join(other_servers)}[/dim]")
+
     console.print()
-    if Confirm.ask("Configure Claude Desktop integration?", default=True):
-        _configure_claude_desktop(silent=False)
-
     console.print(
         Panel.fit(
             "[bold green]Setup Complete![/bold green]\n\n"
-            "To start the server manually:\n"
-            "  [cyan]dbmeta start[/cyan]\n\n"
-            "If you configured Claude Desktop, restart it to connect.",
+            "Claude Desktop needs to restart to load the new config.",
             border_style="green",
         )
     )
+
+    # Offer to launch Claude Desktop
+    console.print()
+    if Confirm.ask("Launch Claude Desktop now?", default=True):
+        launch_claude_desktop()
+    else:
+        console.print("[dim]Please restart Claude Desktop manually.[/dim]")
 
 
 @main.command()
@@ -184,7 +328,7 @@ def config():
     """Open config file in editor."""
     if not CONFIG_FILE.exists():
         console.print("[yellow]No config found. Run 'dbmeta init' first.[/yellow]")
-        if Confirm.ask("Create config now?", default=True):
+        if Confirm.ask("Run setup now?", default=True):
             ctx = click.get_current_context()
             ctx.invoke(init)
             return
@@ -196,92 +340,13 @@ def config():
     try:
         subprocess.run([editor, str(CONFIG_FILE)], check=True)
         console.print("[green]✓ Config saved.[/green]")
+        console.print("[dim]Restart Claude Desktop to apply changes.[/dim]")
     except FileNotFoundError:
         console.print(f"[red]Editor '{editor}' not found.[/red]")
         console.print("[dim]Set EDITOR environment variable or edit manually:[/dim]")
         console.print(f"  {CONFIG_FILE}")
     except subprocess.CalledProcessError:
         console.print("[yellow]Editor exited with error.[/yellow]")
-
-
-def _configure_claude_desktop(silent: bool = False) -> bool:
-    """Configure Claude Desktop to use dbmeta.
-
-    Returns True if successful.
-    """
-    config_path = get_claude_desktop_config_path()
-
-    # Load existing config or create new
-    if config_path.exists():
-        try:
-            with open(config_path) as f:
-                claude_config = json.load(f)
-        except json.JSONDecodeError:
-            if not silent:
-                console.print(f"[red]Invalid JSON in {config_path}[/red]")
-            return False
-    else:
-        claude_config = {}
-
-    # Ensure mcpServers key exists
-    if "mcpServers" not in claude_config:
-        claude_config["mcpServers"] = {}
-
-    # Check if dbmeta already configured
-    if "dbmeta" in claude_config["mcpServers"]:
-        if not silent:
-            console.print("[yellow]dbmeta is already configured in Claude Desktop.[/yellow]")
-            if not Confirm.ask("Update existing configuration?", default=True):
-                return False
-
-    # Get binary path
-    binary_path = get_dbmeta_binary_path()
-
-    # Add dbmeta server config
-    claude_config["mcpServers"]["dbmeta"] = {
-        "command": binary_path,
-        "args": ["start"],
-    }
-
-    # Ensure parent directory exists
-    config_path.parent.mkdir(parents=True, exist_ok=True)
-
-    # Save config
-    with open(config_path, "w") as f:
-        json.dump(claude_config, f, indent=2)
-
-    if not silent:
-        console.print(f"[green]✓ Claude Desktop configured at {config_path}[/green]")
-        console.print()
-        console.print("[bold]Next steps:[/bold]")
-        console.print("  1. Restart Claude Desktop")
-        console.print("  2. Look for 'dbmeta' in the MCP servers list")
-        console.print("  3. Start a conversation and ask about your database!")
-
-    return True
-
-
-@main.command("claude-desktop")
-def claude_desktop():
-    """Configure Claude Desktop integration."""
-    console.print(
-        Panel.fit(
-            "[bold blue]Claude Desktop Configuration[/bold blue]\n\n"
-            "This will add dbmeta to your Claude Desktop MCP servers.",
-            border_style="blue",
-        )
-    )
-
-    if not CONFIG_FILE.exists():
-        console.print("[yellow]No dbmeta config found.[/yellow]")
-        if Confirm.ask("Run setup wizard first?", default=True):
-            ctx = click.get_current_context()
-            ctx.invoke(init)
-            return
-        console.print("[dim]Run 'dbmeta init' to configure.[/dim]")
-        return
-
-    _configure_claude_desktop(silent=False)
 
 
 @main.command()
@@ -298,33 +363,45 @@ def status():
     console.print("\n[bold]Configuration[/bold]")
     if CONFIG_FILE.exists():
         config = load_config()
+        db_url = config.get("database_url", "N/A")
+        # Mask password
+        if "@" in db_url and ":" in db_url.split("@")[0]:
+            parts = db_url.split("@")
+            prefix = parts[0]
+            scheme_user = prefix.rsplit(":", 1)[0]
+            db_url = f"{scheme_user}:****@{parts[1]}"
         console.print(f"  Config file: [green]{CONFIG_FILE}[/green]")
-        console.print(f"  Database:    [cyan]{config.get('database_url', 'N/A')[:50]}...[/cyan]")
+        console.print(
+            f"  Database:    [cyan]{db_url[:60]}{'...' if len(db_url) > 60 else ''}[/cyan]"
+        )
         console.print(f"  Provider:    {config.get('provider_id', 'N/A')}")
         console.print(f"  Tool mode:   {config.get('tool_mode', 'N/A')}")
-        console.print(f"  Vault:       {config.get('vault_path', 'N/A')}")
     else:
         console.print(f"  [yellow]No config found at {CONFIG_FILE}[/yellow]")
         console.print("  [dim]Run 'dbmeta init' to configure.[/dim]")
 
     # Claude Desktop status
     console.print("\n[bold]Claude Desktop[/bold]")
-    claude_config_path = get_claude_desktop_config_path()
-    if claude_config_path.exists():
-        try:
-            with open(claude_config_path) as f:
-                claude_config = json.load(f)
-            if "dbmeta" in claude_config.get("mcpServers", {}):
-                console.print("  [green]✓ dbmeta configured in Claude Desktop[/green]")
-                cmd = claude_config["mcpServers"]["dbmeta"].get("command", "N/A")
-                console.print(f"  Command: {cmd}")
-            else:
-                console.print("  [yellow]dbmeta not configured in Claude Desktop[/yellow]")
-                console.print("  [dim]Run 'dbmeta claude-desktop' to configure.[/dim]")
-        except json.JSONDecodeError:
-            console.print("  [red]Invalid Claude Desktop config[/red]")
+    claude_config, claude_config_path = load_claude_desktop_config()
+    if claude_config:
+        mcp_servers = claude_config.get("mcpServers", {})
+        if "dbmeta" in mcp_servers:
+            console.print("  [green]✓ dbmeta configured[/green]")
+            cmd = mcp_servers["dbmeta"].get("command", "N/A")
+            console.print(f"  Command: {cmd}")
+        elif "db-meta-v2" in mcp_servers:
+            console.print("  [yellow]⚠ Legacy 'db-meta-v2' entry found[/yellow]")
+            console.print("  [dim]Run 'dbmeta init' to upgrade.[/dim]")
+        else:
+            console.print("  [yellow]dbmeta not configured[/yellow]")
+            console.print("  [dim]Run 'dbmeta init' to configure.[/dim]")
+
+        # Show other servers
+        other_servers = [k for k in mcp_servers.keys() if k not in ("dbmeta", "db-meta-v2")]
+        if other_servers:
+            console.print(f"  Other servers: {', '.join(other_servers)}")
     else:
-        console.print(f"  [dim]Claude Desktop config not found at {claude_config_path}[/dim]")
+        console.print(f"  [dim]No config at {claude_config_path}[/dim]")
 
     # Vault status
     console.print("\n[bold]Knowledge Vault[/bold]")
