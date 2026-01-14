@@ -59,7 +59,7 @@ get_latest_version() {
     curl -sL "https://api.github.com/repos/${REPO}/releases/latest" | \
         grep '"tag_name":' | \
         sed -E 's/.*"([^"]+)".*/\1/' | \
-        sed 's/^dbmeta-//'
+        sed 's/^dbmeta-v//'
 }
 
 # Download binary
