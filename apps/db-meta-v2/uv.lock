@@ -534,7 +534,7 @@ wheels = [
 
 [[package]]
 name = "db-meta-v2"
-version = "0.1.3"
+version = "0.1.4"
 source = { editable = "." }
 dependencies = [
     { name = "click" },

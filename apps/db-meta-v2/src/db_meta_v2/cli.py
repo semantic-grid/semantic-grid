@@ -43,12 +43,18 @@ def get_claude_desktop_config_path() -> Path:
     """Get Claude Desktop config path for current OS."""
     system = platform.system()
     if system == "Darwin":  # macOS
-        return Path.home() / ".config" / "claude" / "claude_desktop_config.json"
+        return (
+            Path.home()
+            / "Library"
+            / "Application Support"
+            / "Claude"
+            / "claude_desktop_config.json"
+        )
     elif system == "Windows":
         appdata = os.environ.get("APPDATA", "")
         return Path(appdata) / "Claude" / "claude_desktop_config.json"
     else:  # Linux
-        return Path.home() / ".config" / "claude" / "claude_desktop_config.json"
+        return Path.home() / ".config" / "Claude" / "claude_desktop_config.json"
 
 
 def load_config() -> dict:
