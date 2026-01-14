@@ -339,6 +339,14 @@ def start():
     os.environ["LOG_LEVEL"] = config.get("log_level", "INFO")
     os.environ["MCP_TRANSPORT"] = "stdio"  # Always stdio for CLI
 
+    # Set writable paths for local CLI (not the bundled read-only resources)
+    os.environ["RESOURCES_DIR"] = str(CONFIG_DIR / "resources")
+    os.environ["PROVIDERS_DIR"] = str(CONFIG_DIR / "providers")
+
+    # Ensure directories exist
+    (CONFIG_DIR / "resources").mkdir(parents=True, exist_ok=True)
+    (CONFIG_DIR / "providers").mkdir(parents=True, exist_ok=True)
+
     # Patch fakeredis path for PyInstaller bundles
     if getattr(sys, "frozen", False):
         import fakeredis.model._command_info as cmd_info
