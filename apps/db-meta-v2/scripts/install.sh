@@ -1,6 +1,6 @@
-#!/usr/bin/env bash
+#!/bin/sh
 # dbmeta installer
-# Usage: curl -fsSL https://semantic-grid.io/install.sh | bash
+# Usage: curl -fsSL https://semantic-grid.io/install.sh | sh
 #
 # Environment variables:
 #   DBMETA_VERSION  - Version to install (default: latest)
@@ -8,19 +8,19 @@
 
 set -e
 
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
-
 # GitHub repository
 REPO="semantic-grid/semantic-grid"
 
+# Color output helpers (POSIX-compatible)
+info()    { printf '\033[34m%s\033[0m\n' "$1"; }
+success() { printf '\033[32m%s\033[0m\n' "$1"; }
+warn()    { printf '\033[33m%s\033[0m\n' "$1"; }
+error()   { printf '\033[31m%s\033[0m\n' "$1" >&2; }
+
 # Detect OS and architecture
 detect_platform() {
-    local os arch
+    os=""
+    arch=""
 
     case "$(uname -s)" in
         Darwin)
@@ -33,7 +33,7 @@ detect_platform() {
             os="windows"
             ;;
         *)
-            echo -e "${RED}Unsupported operating system: $(uname -s)${NC}"
+            error "Unsupported operating system: $(uname -s)"
             exit 1
             ;;
     esac
@@ -46,12 +46,12 @@ detect_platform() {
             arch="arm64"
             ;;
         *)
-            echo -e "${RED}Unsupported architecture: $(uname -m)${NC}"
+            error "Unsupported architecture: $(uname -m)"
             exit 1
             ;;
     esac
 
-    echo "${os}-${arch}"
+    printf '%s-%s' "$os" "$arch"
 }
 
 # Get latest release version from GitHub
@@ -64,26 +64,23 @@ get_latest_version() {
 
 # Download binary
 download_binary() {
-    local version="$1"
-    local platform="$2"
-    local dest="$3"
+    version="$1"
+    platform="$2"
+    dest="$3"
 
-    local ext=""
-    if [[ "$platform" == windows-* ]]; then
-        ext=".exe"
-    fi
+    ext=""
+    case "$platform" in
+        windows-*) ext=".exe" ;;
+    esac
 
-    local filename="dbmeta-${platform}${ext}"
-    # Use v2 branch for testing
-    local url="https://github.com/${REPO}/releases/download/dbmeta-v${version}/${filename}"
-    # Note: install script URL uses v2 branch:
-    # https://raw.githubusercontent.com/semantic-grid/semantic-grid/v2/apps/db-meta-v2/scripts/install.sh
+    filename="dbmeta-${platform}${ext}"
+    url="https://github.com/${REPO}/releases/download/dbmeta-v${version}/${filename}"
 
-    echo -e "${BLUE}Downloading dbmeta v${version} for ${platform}...${NC}"
-    echo "  URL: ${url}"
+    info "Downloading dbmeta v${version} for ${platform}..."
+    printf '  URL: %s\n' "$url"
 
     if ! curl -fsSL "$url" -o "$dest"; then
-        echo -e "${RED}Failed to download from ${url}${NC}"
+        error "Failed to download from ${url}"
         exit 1
     fi
 
@@ -92,33 +89,32 @@ download_binary() {
 
 # Main installation
 main() {
-    echo -e "${BLUE}"
-    echo "╔════════════════════════════════════════╗"
-    echo "║       dbmeta Installer                 ║"
-    echo "║  Database MCP Server for Claude        ║"
-    echo "╚════════════════════════════════════════╝"
-    echo -e "${NC}"
+    printf '\033[34m'
+    printf '╔════════════════════════════════════════╗\n'
+    printf '║       dbmeta Installer                 ║\n'
+    printf '║  Database MCP Server for Claude        ║\n'
+    printf '╚════════════════════════════════════════╝\n'
+    printf '\033[0m\n'
 
     # Detect platform
-    local platform
     platform=$(detect_platform)
-    echo -e "Platform: ${GREEN}${platform}${NC}"
+    printf 'Platform: \033[32m%s\033[0m\n' "$platform"
 
     # Get version
-    local version="${DBMETA_VERSION:-}"
-    if [[ -z "$version" ]]; then
-        echo "Fetching latest version..."
+    version="${DBMETA_VERSION:-}"
+    if [ -z "$version" ]; then
+        printf 'Fetching latest version...\n'
         version=$(get_latest_version)
-        if [[ -z "$version" ]]; then
-            echo -e "${YELLOW}Could not determine latest version. Using 'latest'.${NC}"
+        if [ -z "$version" ]; then
+            warn "Could not determine latest version. Using 'latest'."
             version="latest"
         fi
     fi
-    echo -e "Version: ${GREEN}${version}${NC}"
+    printf 'Version: \033[32m%s\033[0m\n' "$version"
 
     # Determine install directory
-    local install_dir="${DBMETA_INSTALL:-$HOME/.local/bin}"
-    local binary_path="${install_dir}/dbmeta"
+    install_dir="${DBMETA_INSTALL:-$HOME/.local/bin}"
+    binary_path="${install_dir}/dbmeta"
 
     # Create install directory
     mkdir -p "$install_dir"
@@ -127,27 +123,25 @@ main() {
     download_binary "$version" "$platform" "$binary_path"
 
     # Verify installation
-    if [[ -x "$binary_path" ]]; then
-        echo -e "${GREEN}✓ dbmeta installed successfully!${NC}"
-        echo "  Location: ${binary_path}"
-        echo ""
+    if [ -x "$binary_path" ]; then
+        success "✓ dbmeta installed successfully!"
+        printf '  Location: %s\n\n' "$binary_path"
 
         # Check if in PATH
-        if [[ ":$PATH:" != *":$install_dir:"* ]]; then
-            echo -e "${YELLOW}Note: ${install_dir} is not in your PATH.${NC}"
-            echo "Add this to your shell profile (~/.bashrc, ~/.zshrc, etc.):"
-            echo ""
-            echo -e "  ${BLUE}export PATH=\"\$HOME/.local/bin:\$PATH\"${NC}"
-            echo ""
-        fi
+        case ":$PATH:" in
+            *":$install_dir:"*) ;;
+            *)
+                warn "Note: ${install_dir} is not in your PATH."
+                printf 'Add this to your shell profile (~/.bashrc, ~/.zshrc, etc.):\n\n'
+                printf '  \033[34mexport PATH="$HOME/.local/bin:$PATH"\033[0m\n\n'
+                ;;
+        esac
 
-        echo -e "${GREEN}Next steps:${NC}"
-        echo "  1. Run 'dbmeta init' to configure your database connection"
-        echo "  2. Run 'dbmeta claude-desktop' to set up Claude Desktop integration"
-        echo "  3. Restart Claude Desktop and start querying!"
-        echo ""
+        success "Next steps:"
+        printf '  1. Run '\''dbmeta init'\'' to configure your database connection\n'
+        printf '  2. Restart Claude Desktop and start querying!\n\n'
     else
-        echo -e "${RED}Installation failed.${NC}"
+        error "Installation failed."
         exit 1
     fi
 }
