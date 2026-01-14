@@ -10,6 +10,7 @@ Commands:
 import json
 import os
 import platform
+import signal
 import subprocess
 import sys
 from pathlib import Path
@@ -21,6 +22,16 @@ from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
 
 console = Console()
+
+
+def _handle_sigint(signum, frame):
+    """Handle Ctrl-C gracefully."""
+    console.print("\n[dim]Cancelled.[/dim]")
+    sys.exit(130)
+
+
+# Register signal handler early to catch Ctrl-C before Click processes it
+signal.signal(signal.SIGINT, _handle_sigint)
 
 # Config paths
 CONFIG_DIR = Path.home() / ".dbmeta"
