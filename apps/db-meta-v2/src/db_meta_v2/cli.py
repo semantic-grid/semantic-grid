@@ -213,6 +213,11 @@ def init():
     has_dbmeta = "dbmeta" in mcp_servers
     has_legacy = "db-meta-v2" in mcp_servers
 
+    # Also check ~/.dbmeta/config.yaml for existing URL
+    if not existing_url:
+        dbmeta_config = load_config()
+        existing_url = dbmeta_config.get("database_url")
+
     if has_dbmeta or has_legacy:
         console.print("\n[yellow]Existing configuration found:[/yellow]")
         if has_dbmeta:
@@ -333,6 +338,22 @@ def start():
     os.environ["VAULT_PATH"] = config.get("vault_path", str(VAULT_DIR))
     os.environ["LOG_LEVEL"] = config.get("log_level", "INFO")
     os.environ["MCP_TRANSPORT"] = "stdio"  # Always stdio for CLI
+
+    # Patch fakeredis path for PyInstaller bundles
+    if getattr(sys, "frozen", False):
+        import fakeredis.model._command_info as cmd_info
+
+        bundle_dir = getattr(sys, "_MEIPASS", "")
+
+        def patched_load():
+            import json
+
+            if cmd_info._COMMAND_INFO is None:
+                json_path = os.path.join(bundle_dir, "fakeredis", "commands.json")
+                with open(json_path, encoding="utf8") as f:
+                    cmd_info._COMMAND_INFO = cmd_info._encode_obj(json.load(f))
+
+        cmd_info._load_command_info = patched_load
 
     # Import and run the server
     from db_meta_v2.server import main as server_main

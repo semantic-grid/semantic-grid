@@ -11,6 +11,7 @@ Or use the build script:
 
 import sys
 from pathlib import Path
+from PyInstaller.utils.hooks import copy_metadata, collect_data_files
 
 # Get the app directory
 app_dir = Path(SPECPATH)
@@ -19,14 +20,45 @@ resources_dir = app_dir.parent.parent / "packages" / "resources"
 
 block_cipher = None
 
+# Collect ALL package metadata to avoid version check failures at runtime
+import importlib.metadata
+from PyInstaller.utils.hooks import collect_dynamic_libs
+
+datas = []
+binaries = []
+
+# Get all installed packages and copy their metadata
+for dist in importlib.metadata.distributions():
+    try:
+        datas += copy_metadata(dist.metadata["Name"])
+    except Exception:
+        pass
+
+# Collect lupa native libraries (Lua bindings for fakeredis)
+try:
+    binaries += collect_dynamic_libs("lupa")
+except Exception:
+    pass
+
+# Collect fakeredis data files (commands.json, etc.)
+try:
+    datas += collect_data_files("fakeredis", include_py_files=False)
+    # Also explicitly add commands.json to the right location
+    import fakeredis
+    fakeredis_dir = Path(fakeredis.__file__).parent
+    datas.append((str(fakeredis_dir / "commands.json"), "fakeredis"))
+except Exception:
+    pass
+
+# Include vault templates if they exist
+if resources_dir.exists():
+    datas.append((str(resources_dir / "dbmeta_app"), "resources/dbmeta_app"))
+
 a = Analysis(
     [str(src_dir / "db_meta_v2" / "cli.py")],
     pathex=[str(src_dir)],
-    binaries=[],
-    datas=[
-        # Include vault templates if they exist
-        (str(resources_dir / "dbmeta_app"), "resources/dbmeta_app"),
-    ] if resources_dir.exists() else [],
+    binaries=binaries,
+    datas=datas,
     hiddenimports=[
         # SQLAlchemy dialects
         "sqlalchemy.dialects.postgresql",
@@ -53,6 +85,15 @@ a = Analysis(
         "click",
         # YAML
         "yaml",
+        # Fakeredis/Lua support (used by docket)
+        "lupa",
+        "lupa.lua51",
+        "lupa.lua52",
+        "lupa.lua53",
+        "lupa.lua54",
+        "lupa.luajit20",
+        "lupa.luajit21",
+        "fakeredis",
         # Other
         "email.mime.text",
         "email.mime.multipart",
@@ -69,6 +110,9 @@ a = Analysis(
         "scipy",
         "PIL",
         "cv2",
+        # Exclude logfire - its Pydantic plugin breaks in PyInstaller
+        # (tries to inspect source code which doesn't exist in bundle)
+        "logfire",
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
