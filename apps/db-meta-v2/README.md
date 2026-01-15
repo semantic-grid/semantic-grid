@@ -134,6 +134,88 @@ uv run ruff check .
 uv run ruff format .
 ```
 
+## Building Standalone Binary
+
+The project uses PyInstaller to create standalone binaries for distribution.
+
+### Build
+
+```bash
+# Build for current platform
+uv run python scripts/build.py
+```
+
+This creates a binary at `dist/dbmeta` (and `dist/dbmeta-<platform>-<arch>`).
+
+### Local Development Installation
+
+To install a dev build locally without Gatekeeper issues on macOS:
+
+```bash
+# Copy binary to cache and create symlink
+cp dist/dbmeta ~/.dbmeta/cache/dbmeta-dev
+ln -sf ~/.dbmeta/cache/dbmeta-dev ~/.local/bin/dbmeta
+
+# Clear extended attributes and re-sign (macOS)
+xattr -cr ~/.dbmeta/cache/dbmeta-dev
+codesign --force -s - ~/.dbmeta/cache/dbmeta-dev
+```
+
+### Testing the Binary
+
+```bash
+# Verify installation
+dbmeta --help
+
+# Initialize configuration
+dbmeta init
+
+# Run with console UI
+dbmeta run --console
+```
+
+### Build Artifacts
+
+- `dist/dbmeta` - Main binary
+- `dist/dbmeta-<platform>-<arch>` - Platform-specific binary (e.g., `dbmeta-macos-arm64`)
+- `build/` - Intermediate build files (can be deleted)
+
+## Releases (GitHub Actions)
+
+The project uses GitHub Actions to build and release binaries for all platforms.
+
+### Triggering a Release
+
+**Option 1: Tag-based release**
+```bash
+git tag dbmeta-v0.1.0
+git push origin dbmeta-v0.1.0
+```
+
+**Option 2: Manual workflow dispatch**
+1. Go to Actions > "Release dbmeta CLI"
+2. Click "Run workflow"
+3. Enter version (e.g., `0.1.0`)
+
+### Release Pipeline
+
+The workflow (`.github/workflows/release-dbmeta.yml`) builds binaries for:
+- macOS (Apple Silicon): `dbmeta-macos-arm64`
+- macOS (Intel): `dbmeta-macos-x64`
+- Linux (x64): `dbmeta-linux-x64`
+- Windows (x64): `dbmeta-windows-x64.exe`
+
+All binaries are uploaded as GitHub Release assets.
+
+### Installing Released Binaries
+
+```bash
+# One-liner (macOS/Linux)
+curl -fsSL https://semantic-grid.io/install.sh | sh
+
+# Or download manually from GitHub Releases
+```
+
 ## Architecture
 
 See [v2 Architecture](../../docs/future/v2-architecture.md) for the full system design.
