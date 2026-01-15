@@ -454,15 +454,14 @@ def main():
     logger = logging.getLogger(__name__)
     logger.info(f"Starting db-meta-v2 in {settings.tool_mode} mode")
 
-    # Instrument tools if console tracing is enabled
-    if os.environ.get("DBMETA_CONSOLE"):
-        try:
-            from db_meta_v2.console.instrument import instrument_server
+    # Always instrument tools for tracing (sends to console if running)
+    try:
+        from db_meta_v2.console.instrument import instrument_server
 
-            instrument_server(mcp)
-            logger.info("Tool instrumentation enabled for console")
-        except Exception as e:
-            logger.warning(f"Failed to instrument tools: {e}")
+        instrument_server(mcp)
+        logger.debug("Tool instrumentation enabled")
+    except Exception as e:
+        logger.debug(f"Tool instrumentation not available: {e}")
 
     if settings.mcp_transport == "http":
         mcp.run(
