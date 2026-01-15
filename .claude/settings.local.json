@@ -13,7 +13,10 @@
       "Bash(python tests/test_regex_debug.py:*)",
       "Bash(npm run lint)",
       "Bash(uv run pytest:*)",
-      "Bash(uv lock:*)"
+      "Bash(uv lock:*)",
+      "mcp__acp__Bash",
+      "mcp__acp__Write",
+      "mcp__acp__Edit"
     ],
     "deny": [],
     "ask": []

@@ -25,6 +25,7 @@ from datetime import datetime
 from typing import Any
 
 from mcp.server.fastmcp import Context
+from opentelemetry import trace
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent
 from pydantic_ai.models.mcp_sampling import MCPSamplingModel
@@ -45,6 +46,7 @@ from db_meta_v2.validation.explain import (
 )
 
 logger = logging.getLogger(__name__)
+tracer = trace.get_tracer("dbmeta.query")
 
 # Threshold for async execution (rows estimated to scan)
 # Queries above this go async to avoid timeout
@@ -185,122 +187,67 @@ def _execute_query(
 ) -> dict[str, Any]:
     """Execute a SQL query and return results.
 
-    Uses Logfire spans for OpenTelemetry tracing when available.
+    Uses OpenTelemetry spans for tracing.
     """
-    engine = get_engine()
     settings = get_settings()
-
-    # Build log prefix with query_id for tracing
     qid = query_id[:8] if query_id else "adhoc"
-    log_prefix = f"[WH_QUERY:{qid}]"
-
-    # Log query start with truncated SQL
     sql_preview = sql[:200] + "..." if len(sql) > 200 else sql
-    logger.info(f"{log_prefix} Starting execution: {sql_preview}")
-    logger.debug(f"{log_prefix} Full SQL: {sql}")
 
-    start_time = time.time()
+    with tracer.start_as_current_span(
+        "execute_query",
+        attributes={
+            "query.id": qid,
+            "query.limit": limit or 0,
+            "sql.preview": sql_preview,
+        },
+    ) as span:
+        start_time = time.time()
 
-    # Try to use Logfire for structured tracing
-    try:
-        import logfire
-    except ImportError:
-        logfire = None
+        try:
+            # Get database connection
+            with tracer.start_as_current_span("db_connect") as conn_span:
+                engine = get_engine()
+                conn_span.set_attribute("db.provider", settings.provider_id)
 
-    # Create span context manager if logfire is available
-    span_ctx = (
-        logfire.span(
-            "warehouse_query",
-            query_id=query_id or "adhoc",
-            sql=sql,
-            sql_preview=sql_preview,
-            limit=limit,
-            provider_id=settings.provider_id,
-        )
-        if logfire
-        else None
-    )
+            # Execute query
+            with tracer.start_as_current_span("db_execute") as exec_span:
+                with engine.connect() as conn:
+                    result = conn.execute(text(sql))
+                    columns = list(result.keys())
+                    exec_span.set_attribute("columns.count", len(columns))
 
-    try:
-        # Enter span if available
-        if span_ctx:
-            span_ctx.__enter__()
+                    # Fetch rows
+                    with tracer.start_as_current_span("fetch_rows") as fetch_span:
+                        rows = []
+                        for i, row in enumerate(result):
+                            if limit and i >= limit:
+                                fetch_span.set_attribute("limit_reached", True)
+                                break
+                            rows.append(dict(zip(columns, row)))
 
-        with engine.connect() as conn:
-            logger.info(f"{log_prefix} Connection established, executing...")
-            if logfire:
-                logfire.info("DB connection established", query_id=qid)
+                        fetch_span.set_attribute("rows.fetched", len(rows))
 
-            result = conn.execute(text(sql))
-            columns = list(result.keys())
-
-            logger.info(f"{log_prefix} Query executed, fetching rows (limit={limit})...")
-
-            rows = []
-            fetch_start = time.time()
-            for i, row in enumerate(result):
-                if limit and i >= limit:
-                    logger.info(f"{log_prefix} Reached row limit ({limit}), stopping fetch")
-                    break
-                rows.append(dict(zip(columns, row)))
-
-                # Log progress every 100 rows
-                if (i + 1) % 100 == 0:
-                    elapsed = time.time() - fetch_start
-                    logger.debug(f"{log_prefix} Fetched {i + 1} rows ({elapsed:.1f}s)")
-
-            fetch_duration_ms = (time.time() - fetch_start) * 1000
             total_duration_ms = (time.time() - start_time) * 1000
+            span.set_attribute("rows.returned", len(rows))
+            span.set_attribute("duration_ms", round(total_duration_ms, 2))
 
-        logger.info(
-            f"{log_prefix} Complete: {len(rows)} rows, "
-            f"fetch={fetch_duration_ms:.0f}ms, total={total_duration_ms:.0f}ms"
-        )
+            logger.info(f"[WH_QUERY:{qid}] Complete: {len(rows)} rows in {total_duration_ms:.0f}ms")
 
-        # Log success to Logfire with full metrics
-        if logfire:
-            logfire.info(
-                "Warehouse query complete",
-                query_id=qid,
-                rows_returned=len(rows),
-                columns=columns,
-                fetch_duration_ms=round(fetch_duration_ms, 2),
-                total_duration_ms=round(total_duration_ms, 2),
-                provider_id=settings.provider_id,
-            )
+            return {
+                "data": rows,
+                "columns": columns,
+                "rows_returned": len(rows),
+                "duration_ms": round(total_duration_ms, 2),
+                "provider_id": settings.provider_id,
+            }
 
-        # Exit span successfully
-        if span_ctx:
-            span_ctx.__exit__(None, None, None)
-
-        return {
-            "data": rows,
-            "columns": columns,
-            "rows_returned": len(rows),
-            "duration_ms": round(total_duration_ms, 2),
-            "provider_id": settings.provider_id,
-        }
-
-    except Exception as e:
-        elapsed = (time.time() - start_time) * 1000
-        logger.error(f"{log_prefix} FAILED after {elapsed:.0f}ms: {type(e).__name__}: {e}")
-
-        # Log failure to Logfire
-        if logfire:
-            logfire.error(
-                "Warehouse query failed",
-                query_id=qid,
-                error_type=type(e).__name__,
-                error_message=str(e),
-                elapsed_ms=round(elapsed, 2),
-                sql_preview=sql_preview,
-            )
-
-        # Exit span with exception
-        if span_ctx:
-            span_ctx.__exit__(type(e), e, e.__traceback__)
-
-        raise
+        except Exception as e:
+            elapsed = (time.time() - start_time) * 1000
+            span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
+            span.set_attribute("error.type", type(e).__name__)
+            span.set_attribute("error.message", str(e))
+            logger.error(f"[WH_QUERY:{qid}] FAILED after {elapsed:.0f}ms: {e}")
+            raise
 
 
 async def _execute_query_background(query_id: str, sql: str) -> None:

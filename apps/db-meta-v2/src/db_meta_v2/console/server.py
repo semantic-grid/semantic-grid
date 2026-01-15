@@ -4,7 +4,6 @@ import json
 import threading
 import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from typing import Callable
 
 from db_meta_v2.console.collector import get_collector
 from db_meta_v2.console.ui import get_html

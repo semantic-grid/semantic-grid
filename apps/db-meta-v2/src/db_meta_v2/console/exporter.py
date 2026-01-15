@@ -1,6 +1,5 @@
 """OpenTelemetry span exporter for the local console."""
 
-import time
 from typing import Sequence
 
 from opentelemetry.sdk.trace import ReadableSpan

@@ -5,10 +5,13 @@ import re
 from enum import Enum
 from typing import Any
 
+from opentelemetry import trace
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from db_meta_v2.db.connection import DatabaseError, detect_dialect_from_url, get_engine
+
+tracer = trace.get_tracer("dbmeta.validation")
 
 
 class CostTier(str, Enum):
@@ -258,62 +261,77 @@ def explain_sql(sql: str, database_url: str | None = None) -> ExplainResult:
     Returns:
         ExplainResult with validation status and cost tier
     """
-    try:
-        engine = get_engine(database_url)
-        dialect = detect_dialect_from_url(str(engine.url))
-        explain_cmd = get_explain_command(dialect)
+    with tracer.start_as_current_span(
+        "explain_sql",
+        attributes={"sql.preview": sql[:200] + "..." if len(sql) > 200 else sql},
+    ) as span:
+        try:
+            engine = get_engine(database_url)
+            dialect = detect_dialect_from_url(str(engine.url))
+            explain_cmd = get_explain_command(dialect)
+            span.set_attribute("db.dialect", dialect)
 
-        with engine.connect() as conn:
-            result = conn.execute(text(f"{explain_cmd} {sql}"))
-            columns = result.keys()
-            rows = [dict(zip(columns, row)) for row in result.fetchall()]
+            with tracer.start_as_current_span("db_execute_explain"):
+                with engine.connect() as conn:
+                    result = conn.execute(text(f"{explain_cmd} {sql}"))
+                    columns = result.keys()
+                    rows = [dict(zip(columns, row)) for row in result.fetchall()]
 
-        # Parse estimates based on dialect
-        if dialect in ("postgresql", "postgres"):
-            est_rows, est_cost, est_size = parse_postgresql_estimates(rows)
-        elif dialect == "clickhouse":
-            est_rows, est_cost, est_size = parse_clickhouse_estimates(rows)
-        elif dialect == "trino":
-            est_rows, est_cost, est_size = parse_trino_estimates(rows)
-        else:
-            est_rows, est_cost, est_size = None, None, None
+            # Parse estimates based on dialect
+            with tracer.start_as_current_span("parse_estimates") as parse_span:
+                if dialect in ("postgresql", "postgres"):
+                    est_rows, est_cost, est_size = parse_postgresql_estimates(rows)
+                elif dialect == "clickhouse":
+                    est_rows, est_cost, est_size = parse_clickhouse_estimates(rows)
+                elif dialect == "trino":
+                    est_rows, est_cost, est_size = parse_trino_estimates(rows)
+                else:
+                    est_rows, est_cost, est_size = None, None, None
 
-        # Evaluate cost tier
-        cost_tier, tier_reason = evaluate_cost_tier(est_rows, est_cost, est_size)
+                if est_rows is not None:
+                    parse_span.set_attribute("estimated_rows", est_rows)
+                if est_cost is not None:
+                    parse_span.set_attribute("estimated_cost", est_cost)
 
-        return ExplainResult(
-            valid=True,
-            explanation=rows,
-            estimated_rows=est_rows,
-            estimated_cost=est_cost,
-            estimated_size_gb=est_size,
-            cost_tier=cost_tier,
-            tier_reason=tier_reason,
-        )
+            # Evaluate cost tier
+            cost_tier, tier_reason = evaluate_cost_tier(est_rows, est_cost, est_size)
+            span.set_attribute("cost_tier", cost_tier.value)
 
-    except DatabaseError as e:
-        return ExplainResult(
-            valid=False,
-            error=str(e),
-            cost_tier=CostTier.REJECT,
-            tier_reason="Database error",
-        )
-    except Exception as e:
-        error_msg = str(e)
-        # Extract useful error message from SQL exceptions
-        if "syntax" in error_msg.lower() or "parse" in error_msg.lower():
+            return ExplainResult(
+                valid=True,
+                explanation=rows,
+                estimated_rows=est_rows,
+                estimated_cost=est_cost,
+                estimated_size_gb=est_size,
+                cost_tier=cost_tier,
+                tier_reason=tier_reason,
+            )
+
+        except DatabaseError as e:
+            span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
             return ExplainResult(
                 valid=False,
-                error=f"SQL syntax error: {error_msg}",
+                error=str(e),
                 cost_tier=CostTier.REJECT,
-                tier_reason="Invalid SQL",
+                tier_reason="Database error",
             )
-        return ExplainResult(
-            valid=False,
-            error=f"Validation error: {error_msg}",
-            cost_tier=CostTier.REJECT,
-            tier_reason="Validation failed",
-        )
+        except Exception as e:
+            error_msg = str(e)
+            span.set_status(trace.Status(trace.StatusCode.ERROR, error_msg))
+            # Extract useful error message from SQL exceptions
+            if "syntax" in error_msg.lower() or "parse" in error_msg.lower():
+                return ExplainResult(
+                    valid=False,
+                    error=f"SQL syntax error: {error_msg}",
+                    cost_tier=CostTier.REJECT,
+                    tier_reason="Invalid SQL",
+                )
+            return ExplainResult(
+                valid=False,
+                error=f"Validation error: {error_msg}",
+                cost_tier=CostTier.REJECT,
+                tier_reason="Validation failed",
+            )
 
 
 def validate_read_only(sql: str) -> tuple[bool, str | None]:
@@ -325,43 +343,49 @@ def validate_read_only(sql: str) -> tuple[bool, str | None]:
     Returns:
         (is_valid, error_message)
     """
-    # Normalize and check for non-SELECT statements
-    sql_upper = sql.strip().upper()
+    with tracer.start_as_current_span("validate_read_only") as span:
+        # Normalize and check for non-SELECT statements
+        sql_upper = sql.strip().upper()
 
-    # List of disallowed statement types
-    disallowed = [
-        "INSERT",
-        "UPDATE",
-        "DELETE",
-        "DROP",
-        "CREATE",
-        "ALTER",
-        "TRUNCATE",
-        "GRANT",
-        "REVOKE",
-        "EXEC",
-        "EXECUTE",
-        "MERGE",
-        "UPSERT",
-    ]
+        # List of disallowed statement types
+        disallowed = [
+            "INSERT",
+            "UPDATE",
+            "DELETE",
+            "DROP",
+            "CREATE",
+            "ALTER",
+            "TRUNCATE",
+            "GRANT",
+            "REVOKE",
+            "EXEC",
+            "EXECUTE",
+            "MERGE",
+            "UPSERT",
+        ]
 
-    for keyword in disallowed:
-        # Check if statement starts with disallowed keyword
-        if sql_upper.startswith(keyword):
-            return False, f"Statement type '{keyword}' is not allowed (read-only mode)"
+        for keyword in disallowed:
+            # Check if statement starts with disallowed keyword
+            if sql_upper.startswith(keyword):
+                span.set_attribute("validation.rejected", keyword)
+                return False, f"Statement type '{keyword}' is not allowed (read-only mode)"
 
-        # Also check for these within CTEs or subqueries
-        # Pattern: keyword followed by whitespace or opening paren
-        if re.search(rf"\b{keyword}\s", sql_upper):
-            # Allow SELECT ... INTO for temp tables in some contexts
-            if keyword == "INTO" and "SELECT" in sql_upper:
-                continue
-            return False, f"Statement contains '{keyword}' which is not allowed"
+            # Also check for these within CTEs or subqueries
+            # Pattern: keyword followed by whitespace or opening paren
+            if re.search(rf"\b{keyword}\s", sql_upper):
+                # Allow SELECT ... INTO for temp tables in some contexts
+                if keyword == "INTO" and "SELECT" in sql_upper:
+                    continue
+                span.set_attribute("validation.rejected", keyword)
+                return False, f"Statement contains '{keyword}' which is not allowed"
 
-    # Must start with SELECT, WITH (CTE), or EXPLAIN
-    if not any(
-        sql_upper.startswith(kw) for kw in ["SELECT", "WITH", "EXPLAIN", "SHOW", "DESCRIBE"]
-    ):
-        return False, "Query must be a SELECT statement"
+        # Must start with SELECT, WITH (CTE), or EXPLAIN
+        if not any(
+            sql_upper.startswith(kw)
+            for kw in ["SELECT", "WITH", "EXPLAIN", "SHOW", "DESCRIBE"]
+        ):
+            span.set_attribute("validation.rejected", "not_select")
+            return False, "Query must be a SELECT statement"
 
-    return True, None
+        span.set_attribute("validation.passed", True)
+        return True, None
