@@ -1,0 +1,70 @@
+version: 1.0.0
+dialect: mssql
+description: SQL dialect instructions for Microsoft SQL Server
+
+rules:
+  # Syntax
+  - "Generated SQL must be compatible with SQL Server 2016+."
+  - "Use square brackets [] or double quotes for identifier quoting."
+  - "Object names are case-insensitive by default (depends on collation)."
+
+  # Schema qualification
+  - "Use schema.table format (e.g., dbo.users)."
+  - "Default schema is typically 'dbo'."
+
+  # Type casting
+  - "Use CAST(value AS type) or CONVERT(type, value) for type casting."
+  - "CONVERT supports optional style parameter for date/string formatting."
+
+  # JSON (SQL Server 2016+)
+  - |
+    JSON field extraction in SQL Server:
+    - JSON_VALUE(column, '$.field') for scalar text value
+    - JSON_QUERY(column, '$.field') for JSON object/array
+    - OPENJSON(column) to parse JSON into rows
+    - ISJSON(column) to validate JSON
+
+  # Arrays
+  - "SQL Server does not have native array types."
+  - "Use STRING_AGG() to aggregate strings (SQL Server 2017+)."
+  - "Use STRING_SPLIT() to split strings into rows."
+  - "Use OPENJSON() to expand JSON arrays."
+
+  # Date/Time
+  - "Use DATEDIFF(unit, start, end) for date differences."
+  - "Use DATEPART(unit, date) or YEAR(), MONTH(), DAY() functions."
+  - "Use GETDATE() or CURRENT_TIMESTAMP for current time."
+  - "Use GETUTCDATE() for UTC time."
+  - "Use FORMAT() for custom date formatting (SQL Server 2012+)."
+
+  # String
+  - "Use + for string concatenation."
+  - "Use CONCAT() for null-safe concatenation."
+  - "LIKE is case-insensitive by default (depends on collation)."
+  - "Use COLLATE for case-sensitive comparison."
+
+  # Limits and pagination
+  - "Use TOP n for limiting rows: SELECT TOP 10 * FROM table."
+  - "Use OFFSET m ROWS FETCH NEXT n ROWS ONLY with ORDER BY (SQL Server 2012+)."
+  - "TOP without ORDER BY returns arbitrary rows."
+
+  # Common table expressions (CTEs)
+  - "CTEs are supported using WITH clause."
+  - "Recursive CTEs use WITH ... AS (anchor UNION ALL recursive)."
+  - "CTE must be followed immediately by SELECT, INSERT, UPDATE, or DELETE."
+
+  # Window functions
+  - "Window functions (ROW_NUMBER, RANK, DENSE_RANK, etc.) are fully supported."
+  - "Use OVER (PARTITION BY ... ORDER BY ...) clause."
+
+  # Unique SQL Server features
+  - "Use ISNULL(x, y) or COALESCE(x, y, ...) for null handling."
+  - "Use TRY_CAST() and TRY_CONVERT() for safe type conversion."
+  - "Use IIF(condition, true_val, false_val) for inline conditionals."
+  - "Use CROSS APPLY / OUTER APPLY for table-valued function joins."
+
+  # Performance
+  - "Use SET SHOWPLAN_TEXT ON or SET SHOWPLAN_ALL ON before query for text plan."
+  - "Use SET STATISTICS IO ON for I/O statistics."
+  - "Include estimated execution plan in SSMS for visual analysis."
+  - "Consider using filtered indexes for partial data."

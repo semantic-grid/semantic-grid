@@ -1,0 +1,54 @@
+version: 1.0.0
+dialect: mysql
+description: SQL dialect instructions for MySQL and MariaDB
+
+rules:
+  # Syntax
+  - "Generated SQL must be compatible with MySQL 8.0+."
+  - "Use backticks (`) for identifier quoting, not double quotes."
+  - "Table names are case-sensitive on Linux, case-insensitive on Windows/macOS."
+
+  # Type casting
+  - "Use CAST(value AS type) for type casting."
+  - "Common types: SIGNED, UNSIGNED, CHAR, DATE, DATETIME, DECIMAL, JSON."
+
+  # JSON
+  - |
+    JSON field extraction in MySQL:
+    - column->'$.field' for JSON value (returns JSON)
+    - column->>'$.field' for text value (returns string, MySQL 8.0+)
+    - JSON_EXTRACT(column, '$.field') for JSON value
+    - JSON_UNQUOTE(JSON_EXTRACT(column, '$.field')) for text value
+
+  # Arrays (JSON arrays in MySQL)
+  - "MySQL does not have native array types; use JSON arrays."
+  - "Use JSON_ARRAYAGG() to aggregate into JSON arrays."
+  - "Use JSON_TABLE() to expand JSON arrays (MySQL 8.0+)."
+  - "Use JSON_LENGTH(json_array) for array length."
+
+  # Date/Time
+  - "Use TIMESTAMPDIFF(unit, ts1, ts2) for date differences."
+  - "Use EXTRACT(unit FROM timestamp) or YEAR(), MONTH(), DAY() functions."
+  - "Use NOW() or CURRENT_TIMESTAMP for current time."
+  - "Use DATE_FORMAT() for custom date formatting."
+
+  # String
+  - "Use CONCAT() for string concatenation (|| does not work)."
+  - "Use LIKE for pattern matching (case-insensitive by default with utf8mb4_general_ci)."
+  - "Use BINARY prefix for case-sensitive comparison."
+
+  # Limits and pagination
+  - "Use LIMIT n OFFSET m or LIMIT m, n for pagination."
+  - "MySQL does not support FETCH FIRST n ROWS ONLY syntax."
+
+  # Common table expressions (CTEs)
+  - "CTEs are supported in MySQL 8.0+ using WITH clause."
+  - "Recursive CTEs use WITH RECURSIVE."
+
+  # Window functions
+  - "Window functions (ROW_NUMBER, RANK, etc.) are supported in MySQL 8.0+."
+
+  # Performance
+  - "Use EXPLAIN to check query plans."
+  - "Use EXPLAIN ANALYZE for actual execution statistics (MySQL 8.0.18+)."
+  - "Consider using covering indexes for frequently queried columns."

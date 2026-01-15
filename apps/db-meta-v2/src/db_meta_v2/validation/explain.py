@@ -208,6 +208,148 @@ def parse_trino_estimates(
     return max_rows, None, max_size_gb
 
 
+def parse_mysql_estimates(
+    rows: list[dict[str, Any]],
+) -> tuple[int | None, float | None, float | None]:
+    """Parse MySQL/MariaDB EXPLAIN output for estimates.
+
+    MySQL EXPLAIN returns structured rows with columns like:
+    - id, select_type, table, type, possible_keys, key, key_len, ref, rows, Extra
+    MySQL 8.0+ EXPLAIN FORMAT=TREE or EXPLAIN ANALYZE provides more detail.
+
+    Returns:
+        (estimated_rows, estimated_cost, estimated_size_gb)
+    """
+    max_rows = None
+    total_rows = 0
+
+    for row in rows:
+        # Standard EXPLAIN output has 'rows' column with estimated row count
+        rows_est = row.get("rows") or row.get("ROWS")
+        if rows_est is not None:
+            try:
+                rows_count = int(rows_est)
+                total_rows += rows_count
+                if max_rows is None or rows_count > max_rows:
+                    max_rows = rows_count
+            except (ValueError, TypeError):
+                pass
+
+        # Also check for text-based output (EXPLAIN FORMAT=TREE)
+        for key in ("EXPLAIN", "Extra", "plan"):
+            text_val = row.get(key, "")
+            if isinstance(text_val, str) and text_val:
+                # Pattern: rows=123 or (rows=123)
+                rows_pattern = r"rows[=:]\s*(\d+)"
+                matches = re.findall(rows_pattern, text_val, re.IGNORECASE)
+                for match in matches:
+                    rows_count = int(match)
+                    if max_rows is None or rows_count > max_rows:
+                        max_rows = rows_count
+
+                # Note: MySQL EXPLAIN FORMAT=TREE also shows cost, but we don't use it
+                # as MySQL doesn't provide a unified cost metric like PostgreSQL
+
+    # Use total rows if we have multiple tables being joined
+    estimated_rows = total_rows if total_rows > 0 else max_rows
+
+    # Rough size estimate: ~1KB per row
+    size_gb = (estimated_rows * 1024) / (1024**3) if estimated_rows else None
+
+    return estimated_rows, None, size_gb
+
+
+def parse_sqlite_estimates(
+    rows: list[dict[str, Any]],
+) -> tuple[int | None, float | None, float | None]:
+    """Parse SQLite EXPLAIN QUERY PLAN output for estimates.
+
+    SQLite's EXPLAIN QUERY PLAN returns rows with columns:
+    - id, parent, notused, detail
+
+    The 'detail' column contains the query plan in text form, e.g.:
+    - SCAN TABLE users
+    - SEARCH TABLE orders USING INDEX idx_user_id (user_id=?)
+    - USE TEMP B-TREE FOR ORDER BY
+
+    SQLite doesn't provide row estimates in EXPLAIN QUERY PLAN.
+    We can only infer relative cost from the plan operations.
+
+    Returns:
+        (estimated_rows, estimated_cost, estimated_size_gb)
+    """
+    # SQLite EXPLAIN QUERY PLAN doesn't provide row estimates.
+    # It only shows the query plan structure (SCAN TABLE, SEARCH using index, etc.)
+    # Without row estimates, the cost tier evaluation will default to CONFIRM
+    # when rows is None, which is the safest approach for SQLite.
+    #
+    # The plan details are still returned in the ExplainResult.explanation field
+    # for manual inspection if needed.
+
+    return None, None, None
+
+
+def parse_mssql_estimates(
+    rows: list[dict[str, Any]],
+) -> tuple[int | None, float | None, float | None]:
+    """Parse SQL Server (MSSQL) execution plan estimates.
+
+    MSSQL SET SHOWPLAN_TEXT ON or SET SHOWPLAN_ALL ON returns plan info.
+    SHOWPLAN_ALL returns structured rows with columns like:
+    - StmtText, Type, EstimateRows, EstimateIO, EstimateCPU, TotalSubtreeCost, etc.
+
+    Returns:
+        (estimated_rows, estimated_cost, estimated_size_gb)
+    """
+    max_rows = None
+    max_cost = None
+
+    for row in rows:
+        # SHOWPLAN_ALL structured output
+        est_rows = row.get("EstimateRows") or row.get("ESTIMATEROWS")
+        if est_rows is not None:
+            try:
+                rows_count = int(float(est_rows))
+                if max_rows is None or rows_count > max_rows:
+                    max_rows = rows_count
+            except (ValueError, TypeError):
+                pass
+
+        # Total subtree cost
+        total_cost = row.get("TotalSubtreeCost") or row.get("TOTALSUBTREECOST")
+        if total_cost is not None:
+            try:
+                cost = float(total_cost)
+                if max_cost is None or cost > max_cost:
+                    max_cost = cost
+            except (ValueError, TypeError):
+                pass
+
+        # Text-based plan output (SET SHOWPLAN_TEXT ON)
+        stmt_text = row.get("StmtText") or row.get("STMTTEXT", "")
+        if isinstance(stmt_text, str) and stmt_text:
+            # Pattern: Estimated rows: 123 or EstimateRows = 123
+            rows_pattern = r"(?:Estimated\s*rows|EstimateRows)[=:\s]*([\d.]+)"
+            matches = re.findall(rows_pattern, stmt_text, re.IGNORECASE)
+            for match in matches:
+                rows_count = int(float(match))
+                if max_rows is None or rows_count > max_rows:
+                    max_rows = rows_count
+
+            # Pattern: Cost = 0.123 or TotalSubtreeCost = 0.123
+            cost_pattern = r"(?:Cost|TotalSubtreeCost)[=:\s]*([\d.]+)"
+            cost_matches = re.findall(cost_pattern, stmt_text, re.IGNORECASE)
+            for match in cost_matches:
+                cost = float(match)
+                if max_cost is None or cost > max_cost:
+                    max_cost = cost
+
+    # Rough size estimate: ~1KB per row
+    size_gb = (max_rows * 1024) / (1024**3) if max_rows else None
+
+    return max_rows, max_cost, size_gb
+
+
 def evaluate_cost_tier(
     estimated_rows: int | None,
     estimated_cost: float | None,
@@ -285,6 +427,12 @@ def explain_sql(sql: str, database_url: str | None = None) -> ExplainResult:
                     est_rows, est_cost, est_size = parse_clickhouse_estimates(rows)
                 elif dialect == "trino":
                     est_rows, est_cost, est_size = parse_trino_estimates(rows)
+                elif dialect in ("mysql", "mariadb"):
+                    est_rows, est_cost, est_size = parse_mysql_estimates(rows)
+                elif dialect == "sqlite":
+                    est_rows, est_cost, est_size = parse_sqlite_estimates(rows)
+                elif dialect == "mssql":
+                    est_rows, est_cost, est_size = parse_mssql_estimates(rows)
                 else:
                     est_rows, est_cost, est_size = None, None, None
 
@@ -381,8 +529,7 @@ def validate_read_only(sql: str) -> tuple[bool, str | None]:
 
         # Must start with SELECT, WITH (CTE), or EXPLAIN
         if not any(
-            sql_upper.startswith(kw)
-            for kw in ["SELECT", "WITH", "EXPLAIN", "SHOW", "DESCRIBE"]
+            sql_upper.startswith(kw) for kw in ["SELECT", "WITH", "EXPLAIN", "SHOW", "DESCRIBE"]
         ):
             span.set_attribute("validation.rejected", "not_select")
             return False, "Query must be a SELECT statement"

@@ -3,7 +3,7 @@
 
 def get_html() -> str:
     """Return the single-page HTML application."""
-    return '''<!DOCTYPE html>
+    return """<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -364,9 +364,11 @@ def get_html() -> str:
             return '<div class="span-row ' + selectedClass + '" ' +
                 'onclick="toggleSpanDetails(\\''+spanKey+'\\', event)">' +
                 '<div class="span-main">' +
-                    '<div class="span-label ' + childClass + '">' + escapeHtml(span.name) + '</div>' +
+                    '<div class="span-label ' + childClass + '">' +
+                        escapeHtml(span.name) + '</div>' +
                     '<div class="span-bar-container">' +
-                        '<div class="span-bar ' + barClass + '" style="left:'+left+'%;width:'+width+'%"></div>' +
+                        '<div class="span-bar ' + barClass + '" ' +
+                            'style="left:'+left+'%;width:'+width+'%"></div>' +
                     '</div>' +
                     '<div class="span-duration">' + duration + '</div>' +
                 '</div>' +
@@ -430,4 +432,4 @@ def get_html() -> str:
     </script>
 </body>
 </html>
-'''
+"""

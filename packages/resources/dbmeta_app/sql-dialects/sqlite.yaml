@@ -1,0 +1,64 @@
+version: 1.0.0
+dialect: sqlite
+description: SQL dialect instructions for SQLite
+
+rules:
+  # Syntax
+  - "Generated SQL must be compatible with SQLite 3.x."
+  - "Use double quotes for identifier quoting (or backticks for MySQL compatibility)."
+  - "SQLite is case-insensitive for keywords and identifiers by default."
+
+  # Type system
+  - "SQLite uses dynamic typing with type affinity (TEXT, NUMERIC, INTEGER, REAL, BLOB)."
+  - "Any column can store any type; declared types are hints only."
+  - "Use TYPEOF(value) to check the storage class of a value."
+
+  # Type casting
+  - "Use CAST(value AS type) for type casting."
+  - "Supported types: INTEGER, REAL, TEXT, BLOB, NUMERIC."
+
+  # JSON (SQLite 3.38+)
+  - |
+    JSON field extraction in SQLite (requires JSON1 extension):
+    - json_extract(column, '$.field') for value
+    - column->>'$.field' for text value (SQLite 3.38+)
+    - column->'$.field' for JSON value (SQLite 3.38+)
+
+  # Arrays
+  - "SQLite does not have native array types."
+  - "Use JSON arrays with json_group_array() to aggregate."
+  - "Use json_each() to expand JSON arrays."
+
+  # Date/Time
+  - "SQLite has no native DATE/DATETIME types; use TEXT, REAL, or INTEGER."
+  - "Use datetime(), date(), time() functions for date manipulation."
+  - "Use strftime() for formatting and extracting date parts."
+  - "Use julianday() for date arithmetic."
+  - "Common format: 'YYYY-MM-DD HH:MM:SS' as TEXT."
+
+  # String
+  - "Use || for string concatenation."
+  - "LIKE is case-insensitive for ASCII; use GLOB for case-sensitive matching."
+  - "Use INSTR(string, substring) to find substring position."
+
+  # Limits and pagination
+  - "Use LIMIT n OFFSET m for pagination."
+  - "LIMIT -1 means no limit."
+
+  # Common table expressions (CTEs)
+  - "CTEs are supported using WITH clause (SQLite 3.8.3+)."
+  - "Recursive CTEs use WITH RECURSIVE."
+
+  # Window functions
+  - "Window functions are supported in SQLite 3.25+."
+
+  # Unique SQLite features
+  - "Use IFNULL(x, y) or COALESCE(x, y, ...) for null handling."
+  - "Use GROUP_CONCAT() to aggregate strings."
+  - "SQLite supports UPSERT with ON CONFLICT clause."
+
+  # Performance
+  - "Use EXPLAIN QUERY PLAN to analyze query execution."
+  - "SQLite does not provide row count estimates in EXPLAIN."
+  - "Create indexes for frequently filtered/joined columns."
+  - "Use ANALYZE to update statistics for the query planner."

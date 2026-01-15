@@ -47,8 +47,14 @@ def detect_dialect_from_url(database_url: str) -> str:
         "trino": "trino",
         "mysql": "mysql",
         "mariadb": "mysql",
+        "pymysql": "mysql",
+        "mysqlconnector": "mysql",
         "mssql": "mssql",
         "sqlserver": "mssql",
+        "pyodbc": "mssql",
+        "pymssql": "mssql",
+        "sqlite": "sqlite",
+        "sqlite3": "sqlite",
     }
 
     return dialect_map.get(dialect, dialect)

@@ -231,7 +231,7 @@ def _execute_query(
             span.set_attribute("rows.returned", len(rows))
             span.set_attribute("duration_ms", round(total_duration_ms, 2))
 
-            logger.info(f"[WH_QUERY:{qid}] Complete: {len(rows)} rows in {total_duration_ms:.0f}ms")
+            logger.info(f"[WH_QUERY:{qid}] Complete: {len(rows)} rows, {total_duration_ms:.0f}ms")
 
             return {
                 "data": rows,

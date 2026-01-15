@@ -92,7 +92,7 @@ def main():
     size_mb = binary_path.stat().st_size / (1024 * 1024)
 
     print()
-    print(f"Build successful!")
+    print("Build successful!")
     print(f"  Binary: {binary_path}")
     print(f"  Size: {size_mb:.1f} MB")
     print()
