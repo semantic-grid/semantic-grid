@@ -54,12 +54,26 @@ detect_platform() {
     printf '%s-%s' "$os" "$arch"
 }
 
-# Get latest release version from GitHub
+# Fallback version if API is unavailable (rate limited, etc.)
+FALLBACK_VERSION="0.2.0"
+
+# Get latest dbmeta release version from GitHub
+# Note: We can't use /releases/latest because the repo has multiple release types
+# Instead, we fetch all releases and find the latest dbmeta-v* tag
 get_latest_version() {
-    curl -sL "https://api.github.com/repos/${REPO}/releases/latest" | \
+    # Fetch releases and find latest dbmeta-v* tag
+    version=$(curl -sL "https://api.github.com/repos/${REPO}/releases" 2>/dev/null | \
         grep '"tag_name":' | \
-        sed -E 's/.*"([^"]+)".*/\1/' | \
-        sed 's/^dbmeta-v//'
+        grep 'dbmeta-v' | \
+        head -1 | \
+        sed -E 's/.*"dbmeta-v([^"]+)".*/\1/')
+
+    # Return version or fallback
+    if [ -n "$version" ]; then
+        printf '%s' "$version"
+    else
+        printf '%s' "$FALLBACK_VERSION"
+    fi
 }
 
 # Download binary
@@ -124,9 +138,8 @@ main() {
     if [ -z "$version" ]; then
         printf 'Fetching latest version...\n'
         version=$(get_latest_version)
-        if [ -z "$version" ]; then
-            warn "Could not determine latest version. Using 'latest'."
-            version="latest"
+        if [ "$version" = "$FALLBACK_VERSION" ]; then
+            warn "Could not fetch from API (rate limited?). Using fallback v${FALLBACK_VERSION}."
         fi
     fi
     printf 'Version: \033[32m%s\033[0m\n' "$version"
