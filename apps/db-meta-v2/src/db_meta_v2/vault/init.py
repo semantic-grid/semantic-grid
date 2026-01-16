@@ -1,34 +1,54 @@
 """Vault initialization and directory structure management."""
 
 import logging
-from pathlib import Path
 
-from db_meta_v2.config import get_settings
+from db_meta_v2.onboarding.state import get_connection_path
 
 logger = logging.getLogger(__name__)
 
 # Default PROTOCOL.md content
 PROTOCOL_MD = """# Knowledge Vault Protocol
 
-This vault stores query examples, learnings, and instructions for SQL generation.
+This connection directory stores query examples, learnings, and instructions for SQL generation.
 Use the `shell` tool to interact with it via bash commands.
+
+## Directory Structure
+
+```
+connection/
+├── PROTOCOL.md          # This file
+├── state.yaml           # Onboarding state
+├── schema/
+│   └── descriptions.yaml  # Cached schema with descriptions
+├── domain/
+│   └── model.md         # Domain model (business entities, relationships)
+├── instructions/
+│   └── sql_rules.md     # SQL dialect rules and gotchas
+├── examples/
+│   └── {uuid}.yaml      # Saved query examples
+└── learnings/
+    ├── patterns.md      # Successful patterns
+    ├── schema_gotchas.md # Schema quirks
+    └── failures/        # Failed query logs
+        └── {uuid}.yaml
+```
 
 ## CRITICAL: Use Cached Schema First
 
 **NEVER introspect the database directly if cached schema exists.**
 
 On first run, dbmeta discovers and caches the full database schema. This cache contains:
-- `schema_descriptions.yaml` - Complete table/column descriptions with semantic annotations
-- `instructions/domain.md` - Domain model explaining relationships and business logic
+- `schema/descriptions.yaml` - Complete table/column descriptions with semantic annotations
+- `domain/model.md` - Domain model explaining relationships and business logic
 
 **Before ANY database introspection:**
-1. Check if `schema_descriptions.yaml` exists
+1. Check if `schema/descriptions.yaml` exists
 2. If it exists, use it as your primary schema reference
 3. Only call `list_catalogs()`, `list_schemas()`, `list_tables()` if cache is missing
 
 ```bash
 # Check for cached schema
-cat schema_descriptions.yaml 2>/dev/null | head -50
+cat schema/descriptions.yaml 2>/dev/null | head -50
 ```
 
 If the file exists and has content, USE IT instead of calling discovery tools.
@@ -37,14 +57,14 @@ If the file exists and has content, USE IT instead of calling discovery tools.
 
 **ALWAYS read the domain model before writing queries.**
 
-The domain model (`instructions/domain.md`) contains:
+The domain model (`domain/model.md`) contains:
 - Business entity relationships
 - Key concepts and terminology
 - Important joins and aggregations
 - Common query patterns
 
 ```bash
-cat instructions/domain.md
+cat domain/model.md
 ```
 
 This is NOT optional - it contains critical context for correct SQL generation.
@@ -58,9 +78,9 @@ Many databases use 3-level hierarchy: `catalog.schema.table`
 - RIGHT: `list_catalogs()` first, then drill down
 
 Before ANY query work:
-1. Check cached schema first (`schema_descriptions.yaml`)
+1. Check cached schema first (`schema/descriptions.yaml`)
 2. Check `instructions/sql_rules.md` for hierarchy rules
-3. Check domain model (`instructions/domain.md`)
+3. Check domain model (`domain/model.md`)
 4. Only if cache missing: use `list_catalogs()` to discover
 
 Failing to do this will cause "table not found" errors.
@@ -88,12 +108,12 @@ cat PROTOCOL.md
 
 2. Check for cached schema (USE THIS FIRST):
 ```bash
-cat schema_descriptions.yaml 2>/dev/null | head -100
+cat schema/descriptions.yaml 2>/dev/null | head -100
 ```
 
 3. Read domain model (REQUIRED):
 ```bash
-cat instructions/domain.md
+cat domain/model.md
 ```
 
 4. Check database structure rules:
@@ -106,7 +126,7 @@ cat instructions/sql_rules.md
 ### 1. Use cached schema (PRIMARY SOURCE)
 ```bash
 # Search for relevant tables/columns in cache
-grep -i "keyword" schema_descriptions.yaml
+grep -i "keyword" schema/descriptions.yaml
 ```
 
 ### 2. Search for existing examples
@@ -128,7 +148,7 @@ grep -i "table_name" learnings/patterns.md
 The domain model should already be loaded from session start.
 If not, read it now:
 ```bash
-cat instructions/domain.md
+cat domain/model.md
 ```
 
 ## After Successful Query
@@ -228,22 +248,23 @@ ls -lt learnings/failures/*.yaml | head -10
 ```
 """
 
-# Directory structure to create
-VAULT_DIRS = [
+# Directory structure to create inside connection
+CONNECTION_DIRS = [
+    "schema",
+    "domain",
     "instructions",
     "examples",
     "learnings",
     "learnings/failures",
-    "schema",
 ]
 
 # Files to always overwrite (system-controlled, shipped with each deploy)
-VAULT_SYSTEM_FILES = {
+CONNECTION_SYSTEM_FILES = {
     "PROTOCOL.md": PROTOCOL_MD,
 }
 
 # Initial files to create only if missing (user-editable templates)
-VAULT_TEMPLATE_FILES = {
+CONNECTION_TEMPLATE_FILES = {
     "instructions/sql_rules.md": """# SQL Generation Rules
 
 ## Database Hierarchy
@@ -273,57 +294,62 @@ Add domain-specific SQL rules below this line.
 ---
 
 """,
-    "instructions/domain.md": "# Domain Knowledge\n\nAdd domain-specific guidance here.\n",
+    "domain/model.md": "# Domain Model\n\nGenerated domain model will be saved here.\n",
     "learnings/patterns.md": "# Query Patterns\n\nDocument successful patterns here.\n",
     "learnings/schema_gotchas.md": "# Schema Gotchas\n\nDocument schema quirks here.\n",
 }
 
 
-def ensure_vault_structure() -> bool:
-    """Ensure vault directory structure exists.
+def ensure_connection_structure() -> bool:
+    """Ensure connection directory structure exists.
 
-    Creates the vault directory and subdirectories if they don't exist.
+    Creates the connection directory and subdirectories if they don't exist.
     Also creates initial template files if missing.
 
     Returns:
-        True if vault was created/updated, False if it already existed unchanged
+        True if connection was created/updated, False if it already existed unchanged
     """
-    settings = get_settings()
-    vault_path = Path(settings.vault_path)
+    connection_path = get_connection_path()
     created = False
 
-    # Create vault root
-    if not vault_path.exists():
-        vault_path.mkdir(parents=True, exist_ok=True)
-        logger.info(f"Created vault directory: {vault_path}")
+    # Create connection root
+    if not connection_path.exists():
+        connection_path.mkdir(parents=True, exist_ok=True)
+        logger.info(f"Created connection directory: {connection_path}")
         created = True
 
     # Create subdirectories
-    for subdir in VAULT_DIRS:
-        dir_path = vault_path / subdir
+    for subdir in CONNECTION_DIRS:
+        dir_path = connection_path / subdir
         if not dir_path.exists():
             dir_path.mkdir(parents=True, exist_ok=True)
-            logger.info(f"Created vault subdirectory: {subdir}")
+            logger.info(f"Created connection subdirectory: {subdir}")
             created = True
 
     # Always overwrite system-controlled files (e.g., PROTOCOL.md)
-    for file_path, content in VAULT_SYSTEM_FILES.items():
-        full_path = vault_path / file_path
+    for file_path, content in CONNECTION_SYSTEM_FILES.items():
+        full_path = connection_path / file_path
         full_path.write_text(content)
         logger.info(f"Updated system file: {file_path}")
         created = True
 
     # Create template files only if missing (user-editable)
-    for file_path, content in VAULT_TEMPLATE_FILES.items():
-        full_path = vault_path / file_path
+    for file_path, content in CONNECTION_TEMPLATE_FILES.items():
+        full_path = connection_path / file_path
         if not full_path.exists():
             full_path.write_text(content)
             logger.info(f"Created template file: {file_path}")
             created = True
 
     if created:
-        logger.info("Vault structure initialized")
+        logger.info("Connection structure initialized")
     else:
-        logger.debug("Vault structure already exists")
+        logger.debug("Connection structure already exists")
 
     return created
+
+
+# Backward compatibility alias
+def ensure_vault_structure() -> bool:
+    """Deprecated: Use ensure_connection_structure instead."""
+    return ensure_connection_structure()

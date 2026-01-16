@@ -11,12 +11,19 @@ from sg_models import (
     TableDescriptionStatus,
 )
 
-from db_meta_v2.onboarding.state import get_provider_dir
+from db_meta_v2.onboarding.state import get_connection_path
 
 
-def get_schema_file_path(provider_id: str) -> Path:
-    """Get path to the schema descriptions file."""
-    return get_provider_dir(provider_id) / "schema_descriptions.yaml"
+def get_schema_file_path(provider_id: str | None = None) -> Path:
+    """Get path to the schema descriptions file.
+
+    Args:
+        provider_id: Ignored in v2 (kept for backward compatibility)
+
+    Returns:
+        Path to schema/descriptions.yaml
+    """
+    return get_connection_path() / "schema" / "descriptions.yaml"
 
 
 def load_schema_descriptions(provider_id: str) -> SchemaDescriptions | None:
@@ -52,15 +59,16 @@ def save_schema_descriptions(schema: SchemaDescriptions) -> dict:
         Dict with save status
     """
     try:
-        provider_dir = get_provider_dir(schema.provider_id)
-        provider_dir.mkdir(parents=True, exist_ok=True)
+        # Ensure schema directory exists
+        schema_dir = get_connection_path() / "schema"
+        schema_dir.mkdir(parents=True, exist_ok=True)
 
         schema.generated_at = datetime.now(UTC)
 
         # Convert to dict for YAML serialization
         schema_dict = schema.model_dump(mode="json", by_alias=True)
 
-        schema_file = get_schema_file_path(schema.provider_id)
+        schema_file = get_schema_file_path()
         with open(schema_file, "w") as f:
             yaml.dump(
                 schema_dict,

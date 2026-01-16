@@ -11,7 +11,7 @@ import shlex
 from dataclasses import dataclass
 from pathlib import Path
 
-from db_meta_v2.config import get_settings
+from db_meta_v2.onboarding.state import get_connection_path
 
 logger = logging.getLogger(__name__)
 
@@ -269,23 +269,29 @@ SHELL_DESCRIPTION_SHELL_MODE = """YOUR PRIMARY TOOL - Use this for ALL query pre
 
 START IMMEDIATELY with: cat PROTOCOL.md
 
-This shell is your Swiss Army knife. The vault contains everything you need:
+This shell is your Swiss Army knife. The connection directory contains everything you need:
 
-    vault/
-    ├── PROTOCOL.md          # READ THIS FIRST - critical instructions
-    ├── examples/            # Query examples (YAML) - search before writing SQL
-    ├── instructions/        # SQL rules, business rules for this database
-    ├── learnings/           # Patterns, common mistakes, tips
-    └── schema/              # Table descriptions, domain model
+    connection/
+    ├── PROTOCOL.md            # READ THIS FIRST - critical instructions
+    ├── state.yaml             # Onboarding state
+    ├── schema/
+    │   └── descriptions.yaml  # Cached schema with descriptions
+    ├── domain/
+    │   └── model.md           # Domain model (business entities)
+    ├── instructions/
+    │   └── sql_rules.md       # SQL dialect rules
+    ├── examples/              # Query examples (YAML)
+    └── learnings/             # Patterns, common mistakes
 
 WORKFLOW:
     1. cat PROTOCOL.md                              # Understand the rules
-    2. grep -ri "keyword" examples/                 # Find similar queries
-    3. cat instructions/sql_rules.md                # Check SQL rules
-    4. cat schema/tables.yaml                       # Understand schema
-    5. Write SQL based on what you found
-    6. Use validate_sql() then run_sql() to execute
-    7. Save successful queries to examples/
+    2. cat schema/descriptions.yaml | head -100     # Check cached schema
+    3. cat domain/model.md                          # Understand the domain
+    4. grep -ri "keyword" examples/                 # Find similar queries
+    5. cat instructions/sql_rules.md                # Check SQL rules
+    6. Write SQL based on what you found
+    7. Use validate_sql() then run_sql() to execute
+    8. Save successful queries to examples/
 
 Available commands:
     - Read: cat, grep, find, ls, head, tail, wc, sort, uniq, diff
@@ -293,7 +299,7 @@ Available commands:
     - Utils: echo, date, uuidgen
 
 Args:
-    command: Bash command to execute in the vault
+    command: Bash command to execute in the connection directory
 
 Returns:
     dict with stdout, stderr, exit_code
@@ -301,9 +307,8 @@ Returns:
 
 
 async def _shell(command: str) -> dict:
-    """Run bash command in the knowledge vault - see SHELL_DESCRIPTION_* for docs."""
-    settings = get_settings()
-    vault_path = Path(settings.vault_path)
+    """Run bash command in the connection directory - see SHELL_DESCRIPTION_* for docs."""
+    connection_path = get_connection_path()
 
     # Validate command
     validation = validate_command(command)
@@ -315,21 +320,21 @@ async def _shell(command: str) -> dict:
             "exit_code": 1,
         }
 
-    # Ensure vault exists
-    if not vault_path.exists():
+    # Ensure connection directory exists
+    if not connection_path.exists():
         return {
             "stdout": "",
-            "stderr": f"Vault path does not exist: {vault_path}",
+            "stderr": f"Connection path does not exist: {connection_path}",
             "exit_code": 1,
         }
 
     # Run command
-    logger.info(f"Running vault command: {command[:100]}...")
-    result = await run_sandboxed(command, vault_path)
+    logger.info(f"Running shell command: {command[:100]}...")
+    result = await run_sandboxed(command, connection_path)
 
     # Log writes for audit
     if validation.is_write:
-        logger.info(f"Vault write operation: {command[:100]}...")
+        logger.info(f"Connection write operation: {command[:100]}...")
 
     # Auto-inject protocol on first successful command
     if result["exit_code"] == 0:
@@ -349,10 +354,9 @@ async def _protocol() -> str:
     Returns:
         The full PROTOCOL.md content
     """
-    settings = get_settings()
-    protocol_path = Path(settings.vault_path) / "PROTOCOL.md"
+    protocol_path = get_connection_path() / "PROTOCOL.md"
 
     if protocol_path.exists():
         return protocol_path.read_text()
 
-    return "PROTOCOL.md not found. Vault may not be initialized."
+    return "PROTOCOL.md not found. Connection may not be initialized."

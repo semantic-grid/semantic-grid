@@ -1,5 +1,6 @@
 """Onboarding state persistence."""
 
+import logging
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -8,30 +9,44 @@ from sg_models import OnboardingPhase, OnboardingState
 
 from db_meta_v2.config import get_settings
 
+logger = logging.getLogger(__name__)
 
-def get_provider_dir(provider_id: str) -> Path:
-    """Get the directory for a provider's artifacts.
 
-    Args:
-        provider_id: Provider identifier
+def get_connection_path() -> Path:
+    """Get the current connection directory path.
 
     Returns:
-        Path to provider directory
+        Path to connection directory
     """
     settings = get_settings()
-    return Path(settings.providers_dir) / provider_id
+    return settings.get_effective_connection_path()
 
 
-def get_state_file_path(provider_id: str) -> Path:
+def get_provider_dir(provider_id: str | None = None) -> Path:
+    """Get the directory for connection artifacts.
+
+    DEPRECATED: Use get_connection_path() instead.
+
+    Args:
+        provider_id: Ignored in v2 (kept for backward compatibility)
+
+    Returns:
+        Path to connection directory
+    """
+    # In v2, we ignore provider_id and use the connection path
+    return get_connection_path()
+
+
+def get_state_file_path(provider_id: str | None = None) -> Path:
     """Get path to the onboarding state file.
 
     Args:
-        provider_id: Provider identifier
+        provider_id: Ignored in v2 (kept for backward compatibility)
 
     Returns:
         Path to state YAML file
     """
-    return get_provider_dir(provider_id) / "onboarding_state.yaml"
+    return get_connection_path() / "state.yaml"
 
 
 def create_initial_state(provider_id: str) -> OnboardingState:
@@ -60,9 +75,9 @@ def save_state(state: OnboardingState) -> dict:
         Dict with save status
     """
     try:
-        # Ensure provider directory exists
-        provider_dir = get_provider_dir(state.provider_id)
-        provider_dir.mkdir(parents=True, exist_ok=True)
+        # Ensure connection directory exists
+        conn_path = get_connection_path()
+        conn_path.mkdir(parents=True, exist_ok=True)
 
         # Update timestamp
         state.last_updated_at = datetime.now(UTC)
@@ -71,35 +86,35 @@ def save_state(state: OnboardingState) -> dict:
         state_dict = state.model_dump(mode="json")
 
         # Write to file
-        state_file = get_state_file_path(state.provider_id)
+        state_file = get_state_file_path()
         with open(state_file, "w") as f:
             yaml.dump(state_dict, f, default_flow_style=False, sort_keys=False)
 
         return {
             "saved": True,
-            "provider_id": state.provider_id,
+            "connection": str(conn_path),
             "file_path": str(state_file),
             "error": None,
         }
     except Exception as e:
         return {
             "saved": False,
-            "provider_id": state.provider_id,
+            "connection": None,
             "file_path": None,
             "error": str(e),
         }
 
 
-def load_state(provider_id: str) -> OnboardingState | None:
+def load_state(provider_id: str | None = None) -> OnboardingState | None:
     """Load onboarding state from YAML file.
 
     Args:
-        provider_id: Provider identifier
+        provider_id: Ignored in v2 (kept for backward compatibility)
 
     Returns:
         OnboardingState if found, None otherwise
     """
-    state_file = get_state_file_path(provider_id)
+    state_file = get_state_file_path()
 
     if not state_file.exists():
         return None
@@ -113,21 +128,22 @@ def load_state(provider_id: str) -> OnboardingState | None:
         return None
 
 
-def delete_state(provider_id: str) -> dict:
+def delete_state(provider_id: str | None = None) -> dict:
     """Delete onboarding state file.
 
     Args:
-        provider_id: Provider identifier
+        provider_id: Ignored in v2 (kept for backward compatibility)
 
     Returns:
         Dict with delete status
     """
-    state_file = get_state_file_path(provider_id)
+    state_file = get_state_file_path()
+    conn_path = get_connection_path()
 
     if not state_file.exists():
         return {
             "deleted": False,
-            "provider_id": provider_id,
+            "connection": str(conn_path),
             "error": "State file not found",
         }
 
@@ -135,12 +151,12 @@ def delete_state(provider_id: str) -> dict:
         state_file.unlink()
         return {
             "deleted": True,
-            "provider_id": provider_id,
+            "connection": str(conn_path),
             "error": None,
         }
     except Exception as e:
         return {
             "deleted": False,
-            "provider_id": provider_id,
+            "connection": str(conn_path),
             "error": str(e),
         }

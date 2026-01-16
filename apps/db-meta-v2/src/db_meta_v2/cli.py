@@ -1,10 +1,17 @@
 """dbmeta CLI - Standalone CLI for db-meta-v2 MCP server.
 
 Commands:
-    dbmeta init    - Interactive setup wizard (configures database + Claude Desktop)
-    dbmeta start   - Start MCP server (stdio mode)
-    dbmeta config  - Open config in editor
-    dbmeta status  - Show current configuration
+    dbmeta init [NAME]  - Interactive setup wizard (configures database + Claude Desktop)
+    dbmeta start        - Start MCP server (stdio mode)
+    dbmeta config       - Open config in editor
+    dbmeta status       - Show current configuration
+    dbmeta list         - List all connections
+    dbmeta use NAME     - Switch active connection
+    dbmeta remove NAME  - Remove a connection
+
+Global options:
+    -c, --connection NAME  - Use specific connection (default: from config)
+    all                    - Apply command to all connections (where supported)
 """
 
 import json
@@ -20,6 +27,7 @@ import yaml
 from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
+from rich.table import Table
 
 console = Console()
 
@@ -36,7 +44,41 @@ signal.signal(signal.SIGINT, _handle_sigint)
 # Config paths
 CONFIG_DIR = Path.home() / ".dbmeta"
 CONFIG_FILE = CONFIG_DIR / "config.yaml"
-VAULT_DIR = CONFIG_DIR / "vault"
+CONNECTIONS_DIR = CONFIG_DIR / "connections"
+
+# Legacy paths (for migration)
+LEGACY_VAULT_DIR = CONFIG_DIR / "vault"
+LEGACY_PROVIDERS_DIR = CONFIG_DIR / "providers"
+
+
+def get_connection_path(name: str) -> Path:
+    """Get path to a connection directory."""
+    return CONNECTIONS_DIR / name
+
+
+def list_connections() -> list[str]:
+    """List all connection names."""
+    if not CONNECTIONS_DIR.exists():
+        return []
+    return sorted([d.name for d in CONNECTIONS_DIR.iterdir() if d.is_dir()])
+
+
+def get_active_connection() -> str:
+    """Get the active connection name from config."""
+    config = load_config()
+    return config.get("active_connection", "default")
+
+
+def set_active_connection(name: str) -> None:
+    """Set the active connection in config."""
+    config = load_config()
+    config["active_connection"] = name
+    save_config(config)
+
+
+def connection_exists(name: str) -> bool:
+    """Check if a connection exists."""
+    return get_connection_path(name).exists()
 
 
 def get_claude_desktop_config_path() -> Path:
@@ -182,8 +224,13 @@ def main():
 
 
 @main.command()
-def init():
-    """Interactive setup wizard - configure database and Claude Desktop."""
+@click.argument("name", default="default", required=False)
+def init(name: str):
+    """Interactive setup wizard - configure database and Claude Desktop.
+
+    NAME is the connection name (default: "default").
+    Use different names for multiple database connections.
+    """
     # Check if Claude Desktop is installed
     if not is_claude_desktop_installed():
         console.print(
@@ -198,8 +245,7 @@ def init():
 
     console.print(
         Panel.fit(
-            "[bold blue]dbmeta Setup[/bold blue]\n\n"
-            "Configure database connection for Claude Desktop.",
+            f"[bold blue]dbmeta Setup[/bold blue]\n\nConfigure connection: [cyan]{name}[/cyan]",
             border_style="blue",
         )
     )
@@ -218,7 +264,14 @@ def init():
         dbmeta_config = load_config()
         existing_url = dbmeta_config.get("database_url")
 
-    if has_dbmeta or has_legacy:
+    # Check if connection already exists
+    connection_path = get_connection_path(name)
+    if connection_path.exists():
+        console.print(f"\n[yellow]Connection '{name}' already exists.[/yellow]")
+        if not Confirm.ask("Update configuration?", default=True):
+            console.print("[dim]Setup cancelled.[/dim]")
+            return
+    elif has_dbmeta or has_legacy:
         console.print("\n[yellow]Existing configuration found:[/yellow]")
         if has_dbmeta:
             console.print("  Entry: [cyan]dbmeta[/cyan]")
@@ -236,10 +289,6 @@ def init():
                     display_url = f"{scheme_user}:****@{parts[1]}"
             console.print(f"  Database: [cyan]{display_url}[/cyan]")
         console.print()
-
-        if not Confirm.ask("Update configuration?", default=True):
-            console.print("[dim]Setup cancelled.[/dim]")
-            return
     else:
         console.print(f"\n[dim]Claude Desktop config: {claude_config_path}[/dim]")
         if not claude_config_path.exists():
@@ -263,20 +312,23 @@ def init():
         return
 
     # Build dbmeta config (saved to ~/.dbmeta/config.yaml)
-    config = {
-        "database_url": database_url,
-        "provider_id": "default",
-        "tool_mode": "shell",
-        "vault_path": str(VAULT_DIR),
-        "log_level": "INFO",
-    }
+    config = load_config()
+    config.update(
+        {
+            "database_url": database_url,
+            "active_connection": name,
+            "tool_mode": "shell",
+            "log_level": "INFO",
+        }
+    )
 
     # Save dbmeta config
     save_config(config)
     console.print(f"\n[green]✓ Config saved to {CONFIG_FILE}[/green]")
 
-    # Create vault directory
-    VAULT_DIR.mkdir(parents=True, exist_ok=True)
+    # Create connection directory
+    connection_path.mkdir(parents=True, exist_ok=True)
+    console.print(f"[green]✓ Connection directory created: {connection_path}[/green]")
 
     # Update Claude Desktop config
     if "mcpServers" not in claude_config:
@@ -305,6 +357,18 @@ def init():
     if other_servers:
         console.print(f"[dim]Other MCP servers (unchanged): {', '.join(other_servers)}[/dim]")
 
+    # Run migration if legacy data exists
+    if LEGACY_VAULT_DIR.exists() or LEGACY_PROVIDERS_DIR.exists():
+        console.print("\n[yellow]Legacy data detected. Running migration...[/yellow]")
+        try:
+            from db_meta_v2.vault.migrate import migrate_to_connection_structure
+
+            stats = migrate_to_connection_structure(name)
+            if not stats.get("skipped"):
+                console.print("[green]✓ Legacy data migrated[/green]")
+        except Exception as e:
+            console.print(f"[yellow]Migration warning: {e}[/yellow]")
+
     console.print()
     console.print(
         Panel.fit(
@@ -323,7 +387,8 @@ def init():
 
 
 @main.command()
-def start():
+@click.option("-c", "--connection", default=None, help="Connection name (default: active)")
+def start(connection: str | None):
     """Start the MCP server (stdio mode for Claude Desktop)."""
     if not CONFIG_FILE.exists():
         console.print("[red]No config found. Run 'dbmeta init' first.[/red]")
@@ -331,21 +396,24 @@ def start():
 
     config = load_config()
 
+    # Determine connection name
+    conn_name = connection or config.get("active_connection", "default")
+    connection_path = get_connection_path(conn_name)
+
     # Set environment variables from config
     os.environ["DATABASE_URL"] = config.get("database_url", "")
-    os.environ["PROVIDER_ID"] = config.get("provider_id", "default")
+    os.environ["CONNECTION_NAME"] = conn_name
+    os.environ["CONNECTION_PATH"] = str(connection_path)
     os.environ["TOOL_MODE"] = config.get("tool_mode", "shell")
-    os.environ["VAULT_PATH"] = config.get("vault_path", str(VAULT_DIR))
     os.environ["LOG_LEVEL"] = config.get("log_level", "INFO")
     os.environ["MCP_TRANSPORT"] = "stdio"  # Always stdio for CLI
 
-    # Set writable paths for local CLI (not the bundled read-only resources)
-    os.environ["RESOURCES_DIR"] = str(CONFIG_DIR / "resources")
-    os.environ["PROVIDERS_DIR"] = str(CONFIG_DIR / "providers")
+    # Legacy env vars for backward compatibility
+    os.environ["PROVIDER_ID"] = conn_name
+    os.environ["CONNECTIONS_DIR"] = str(CONNECTIONS_DIR)
 
-    # Ensure directories exist
-    (CONFIG_DIR / "resources").mkdir(parents=True, exist_ok=True)
-    (CONFIG_DIR / "providers").mkdir(parents=True, exist_ok=True)
+    # Ensure connection directory exists
+    connection_path.mkdir(parents=True, exist_ok=True)
 
     # Patch fakeredis path for PyInstaller bundles
     if getattr(sys, "frozen", False):
@@ -424,7 +492,8 @@ def console_cmd(port: int, no_browser: bool):
 
 
 @main.command()
-def status():
+@click.option("-c", "--connection", default=None, help="Show status for specific connection")
+def status(connection: str | None):
     """Show current configuration status."""
     console.print(
         Panel.fit(
@@ -448,11 +517,41 @@ def status():
         console.print(
             f"  Database:    [cyan]{db_url[:60]}{'...' if len(db_url) > 60 else ''}[/cyan]"
         )
-        console.print(f"  Provider:    {config.get('provider_id', 'N/A')}")
         console.print(f"  Tool mode:   {config.get('tool_mode', 'N/A')}")
     else:
         console.print(f"  [yellow]No config found at {CONFIG_FILE}[/yellow]")
         console.print("  [dim]Run 'dbmeta init' to configure.[/dim]")
+
+    # Connections status
+    console.print("\n[bold]Connections[/bold]")
+    connections = list_connections()
+    active = get_active_connection()
+
+    if connections:
+        for conn in connections:
+            conn_path = get_connection_path(conn)
+            is_active = conn == active
+            marker = "[green]●[/green]" if is_active else "[dim]○[/dim]"
+            active_label = " [green](active)[/green]" if is_active else ""
+
+            # Check for key files
+            has_schema = (conn_path / "schema" / "descriptions.yaml").exists()
+            has_domain = (conn_path / "domain" / "model.md").exists()
+            has_state = (conn_path / "state.yaml").exists()
+
+            status_parts = []
+            if has_schema:
+                status_parts.append("schema")
+            if has_domain:
+                status_parts.append("domain")
+            if has_state:
+                status_parts.append("state")
+
+            status_str = f"[dim]({', '.join(status_parts)})[/dim]" if status_parts else ""
+            console.print(f"  {marker} [cyan]{conn}[/cyan]{active_label} {status_str}")
+    else:
+        console.print("  [dim]No connections configured.[/dim]")
+        console.print("  [dim]Run 'dbmeta init' to create one.[/dim]")
 
     # Claude Desktop status
     console.print("\n[bold]Claude Desktop[/bold]")
@@ -477,21 +576,277 @@ def status():
     else:
         console.print(f"  [dim]No config at {claude_config_path}[/dim]")
 
-    # Vault status
-    console.print("\n[bold]Knowledge Vault[/bold]")
-    if VAULT_DIR.exists():
-        protocol = VAULT_DIR / "PROTOCOL.md"
-        examples = VAULT_DIR / "examples"
-        console.print(f"  Vault path:  [green]{VAULT_DIR}[/green]")
-        proto_status = "[green]✓[/green]" if protocol.exists() else "[yellow]missing[/yellow]"
-        console.print(f"  PROTOCOL.md: {proto_status}")
-        if examples.exists():
-            example_count = len(list(examples.glob("*.yaml")))
-            console.print(f"  Examples:    {example_count} files")
+    # Legacy structure warning
+    if LEGACY_VAULT_DIR.exists() or LEGACY_PROVIDERS_DIR.exists():
+        console.print("\n[yellow]⚠ Legacy data structure detected[/yellow]")
+        console.print("  [dim]Run 'dbmeta init' to migrate to new connection structure.[/dim]")
+
+
+@main.command("list")
+def list_cmd():
+    """List all configured connections."""
+    connections = list_connections()
+    active = get_active_connection()
+
+    if not connections:
+        console.print("[dim]No connections configured.[/dim]")
+        console.print("[dim]Run 'dbmeta init <name>' to create one.[/dim]")
+        return
+
+    table = Table(title="Connections", show_header=True)
+    table.add_column("Name", style="cyan")
+    table.add_column("Active", justify="center")
+    table.add_column("Schema", justify="center")
+    table.add_column("Domain", justify="center")
+    table.add_column("Path")
+
+    for conn in connections:
+        conn_path = get_connection_path(conn)
+        is_active = conn == active
+
+        has_schema = (conn_path / "schema" / "descriptions.yaml").exists()
+        has_domain = (conn_path / "domain" / "model.md").exists()
+
+        table.add_row(
+            conn,
+            "[green]●[/green]" if is_active else "",
+            "[green]✓[/green]" if has_schema else "[dim]-[/dim]",
+            "[green]✓[/green]" if has_domain else "[dim]-[/dim]",
+            str(conn_path),
+        )
+
+    console.print(table)
+
+
+@main.command()
+@click.argument("name")
+def use(name: str):
+    """Switch to a different connection.
+
+    NAME is the connection name to switch to.
+    """
+    if not connection_exists(name):
+        console.print(f"[red]Connection '{name}' not found.[/red]")
+        console.print("[dim]Run 'dbmeta list' to see available connections.[/dim]")
+        sys.exit(1)
+
+    set_active_connection(name)
+    console.print(f"[green]✓ Switched to connection '{name}'[/green]")
+    console.print("[dim]Restart Claude Desktop to apply changes.[/dim]")
+
+
+@main.command()
+@click.argument("name")
+@click.option("--force", "-f", is_flag=True, help="Skip confirmation prompt")
+def remove(name: str, force: bool):
+    """Remove a connection.
+
+    NAME is the connection name to remove.
+    This deletes all data associated with the connection.
+    """
+    if not connection_exists(name):
+        console.print(f"[red]Connection '{name}' not found.[/red]")
+        sys.exit(1)
+
+    conn_path = get_connection_path(name)
+
+    if not force:
+        console.print(f"[yellow]Warning: This will delete all data in {conn_path}[/yellow]")
+        if not Confirm.ask(f"Remove connection '{name}'?", default=False):
+            console.print("[dim]Cancelled.[/dim]")
+            return
+
+    import shutil
+
+    shutil.rmtree(conn_path)
+    console.print(f"[green]✓ Connection '{name}' removed[/green]")
+
+    # If this was the active connection, suggest switching
+    if get_active_connection() == name:
+        remaining = list_connections()
+        if remaining:
+            console.print(f"[yellow]'{name}' was the active connection.[/yellow]")
+            console.print(f"[dim]Run 'dbmeta use {remaining[0]}' to switch.[/dim]")
+
+
+@main.command()
+@click.option("--dry-run", is_flag=True, help="Show what would be migrated without making changes")
+@click.option("--server", is_flag=True, help="Run in server mode (use CONNECTION_PATH env var)")
+def migrate(dry_run: bool, server: bool):
+    """Migrate from legacy storage format to new connection structure.
+
+    This migrates data from the old structure:
+        ~/.dbmeta/vault/
+        ~/.dbmeta/providers/{id}/
+
+    To the new self-contained connection structure:
+        ~/.dbmeta/connections/{name}/
+
+    For server/container deployments, use --server flag which reads
+    CONNECTION_PATH from environment variables.
+
+    Migration is non-destructive - original files are preserved.
+    Run 'dbmeta status' to check if migration is needed.
+
+    Examples:
+        # Local CLI migration
+        dbmeta migrate
+
+        # Server/container migration (uses env vars)
+        CONNECTION_PATH=/data/connection dbmeta migrate --server
+
+        # Dry run to see what would happen
+        dbmeta migrate --dry-run
+    """
+    from db_meta_v2.vault import ensure_connection_structure
+    from db_meta_v2.vault.migrate import (
+        detect_legacy_structure,
+        get_storage_version,
+        migrate_to_connection_structure,
+        write_storage_version,
+    )
+
+    # Server mode: use CONNECTION_PATH env var directly
+    if server:
+        from db_meta_v2.config import get_settings
+
+        settings = get_settings()
+        connection_path = settings.get_effective_connection_path()
+        conn_name = settings.connection_name
+
+        console.print("[bold]Server mode migration[/bold]")
+        console.print(f"  Connection: {conn_name}")
+        console.print(f"  Path:       {connection_path}")
+
+        version = get_storage_version(connection_path)
+        if version >= 2:
+            console.print("\n[green]✓ Already at v2 format.[/green]")
+            return
+
+        if dry_run:
+            console.print("\n[yellow]Dry run - no changes made.[/yellow]")
+            return
+
+        # For server mode, we mainly ensure structure and write version
+        console.print("\n[bold]Initializing connection structure...[/bold]")
+        ensure_connection_structure()
+        write_storage_version(connection_path)
+        console.print("[green]✓ Connection structure initialized (v2)[/green]")
+        return
+
+    # Local CLI mode: detect and migrate legacy structure
+    legacy = detect_legacy_structure()
+
+    if not legacy:
+        console.print("[green]✓ No legacy data to migrate.[/green]")
+        console.print("[dim]Already using new connection structure.[/dim]")
+        return
+
+    console.print("[bold]Legacy data detected:[/bold]")
+    if legacy.get("vault_path"):
+        console.print(f"  Vault:    {legacy['vault_path']}")
+    if legacy.get("provider_path"):
+        console.print(f"  Provider: {legacy['provider_path']}")
+    console.print(f"  ID:       {legacy.get('provider_id', 'default')}")
+
+    # Check target
+    conn_name = legacy.get("provider_id") or "default"
+    target_path = CONNECTIONS_DIR / conn_name
+    version = get_storage_version(target_path)
+
+    if version >= 2:
+        console.print(f"\n[green]✓ Already migrated to: {target_path}[/green]")
+        return
+
+    console.print("\n[bold]Migration target:[/bold]")
+    console.print(f"  {target_path}")
+
+    if dry_run:
+        console.print("\n[yellow]Dry run - no changes made.[/yellow]")
+        console.print("[dim]Run without --dry-run to perform migration.[/dim]")
+        return
+
+    # Perform migration
+    console.print("\n[bold]Migrating...[/bold]")
+    try:
+        stats = migrate_to_connection_structure(conn_name)
+
+        if stats.get("skipped"):
+            console.print(f"[yellow]Skipped: {stats.get('reason')}[/yellow]")
         else:
-            console.print("  Examples:    [dim]none yet[/dim]")
-    else:
-        console.print(f"  [dim]Vault not initialized at {VAULT_DIR}[/dim]")
+            console.print("[green]✓ Migration complete![/green]")
+            console.print("\n[bold]Migrated:[/bold]")
+            if stats.get("schema_descriptions"):
+                console.print("  ✓ Schema descriptions")
+            if stats.get("domain_model"):
+                console.print("  ✓ Domain model")
+            if stats.get("onboarding_state"):
+                console.print("  ✓ Onboarding state")
+            if stats.get("query_examples", 0) > 0:
+                console.print(f"  ✓ {stats['query_examples']} query examples")
+            if stats.get("failures", 0) > 0:
+                console.print(f"  ✓ {stats['failures']} failure records")
+            vault_files = stats.get("vault_files", {})
+            if vault_files:
+                for key, count in vault_files.items():
+                    if count > 0:
+                        console.print(f"  ✓ {count} {key} files")
+
+            console.print("\n[dim]Original files preserved in legacy locations.[/dim]")
+            console.print("[dim]You may delete them after verifying the migration.[/dim]")
+
+    except Exception as e:
+        console.print(f"[red]Migration failed: {e}[/red]")
+        sys.exit(1)
+
+
+@main.command()
+@click.argument("command", type=click.Choice(["status", "migrate"]))
+def all(command: str):
+    """Run a command for all connections.
+
+    Supported commands:
+    - status: Show status for all connections
+    - migrate: Run migration for all connections (legacy)
+    """
+    connections = list_connections()
+
+    if not connections:
+        console.print("[dim]No connections found.[/dim]")
+        return
+
+    if command == "status":
+        for conn in connections:
+            console.print(f"\n[bold cyan]Connection: {conn}[/bold cyan]")
+            conn_path = get_connection_path(conn)
+
+            # Quick status
+            has_schema = (conn_path / "schema" / "descriptions.yaml").exists()
+            has_domain = (conn_path / "domain" / "model.md").exists()
+            has_state = (conn_path / "state.yaml").exists()
+            has_version = (conn_path / ".version").exists()
+
+            console.print(f"  Path:    {conn_path}")
+            console.print(f"  Schema:  {'[green]✓[/green]' if has_schema else '[dim]-[/dim]'}")
+            console.print(f"  Domain:  {'[green]✓[/green]' if has_domain else '[dim]-[/dim]'}")
+            console.print(f"  State:   {'[green]✓[/green]' if has_state else '[dim]-[/dim]'}")
+            console.print(
+                f"  Version: {'[green]v2[/green]' if has_version else '[yellow]v1[/yellow]'}"
+            )
+
+    elif command == "migrate":
+        from db_meta_v2.vault.migrate import migrate_to_connection_structure
+
+        for conn in connections:
+            console.print(f"\n[bold]Migrating: {conn}[/bold]")
+            try:
+                stats = migrate_to_connection_structure(conn)
+                if stats.get("skipped"):
+                    console.print(f"  [dim]Skipped: {stats.get('reason')}[/dim]")
+                else:
+                    console.print("  [green]✓ Migrated[/green]")
+            except Exception as e:
+                console.print(f"  [red]Error: {e}[/red]")
 
 
 if __name__ == "__main__":

@@ -4,7 +4,6 @@ import logging
 import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 from fastmcp import FastMCP
 from pydantic_ai import Agent
@@ -12,6 +11,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from db_meta_v2.config import get_settings
+from db_meta_v2.onboarding.state import get_connection_path
 from db_meta_v2.tasks.store import get_task_store
 from db_meta_v2.tools.database import (
     _describe_table,
@@ -68,7 +68,7 @@ from db_meta_v2.tools.training import (
     _query_list_rules,
     _query_status,
 )
-from db_meta_v2.vault import ensure_vault_structure, migrate_legacy_provider_data
+from db_meta_v2.vault import ensure_connection_structure, migrate_to_connection_structure
 
 
 class HealthCheckFilter(logging.Filter):
@@ -253,10 +253,11 @@ def _create_server() -> FastMCP:
         - User transparency requirements
         - SQL generation workflow
         """
-        protocol_path = Path(settings.vault_path) / "PROTOCOL.md"
+        connection_path = get_connection_path()
+        protocol_path = connection_path / "PROTOCOL.md"
         if protocol_path.exists():
             return protocol_path.read_text()
-        return "PROTOCOL.md not found. Run vault initialization."
+        return "PROTOCOL.md not found. Run connection initialization."
 
     @server.resource("dbmeta://sql-rules")
     def get_sql_rules() -> str:
@@ -268,7 +269,8 @@ def _create_server() -> FastMCP:
         - Common mistakes to avoid
         - Query patterns and examples
         """
-        rules_path = Path(settings.vault_path) / "instructions" / "sql_rules.md"
+        connection_path = get_connection_path()
+        rules_path = connection_path / "instructions" / "sql_rules.md"
         if rules_path.exists():
             return rules_path.read_text()
         return "sql_rules.md not found."
@@ -281,7 +283,7 @@ def _create_server() -> FastMCP:
             {
                 "status": "healthy",
                 "service": "db-meta-v2",
-                "provider_id": settings.provider_id,
+                "connection": settings.connection_name,
                 "tool_mode": settings.tool_mode,
             }
         )
@@ -294,18 +296,18 @@ def _create_server() -> FastMCP:
         """Health check - verify server is running."""
         return {
             "status": "ok",
-            "provider_id": settings.provider_id,
+            "connection": settings.connection_name,
             "tool_mode": settings.tool_mode,
             "database_configured": bool(settings.database_url),
         }
 
     async def _get_config() -> dict:
         """Get current server configuration (non-sensitive)."""
+        connection_path = get_connection_path()
         return {
-            "provider_id": settings.provider_id,
+            "connection": settings.connection_name,
+            "connection_path": str(connection_path),
             "tool_mode": settings.tool_mode,
-            "resources_dir": settings.resources_dir,
-            "providers_dir": settings.providers_dir,
             "database_configured": bool(settings.database_url),
         }
 
@@ -444,15 +446,19 @@ def main():
     _configure_logging()
     _configure_observability()
 
-    # Ensure vault directory structure exists
-    ensure_vault_structure()
-
-    # Migrate legacy provider data if present
-    migrate_legacy_provider_data()
-
     settings = get_settings()
     logger = logging.getLogger(__name__)
-    logger.info(f"Starting db-meta-v2 in {settings.tool_mode} mode")
+
+    # Ensure connection directory structure exists
+    ensure_connection_structure()
+
+    # Migrate legacy provider data if present
+    migrate_to_connection_structure()
+
+    logger.info(
+        f"Starting db-meta-v2 in {settings.tool_mode} mode "
+        f"(connection: {settings.connection_name})"
+    )
 
     # Always instrument tools for tracing (sends to console if running)
     try:

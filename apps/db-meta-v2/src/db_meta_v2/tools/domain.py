@@ -2,13 +2,12 @@
 
 import re
 from collections import defaultdict
-from pathlib import Path
 
 from sg_models import OnboardingPhase, SchemaDescriptions, TableDescriptionStatus
 
 from db_meta_v2.config import get_settings
 from db_meta_v2.onboarding.schema_store import load_schema_descriptions
-from db_meta_v2.onboarding.state import load_state, save_state
+from db_meta_v2.onboarding.state import get_connection_path, load_state, save_state
 
 
 def _extract_table_prefix(table_name: str) -> str | None:
@@ -362,26 +361,22 @@ async def _domain_status(provider_id: str | None = None) -> dict:
     """Get current domain model status.
 
     Args:
-        provider_id: Provider ID. Uses configured default if not provided.
+        provider_id: Provider ID (deprecated, kept for compatibility).
 
     Returns:
         Domain model status and content if available
     """
-    if provider_id is None:
-        settings = get_settings()
-        provider_id = settings.provider_id
-
     state = load_state(provider_id)
 
     if state is None:
         return {"error": "Onboarding not started."}
 
     # Check if domain model file exists
-    settings = get_settings()
-    domain_file = Path(settings.providers_dir) / provider_id / "domain_model.md"
+    domain_file = get_connection_path() / "domain" / "model.md"
 
+    settings = get_settings()
     result = {
-        "provider_id": provider_id,
+        "connection": settings.connection_name,
         "phase": state.phase.value,
         "domain_model_generated": state.domain_model_generated,
         "domain_model_approved": state.domain_model_approved,
@@ -401,18 +396,14 @@ async def _domain_generate(provider_id: str | None = None) -> dict:
     """Generate domain model from schema descriptions.
 
     Creates a markdown document describing the business domain based on
-    the schema_descriptions.yaml file.
+    the schema descriptions file.
 
     Args:
-        provider_id: Provider ID. Uses configured default if not provided.
+        provider_id: Provider ID (deprecated, kept for compatibility).
 
     Returns:
         Generated domain model content for review
     """
-    if provider_id is None:
-        settings = get_settings()
-        provider_id = settings.provider_id
-
     state = load_state(provider_id)
 
     if state is None:
@@ -442,10 +433,11 @@ async def _domain_generate(provider_id: str | None = None) -> dict:
     save_state(state)
 
     counts = schema.count_by_status()
+    settings = get_settings()
 
     return {
         "generated": True,
-        "provider_id": provider_id,
+        "connection": settings.connection_name,
         "content": content,
         "tables_included": counts.get("approved", 0),
         "instruction": "Review the domain model above. "
@@ -461,27 +453,25 @@ async def _domain_approve(
 
     Args:
         content: Optional edited content. If not provided, uses the pending content.
-        provider_id: Provider ID. Uses configured default if not provided.
+        provider_id: Provider ID (deprecated, kept for compatibility).
 
     Returns:
         Approval result with file path
     """
-    if provider_id is None:
-        settings = get_settings()
-        provider_id = settings.provider_id
-
     state = load_state(provider_id)
 
     if state is None:
         return {"error": "Onboarding not started."}
 
+    settings = get_settings()
+    domain_dir = get_connection_path() / "domain"
+    domain_file = domain_dir / "model.md"
+
     # Idempotency check: if already approved and no new content, return success
     if state.domain_model_approved and content is None:
-        settings = get_settings()
-        domain_file = Path(settings.providers_dir) / provider_id / "domain_model.md"
         return {
             "approved": True,
-            "provider_id": provider_id,
+            "connection": settings.connection_name,
             "file": str(domain_file),
             "phase": state.phase.value,
             "message": "Domain model was already approved.",
@@ -494,11 +484,7 @@ async def _domain_approve(
         return {"error": "No domain model to approve. Call domain_generate first."}
 
     # Save to file
-    settings = get_settings()
-    provider_dir = Path(settings.providers_dir) / provider_id
-    provider_dir.mkdir(parents=True, exist_ok=True)
-
-    domain_file = provider_dir / "domain_model.md"
+    domain_dir.mkdir(parents=True, exist_ok=True)
     domain_file.write_text(final_content)
 
     # Update state
@@ -509,7 +495,7 @@ async def _domain_approve(
 
     return {
         "approved": True,
-        "provider_id": provider_id,
+        "connection": settings.connection_name,
         "file": str(domain_file),
         "phase": state.phase.value,
         "next_action": "Domain model saved. Next phase: Business Rules. "
@@ -521,15 +507,11 @@ async def _domain_skip(provider_id: str | None = None) -> dict:
     """Skip domain model generation and move to next phase.
 
     Args:
-        provider_id: Provider ID. Uses configured default if not provided.
+        provider_id: Provider ID (deprecated, kept for compatibility).
 
     Returns:
         Skip result
     """
-    if provider_id is None:
-        settings = get_settings()
-        provider_id = settings.provider_id
-
     state = load_state(provider_id)
 
     if state is None:
@@ -543,9 +525,10 @@ async def _domain_skip(provider_id: str | None = None) -> dict:
     state.phase = OnboardingPhase.BUSINESS_RULES
     save_state(state)
 
+    settings = get_settings()
     return {
         "skipped": True,
-        "provider_id": provider_id,
+        "connection": settings.connection_name,
         "phase": state.phase.value,
         "message": "Domain model skipped. You can generate it later.",
     }

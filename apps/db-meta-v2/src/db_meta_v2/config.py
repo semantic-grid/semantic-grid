@@ -1,9 +1,13 @@
 """Configuration for db-meta-v2."""
 
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Storage format version
+STORAGE_VERSION = 2
 
 
 class Settings(BaseSettings):
@@ -15,7 +19,32 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # Database connection - either full URL or components
+    # ==========================================================================
+    # Connection configuration (v2 structure)
+    # ==========================================================================
+
+    # Connection path - new unified path for all connection data
+    connection_path: str = Field(
+        default="",
+        description="Path to connection directory (contains schema, examples, etc.)",
+    )
+
+    # Connection name - used with connections_dir for local CLI
+    connection_name: str = Field(
+        default="default",
+        description="Connection name (used with connections_dir for local CLI)",
+    )
+
+    # Connections directory - base path for multiple connections (local CLI)
+    connections_dir: str = Field(
+        default="",
+        description="Base directory for connections (local CLI mode)",
+    )
+
+    # ==========================================================================
+    # Database connection
+    # ==========================================================================
+
     database_url: str = Field(
         default="",
         description="Database connection URL (e.g., trino://user:pass@host:port/catalog/schema)",
@@ -57,21 +86,26 @@ class Settings(BaseSettings):
 
         return self
 
-    # Provider configuration
+    # ==========================================================================
+    # Legacy settings (deprecated, for backward compatibility)
+    # ==========================================================================
+
+    # Provider configuration (deprecated - use connection_name)
     provider_id: str = Field(
         default="default",
-        description="Provider identifier for multi-tenant support",
+        description="[DEPRECATED] Use connection_name instead",
     )
 
     # Resource paths
     resources_dir: str = Field(
         default="packages/resources/dbmeta_app",
-        description="Path to resources directory",
+        description="Path to bundled resources directory",
     )
 
+    # Providers directory (deprecated - use connection_path or connections_dir)
     providers_dir: str = Field(
-        default="packages/resources/dbmeta_app/providers",
-        description="Path to providers directory for artifact storage",
+        default="",
+        description="[DEPRECATED] Use connection_path instead",
     )
 
     # OpenAI for embeddings (optional, for query examples)
@@ -138,22 +172,29 @@ class Settings(BaseSettings):
         description="Path for MCP HTTP endpoint",
     )
 
-    # Knowledge Vault configuration
+    # ==========================================================================
+    # Storage backend configuration
+    # ==========================================================================
+
     vault_backend: Literal["local", "s3"] = Field(
         default="local",
-        description="Vault storage backend: 'local' for filesystem, 's3' for AWS S3",
+        description="Storage backend: 'local' for filesystem, 's3' for AWS S3",
     )
+
+    # Legacy vault_path (deprecated - use connection_path)
     vault_path: str = Field(
-        default="/data/vault",
-        description="Local path for vault storage (also used as cache for S3 backend)",
+        default="",
+        description="[DEPRECATED] Use connection_path instead",
     )
+
+    # S3 configuration (applies to connection data when vault_backend='s3')
     vault_s3_bucket: str = Field(
         default="",
-        description="S3 bucket name for vault storage (only used if vault_backend='s3')",
+        description="S3 bucket name for storage (only used if vault_backend='s3')",
     )
     vault_s3_prefix: str = Field(
-        default="knowledge/",
-        description="S3 key prefix for vault files",
+        default="connections/",
+        description="S3 key prefix for connection files",
     )
     vault_s3_region: str = Field(
         default="us-east-1",
@@ -161,16 +202,53 @@ class Settings(BaseSettings):
     )
     vault_sync_on_startup: bool = Field(
         default=True,
-        description="Sync vault from S3 on startup (only if vault_backend='s3')",
+        description="Sync from S3 on startup (only if vault_backend='s3')",
     )
     vault_sync_interval_seconds: int = Field(
         default=300,
-        description="Interval for background vault sync in seconds (0 to disable)",
+        description="Interval for background sync in seconds (0 to disable)",
     )
-    vault_migrate_legacy: bool = Field(
+
+    # Migration settings
+    auto_migrate: bool = Field(
         default=True,
-        description="Auto-migrate data from legacy providers/{id}/ structure on startup",
+        description="Auto-migrate from legacy v1 structure on startup",
     )
+
+    def get_effective_connection_path(self) -> Path:
+        """Get the effective connection path based on configuration.
+
+        Priority:
+        1. connection_path (explicit, for server deployments)
+        2. connections_dir + connection_name (for local CLI)
+        3. Legacy: vault_path parent / "connection" (migration)
+        4. Default: ~/.dbmeta/connections/{connection_name}
+
+        Returns:
+            Path to the connection directory
+        """
+        # 1. Explicit connection_path (server mode)
+        if self.connection_path:
+            return Path(self.connection_path)
+
+        # 2. connections_dir + connection_name (local CLI)
+        if self.connections_dir:
+            return Path(self.connections_dir) / self.connection_name
+
+        # 3. Legacy vault_path - derive connection path
+        if self.vault_path:
+            # vault_path=/data/vault -> connection=/data/connection
+            return Path(self.vault_path).parent / "connection"
+
+        # 4. Default: ~/.dbmeta/connections/{name}
+        return Path.home() / ".dbmeta" / "connections" / self.connection_name
+
+    def get_effective_provider_id(self) -> str:
+        """Get effective provider/connection identifier.
+
+        Returns connection_name, falling back to provider_id for legacy compat.
+        """
+        return self.connection_name or self.provider_id or "default"
 
 
 _settings: Settings | None = None
@@ -182,3 +260,9 @@ def get_settings() -> Settings:
     if _settings is None:
         _settings = Settings()
     return _settings
+
+
+def reset_settings() -> None:
+    """Reset cached settings (useful for testing)."""
+    global _settings
+    _settings = None
