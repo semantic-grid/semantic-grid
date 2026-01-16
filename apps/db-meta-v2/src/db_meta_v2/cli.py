@@ -7,6 +7,8 @@ Commands:
     dbmeta status       - Show current configuration
     dbmeta list         - List all connections
     dbmeta use NAME     - Switch active connection
+    dbmeta edit NAME    - Open connection directory in editor
+    dbmeta rename OLD NEW - Rename a connection
     dbmeta remove NAME  - Remove a connection
 
 Global options:
@@ -17,6 +19,8 @@ Global options:
 import json
 import os
 import platform
+import re
+import shutil
 import signal
 import subprocess
 import sys
@@ -448,7 +452,7 @@ def config():
             return
         return
 
-    editor = os.environ.get("EDITOR", "nano")
+    editor = os.environ.get("EDITOR", "vim")
     console.print(f"[dim]Opening {CONFIG_FILE} in {editor}...[/dim]")
 
     try:
@@ -636,6 +640,89 @@ def use(name: str):
 
 
 @main.command()
+@click.argument("name", default=None, required=False)
+def edit(name: str | None):
+    """Open connection directory in editor.
+
+    NAME is the connection name to edit (default: active connection).
+
+    Opens the connection directory in your editor (vim by default).
+    Set EDITOR environment variable to change the editor.
+
+    The connection directory contains:
+    - schema/descriptions.yaml - Column descriptions
+    - domain/model.md - Domain model documentation
+    - examples/ - Query examples
+    - instructions/ - Custom instructions
+    - learnings/ - Failure patterns
+    """
+    # Default to active connection
+    if not name:
+        name = get_active_connection()
+
+    if not connection_exists(name):
+        console.print(f"[red]Connection '{name}' not found.[/red]")
+        console.print("[dim]Run 'dbmeta list' to see available connections.[/dim]")
+        sys.exit(1)
+
+    conn_path = get_connection_path(name)
+    editor = os.environ.get("EDITOR", "vim")
+
+    console.print(f"[dim]Opening {conn_path} in {editor}...[/dim]")
+
+    try:
+        subprocess.run([editor, str(conn_path)], check=True)
+        console.print("[green]✓ Done.[/green]")
+    except FileNotFoundError:
+        console.print(f"[red]Editor '{editor}' not found.[/red]")
+        console.print("[dim]Set EDITOR environment variable or edit manually:[/dim]")
+        console.print(f"  {conn_path}")
+    except subprocess.CalledProcessError:
+        console.print("[yellow]Editor exited with error.[/yellow]")
+
+
+@main.command()
+@click.argument("old_name")
+@click.argument("new_name")
+def rename(old_name: str, new_name: str):
+    """Rename a connection.
+
+    OLD_NAME is the current connection name.
+    NEW_NAME is the new name for the connection.
+
+    This renames the connection directory and updates the active
+    connection if needed.
+    """
+    if not connection_exists(old_name):
+        console.print(f"[red]Connection '{old_name}' not found.[/red]")
+        console.print("[dim]Run 'dbmeta list' to see available connections.[/dim]")
+        sys.exit(1)
+
+    if connection_exists(new_name):
+        console.print(f"[red]Connection '{new_name}' already exists.[/red]")
+        sys.exit(1)
+
+    # Validate new name (simple alphanumeric + dash/underscore)
+    if not re.match(r"^[a-zA-Z0-9_-]+$", new_name):
+        console.print("[red]Invalid name. Use only letters, numbers, dashes, underscores.[/red]")
+        sys.exit(1)
+
+    old_path = get_connection_path(old_name)
+    new_path = get_connection_path(new_name)
+
+    # Rename directory
+    old_path.rename(new_path)
+    console.print(f"[green]✓ Renamed '{old_name}' to '{new_name}'[/green]")
+
+    # Update active connection if needed
+    if get_active_connection() == old_name:
+        set_active_connection(new_name)
+        console.print(f"[dim]Active connection updated to '{new_name}'.[/dim]")
+
+    console.print("[dim]Restart Claude Desktop to apply changes.[/dim]")
+
+
+@main.command()
 @click.argument("name")
 @click.option("--force", "-f", is_flag=True, help="Skip confirmation prompt")
 def remove(name: str, force: bool):
@@ -655,8 +742,6 @@ def remove(name: str, force: bool):
         if not Confirm.ask(f"Remove connection '{name}'?", default=False):
             console.print("[dim]Cancelled.[/dim]")
             return
-
-    import shutil
 
     shutil.rmtree(conn_path)
     console.print(f"[green]✓ Connection '{name}' removed[/green]")
