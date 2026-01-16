@@ -275,6 +275,12 @@ def _create_server() -> FastMCP:
             return rules_path.read_text()
         return "sql_rules.md not found."
 
+    # NOTE: Schema and domain model are NOT exposed as resources because:
+    # 1. They can be large and change during onboarding
+    # 2. MCP has no content-change notification (only list-change)
+    # 3. Client caching could serve stale data
+    # Use shell tool instead: cat schema/descriptions.yaml, cat domain/model.md
+
     # Health check endpoint for k8s probes
     @server.custom_route("/health", methods=["GET"])
     async def health_check(request: Request) -> JSONResponse:
