@@ -169,7 +169,12 @@ def _recover_state_from_files() -> OnboardingState | None:
             with open(schema_file) as f:
                 schema_data = yaml.safe_load(f)
             if schema_data and "tables" in schema_data:
-                tables_discovered = list(schema_data["tables"].keys())
+                tables = schema_data["tables"]
+                # Handle both list format (v2) and dict format (legacy)
+                if isinstance(tables, list):
+                    tables_discovered = [t.get("full_name") or t.get("name", "") for t in tables]
+                elif isinstance(tables, dict):
+                    tables_discovered = list(tables.keys())
                 tables_total = len(tables_discovered)
         except Exception:
             pass
