@@ -732,8 +732,49 @@ def _init_greenfield(name: str):
         console.print("[dim]Please restart Claude Desktop manually.[/dim]")
 
 
+def _get_connection_env_path(name: str) -> Path:
+    """Get path to connection's .env file."""
+    return get_connection_path(name) / ".env"
+
+
+def _load_connection_env(name: str) -> dict:
+    """Load environment variables from connection's .env file."""
+    env_file = _get_connection_env_path(name)
+    if not env_file.exists():
+        return {}
+
+    env_vars = {}
+    with open(env_file) as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                key, value = line.split("=", 1)
+                # Remove quotes if present
+                value = value.strip().strip("\"'")
+                env_vars[key] = value
+    return env_vars
+
+
+def _save_connection_env(name: str, env_vars: dict):
+    """Save environment variables to connection's .env file."""
+    conn_path = get_connection_path(name)
+    conn_path.mkdir(parents=True, exist_ok=True)
+
+    env_file = _get_connection_env_path(name)
+    with open(env_file, "w") as f:
+        f.write("# dbmeta connection credentials\n")
+        f.write("# This file is gitignored - do not commit\n\n")
+        for key, value in env_vars.items():
+            f.write(f'{key}="{value}"\n')
+
+
 def _prompt_and_save_database_url(name: str, existing_url: str | None = None) -> str | None:
-    """Prompt for database URL and save config."""
+    """Prompt for database URL and save to connection's .env file."""
+    # Try to load existing URL from connection's .env
+    if not existing_url:
+        conn_env = _load_connection_env(name)
+        existing_url = conn_env.get("DATABASE_URL")
+
     console.print("\n[bold]Database Connection[/bold]")
     console.print("[dim]Examples:[/dim]")
     console.print("  trino://user:pass@host:8443/catalog/schema?http_scheme=https")
@@ -750,20 +791,24 @@ def _prompt_and_save_database_url(name: str, existing_url: str | None = None) ->
         console.print("[red]Database URL is required.[/red]")
         return None
 
-    # Build dbmeta config (saved to ~/.dbmeta/config.yaml)
+    # Save DATABASE_URL to connection's .env file (gitignored)
+    _save_connection_env(name, {"DATABASE_URL": database_url})
+    console.print(f"\n[green]✓ Credentials saved to {_get_connection_env_path(name)}[/green]")
+
+    # Save non-sensitive config to global config.yaml
     config = load_config()
     config.update(
         {
-            "database_url": database_url,
             "active_connection": name,
             "tool_mode": "shell",
             "log_level": "INFO",
         }
     )
+    # Remove database_url from global config if present (migrate to per-connection)
+    config.pop("database_url", None)
 
-    # Save dbmeta config
     save_config(config)
-    console.print(f"\n[green]✓ Config saved to {CONFIG_FILE}[/green]")
+    console.print(f"[green]✓ Config saved to {CONFIG_FILE}[/green]")
 
     return database_url
 
@@ -887,8 +932,16 @@ def start(connection: str | None):
     conn_name = connection or config.get("active_connection", "default")
     connection_path = get_connection_path(conn_name)
 
-    # Set environment variables from config
-    os.environ["DATABASE_URL"] = config.get("database_url", "")
+    # Load DATABASE_URL from connection's .env file
+    conn_env = _load_connection_env(conn_name)
+    database_url = conn_env.get("DATABASE_URL", "")
+
+    # Fallback to global config for backward compatibility
+    if not database_url:
+        database_url = config.get("database_url", "")
+
+    # Set environment variables
+    os.environ["DATABASE_URL"] = database_url
     os.environ["CONNECTION_NAME"] = conn_name
     os.environ["CONNECTION_PATH"] = str(connection_path)
     os.environ["TOOL_MODE"] = config.get("tool_mode", "shell")
@@ -993,17 +1046,7 @@ def status(connection: str | None):
     console.print("\n[bold]Configuration[/bold]")
     if CONFIG_FILE.exists():
         config = load_config()
-        db_url = config.get("database_url", "N/A")
-        # Mask password
-        if "@" in db_url and ":" in db_url.split("@")[0]:
-            parts = db_url.split("@")
-            prefix = parts[0]
-            scheme_user = prefix.rsplit(":", 1)[0]
-            db_url = f"{scheme_user}:****@{parts[1]}"
         console.print(f"  Config file: [green]{CONFIG_FILE}[/green]")
-        console.print(
-            f"  Database:    [cyan]{db_url[:60]}{'...' if len(db_url) > 60 else ''}[/cyan]"
-        )
         console.print(f"  Tool mode:   {config.get('tool_mode', 'N/A')}")
     else:
         console.print(f"  [yellow]No config found at {CONFIG_FILE}[/yellow]")
@@ -1024,18 +1067,36 @@ def status(connection: str | None):
             # Check for key files
             has_schema = (conn_path / "schema" / "descriptions.yaml").exists()
             has_domain = (conn_path / "domain" / "model.md").exists()
-            has_state = (conn_path / "state.yaml").exists()
+            has_env = (conn_path / ".env").exists()
 
             status_parts = []
             if has_schema:
                 status_parts.append("schema")
             if has_domain:
                 status_parts.append("domain")
-            if has_state:
-                status_parts.append("state")
+            if has_env:
+                status_parts.append("credentials")
 
             status_str = f"[dim]({', '.join(status_parts)})[/dim]" if status_parts else ""
             console.print(f"  {marker} [cyan]{conn}[/cyan]{active_label} {status_str}")
+
+            # Show masked database URL for active connection
+            if is_active:
+                conn_env = _load_connection_env(conn)
+                db_url = conn_env.get("DATABASE_URL", "")
+                if db_url:
+                    # Mask password
+                    if "@" in db_url and ":" in db_url.split("@")[0]:
+                        parts = db_url.split("@")
+                        prefix = parts[0]
+                        scheme_user = prefix.rsplit(":", 1)[0]
+                        db_url = f"{scheme_user}:****@{parts[1]}"
+                    truncated = f"{db_url[:50]}..." if len(db_url) > 50 else db_url
+                    console.print(f"      [dim]Database: {truncated}[/dim]")
+                elif not has_env:
+                    console.print(
+                        "      [yellow]No .env file - run 'dbmeta init' to configure[/yellow]"
+                    )
     else:
         console.print("  [dim]No connections configured.[/dim]")
         console.print("  [dim]Run 'dbmeta init' to create one.[/dim]")
