@@ -459,11 +459,13 @@ async def _onboarding_discover(provider_id: str | None = None) -> dict:
                 tables = get_tables(schema=schema, catalog=catalog)
                 print(
                     f"[DISCOVERY] Found {len(tables)} tables in {catalog}.{schema} (pre-filter)",
+                    file=sys.stderr,
                     flush=True,
                 )
                 tables = ignore.filter_tables(tables)
                 print(
                     f"[DISCOVERY] Found {len(tables)} tables in {catalog}.{schema} (after filter)",
+                    file=sys.stderr,
                     flush=True,
                 )
 
@@ -473,7 +475,9 @@ async def _onboarding_discover(provider_id: str | None = None) -> dict:
                         columns = get_columns(t["name"], schema=schema, catalog=catalog)
                     except Exception as e:
                         print(
-                            f"[DISCOVERY] Error getting columns for {t['name']}: {e}", flush=True
+                            f"[DISCOVERY] Error getting columns for {t['name']}: {e}",
+                            file=sys.stderr,
+                            flush=True,
                         )
                         columns = []
 
