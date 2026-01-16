@@ -357,7 +357,7 @@ def migrate_to_connection_structure(connection_name: str | None = None) -> dict:
     """
     settings = get_settings()
 
-    if not settings.vault_migrate_legacy:
+    if not settings.auto_migrate:
         logger.debug("Legacy migration disabled via config")
         return {"skipped": True, "reason": "disabled"}
 

@@ -174,11 +174,12 @@ main() {
         printf '  2. Restart Claude Desktop and start querying!\n\n'
 
         info "Commands:"
-        printf '  dbmeta init           Configure database and Claude Desktop\n'
-        printf '  dbmeta start          Start MCP server (used by Claude Desktop)\n'
-        printf '  dbmeta console        Open trace viewer at http://localhost:8384\n'
+        printf '  dbmeta init [NAME]    Configure database connection (default: "default")\n'
+        printf '  dbmeta list           List all connections\n'
+        printf '  dbmeta use NAME       Switch active connection\n'
         printf '  dbmeta status         Show current configuration\n'
-        printf '  dbmeta config         Edit config file\n'
+        printf '  dbmeta migrate        Migrate from legacy storage format\n'
+        printf '  dbmeta console        Open trace viewer at http://localhost:8384\n'
         printf '  dbmeta --help         Show all commands\n\n'
     else
         error "Installation failed."
