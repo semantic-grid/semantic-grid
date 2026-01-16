@@ -1,15 +1,18 @@
 """dbmeta CLI - Standalone CLI for db-meta-v2 MCP server.
 
 Commands:
-    dbmeta init [NAME]  - Interactive setup wizard (configures database + Claude Desktop)
-    dbmeta start        - Start MCP server (stdio mode)
-    dbmeta config       - Open config in editor
-    dbmeta status       - Show current configuration
-    dbmeta list         - List all connections
-    dbmeta use NAME     - Switch active connection
-    dbmeta edit NAME    - Open connection directory in editor
-    dbmeta rename OLD NEW - Rename a connection
-    dbmeta remove NAME  - Remove a connection
+    dbmeta init [NAME] [GIT_URL]  - Interactive setup wizard (or clone from git)
+    dbmeta start                  - Start MCP server (stdio mode)
+    dbmeta config                 - Open config in editor
+    dbmeta status                 - Show current configuration
+    dbmeta list                   - List all connections
+    dbmeta use NAME               - Switch active connection
+    dbmeta git-init [NAME] [URL]  - Enable git sync for existing connection
+    dbmeta sync [NAME]            - Sync changes to git remote
+    dbmeta pull [NAME]            - Pull updates from git remote
+    dbmeta edit [NAME]            - Open connection directory in editor
+    dbmeta rename OLD NEW         - Rename a connection
+    dbmeta remove NAME            - Remove a connection
 
 Global options:
     -c, --connection NAME  - Use specific connection (default: from config)
@@ -220,6 +223,296 @@ def launch_claude_desktop() -> None:
         console.print("[dim]Could not auto-launch. Please start Claude Desktop manually.[/dim]")
 
 
+# =============================================================================
+# Git utilities
+# =============================================================================
+
+GIT_INSTALL_URL = "https://git-scm.com/downloads"
+
+# Default .gitignore content for connection directories
+GITIGNORE_CONTENT = """# dbmeta gitignore
+# Local state (not shared)
+state.yaml
+
+# Temp/backup files
+*.tmp
+*.bak
+*.swp
+*~
+
+# Environment files (may contain credentials)
+.env*
+"""
+
+
+def is_git_installed() -> bool:
+    """Check if git is installed and available."""
+    try:
+        subprocess.run(
+            ["git", "--version"],
+            capture_output=True,
+            check=True,
+        )
+        return True
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return False
+
+
+def is_git_repo(path: Path) -> bool:
+    """Check if a directory is a git repository."""
+    return (path / ".git").is_dir()
+
+
+def git_init(path: Path, remote_url: str | None = None) -> bool:
+    """Initialize a git repository in the given path.
+
+    Args:
+        path: Directory to initialize
+        remote_url: Optional remote URL to add as origin
+
+    Returns:
+        True if successful
+    """
+    try:
+        # Initialize repo
+        subprocess.run(["git", "init"], cwd=path, capture_output=True, check=True)
+
+        # Create .gitignore
+        gitignore_path = path / ".gitignore"
+        if not gitignore_path.exists():
+            gitignore_path.write_text(GITIGNORE_CONTENT)
+
+        # Initial commit
+        subprocess.run(["git", "add", "."], cwd=path, capture_output=True, check=True)
+        subprocess.run(
+            ["git", "commit", "-m", "Initial dbmeta connection setup"],
+            cwd=path,
+            capture_output=True,
+            check=True,
+        )
+
+        # Add remote if provided
+        if remote_url:
+            subprocess.run(
+                ["git", "remote", "add", "origin", remote_url],
+                cwd=path,
+                capture_output=True,
+                check=True,
+            )
+
+        return True
+    except subprocess.CalledProcessError as e:
+        console.print(f"[red]Git error: {e.stderr.decode() if e.stderr else str(e)}[/red]")
+        return False
+
+
+def git_clone(url: str, dest: Path) -> bool:
+    """Clone a git repository.
+
+    Args:
+        url: Git URL to clone
+        dest: Destination path
+
+    Returns:
+        True if successful
+    """
+    try:
+        subprocess.run(
+            ["git", "clone", url, str(dest)],
+            capture_output=True,
+            check=True,
+        )
+        return True
+    except subprocess.CalledProcessError as e:
+        error_msg = e.stderr.decode() if e.stderr else str(e)
+        console.print(f"[red]Git clone failed: {error_msg}[/red]")
+        return False
+
+
+def git_sync(path: Path) -> bool:
+    """Sync local changes to remote (add, commit, pull --rebase, push).
+
+    Args:
+        path: Git repository path
+
+    Returns:
+        True if successful
+    """
+    from datetime import datetime
+
+    try:
+        # Check for changes
+        result = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=path,
+            capture_output=True,
+            check=True,
+        )
+
+        has_changes = bool(result.stdout.strip())
+
+        if has_changes:
+            # Add all changes
+            subprocess.run(["git", "add", "."], cwd=path, capture_output=True, check=True)
+
+            # Commit with timestamp
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+            subprocess.run(
+                ["git", "commit", "-m", f"dbmeta sync {timestamp}"],
+                cwd=path,
+                capture_output=True,
+                check=True,
+            )
+            console.print("[green]✓ Changes committed[/green]")
+        else:
+            console.print("[dim]No local changes to commit.[/dim]")
+
+        # Check if remote exists
+        result = subprocess.run(
+            ["git", "remote"],
+            cwd=path,
+            capture_output=True,
+            check=True,
+        )
+
+        if not result.stdout.strip():
+            console.print(
+                "[yellow]No remote configured. Use 'git remote add origin <url>'[/yellow]"
+            )
+            return True
+
+        # Pull with rebase to get remote changes
+        console.print("[dim]Pulling remote changes...[/dim]")
+        result = subprocess.run(
+            ["git", "pull", "--rebase", "origin", "HEAD"],
+            cwd=path,
+            capture_output=True,
+        )
+
+        if result.returncode != 0:
+            error_msg = result.stderr.decode() if result.stderr else ""
+            if "conflict" in error_msg.lower():
+                console.print("[yellow]Merge conflict detected.[/yellow]")
+                console.print("[dim]Resolve conflicts manually, then run:[/dim]")
+                console.print(f"  cd {path}")
+                console.print("  git add .")
+                console.print("  git rebase --continue")
+                console.print("  dbmeta sync")
+                return False
+            elif "couldn't find remote ref" in error_msg.lower():
+                # Remote branch doesn't exist yet, that's ok
+                pass
+            else:
+                console.print(f"[yellow]Pull warning: {error_msg}[/yellow]")
+
+        # Push changes
+        console.print("[dim]Pushing to remote...[/dim]")
+        result = subprocess.run(
+            ["git", "push", "-u", "origin", "HEAD"],
+            cwd=path,
+            capture_output=True,
+        )
+
+        if result.returncode != 0:
+            error_msg = result.stderr.decode() if result.stderr else ""
+            if "rejected" in error_msg.lower():
+                console.print("[yellow]Push rejected. Try 'dbmeta pull' first.[/yellow]")
+                return False
+            else:
+                console.print(f"[red]Push failed: {error_msg}[/red]")
+                return False
+
+        console.print("[green]✓ Synced with remote[/green]")
+        return True
+
+    except subprocess.CalledProcessError as e:
+        error_msg = e.stderr.decode() if e.stderr else str(e)
+        console.print(f"[red]Git error: {error_msg}[/red]")
+        return False
+
+
+def git_pull(path: Path) -> bool:
+    """Pull changes from remote.
+
+    Args:
+        path: Git repository path
+
+    Returns:
+        True if successful
+    """
+    try:
+        # Check for uncommitted changes
+        result = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=path,
+            capture_output=True,
+            check=True,
+        )
+
+        if result.stdout.strip():
+            console.print("[yellow]You have uncommitted changes.[/yellow]")
+            console.print("[dim]Stashing changes before pull...[/dim]")
+            subprocess.run(["git", "stash"], cwd=path, capture_output=True, check=True)
+            stashed = True
+        else:
+            stashed = False
+
+        # Pull
+        result = subprocess.run(
+            ["git", "pull", "--rebase", "origin", "HEAD"],
+            cwd=path,
+            capture_output=True,
+        )
+
+        if result.returncode != 0:
+            error_msg = result.stderr.decode() if result.stderr else ""
+            if "conflict" in error_msg.lower():
+                console.print("[yellow]Merge conflict detected.[/yellow]")
+                console.print(f"[dim]Resolve conflicts in {path}[/dim]")
+                return False
+            elif "couldn't find remote ref" in error_msg.lower():
+                console.print("[dim]Remote branch not found (may not exist yet).[/dim]")
+            else:
+                console.print(f"[yellow]Pull warning: {error_msg}[/yellow]")
+
+        # Pop stash if we stashed
+        if stashed:
+            result = subprocess.run(
+                ["git", "stash", "pop"],
+                cwd=path,
+                capture_output=True,
+            )
+            if result.returncode != 0:
+                console.print("[yellow]Conflict applying stashed changes.[/yellow]")
+                console.print("[dim]Resolve conflicts manually.[/dim]")
+                return False
+            console.print("[dim]Restored local changes.[/dim]")
+
+        console.print("[green]✓ Pulled from remote[/green]")
+        return True
+
+    except subprocess.CalledProcessError as e:
+        error_msg = e.stderr.decode() if e.stderr else str(e)
+        console.print(f"[red]Git error: {error_msg}[/red]")
+        return False
+
+
+def is_git_url(s: str) -> bool:
+    """Check if a string looks like a git URL."""
+    if not s:
+        return False
+    # Common git URL patterns
+    return (
+        s.startswith("git@")
+        or s.startswith("https://github.com/")
+        or s.startswith("https://gitlab.com/")
+        or s.startswith("https://bitbucket.org/")
+        or s.endswith(".git")
+        or "github.com" in s
+        or "gitlab.com" in s
+    )
+
+
 @click.group()
 @click.version_option(version="0.2.2")
 def main():
@@ -229,11 +522,20 @@ def main():
 
 @main.command()
 @click.argument("name", default="default", required=False)
-def init(name: str):
+@click.argument("source", default=None, required=False)
+def init(name: str, source: str | None):
     """Interactive setup wizard - configure database and Claude Desktop.
 
     NAME is the connection name (default: "default").
-    Use different names for multiple database connections.
+
+    SOURCE is an optional git URL to clone an existing connection config.
+    This enables "brownfield" setup where you join an existing team's
+    semantic layer instead of starting from scratch.
+
+    Examples:
+        dbmeta init                           # New connection "default"
+        dbmeta init mydb                      # New connection "mydb"
+        dbmeta init mydb git@github.com:org/dbmeta-mydb.git  # Clone from git
     """
     # Check if Claude Desktop is installed
     if not is_claude_desktop_installed():
@@ -247,6 +549,91 @@ def init(name: str):
         )
         return
 
+    # Determine if this is brownfield (git clone) or greenfield (new setup)
+    is_brownfield = source and is_git_url(source)
+
+    if is_brownfield:
+        _init_brownfield(name, source)
+    else:
+        _init_greenfield(name)
+
+
+def _init_brownfield(name: str, git_url: str):
+    """Initialize connection by cloning from git (brownfield setup)."""
+    # Check git is installed
+    if not is_git_installed():
+        console.print(
+            Panel.fit(
+                "[bold red]Git Not Found[/bold red]\n\n"
+                "Git is required for cloning connection configs.\n\n"
+                f"Install from: [cyan]{GIT_INSTALL_URL}[/cyan]",
+                border_style="red",
+            )
+        )
+        return
+
+    console.print(
+        Panel.fit(
+            f"[bold blue]dbmeta Setup (Brownfield)[/bold blue]\n\n"
+            f"Clone connection: [cyan]{name}[/cyan]\n"
+            f"From: [dim]{git_url}[/dim]",
+            border_style="blue",
+        )
+    )
+
+    connection_path = get_connection_path(name)
+
+    # Check if connection already exists
+    if connection_path.exists():
+        console.print(f"\n[red]Connection '{name}' already exists.[/red]")
+        console.print("[dim]Use 'dbmeta remove {name}' first, or choose a different name.[/dim]")
+        return
+
+    # Clone the repository
+    console.print("\n[dim]Cloning repository...[/dim]")
+    if not git_clone(git_url, connection_path):
+        return
+
+    console.print(f"[green]✓ Cloned to {connection_path}[/green]")
+
+    # Show what was cloned
+    console.print("\n[bold]Cloned files:[/bold]")
+    for item in sorted(connection_path.iterdir()):
+        if item.name.startswith("."):
+            continue
+        if item.is_dir():
+            console.print(f"  [cyan]{item.name}/[/cyan]")
+        else:
+            console.print(f"  {item.name}")
+
+    # Now prompt for DATABASE_URL (credentials are not in git)
+    _prompt_and_save_database_url(name)
+
+    # Configure Claude Desktop
+    _configure_claude_desktop(name)
+
+    console.print()
+    console.print(
+        Panel.fit(
+            "[bold green]Setup Complete![/bold green]\n\n"
+            "Connection cloned from git.\n"
+            "Claude Desktop needs to restart to load the new config.\n\n"
+            "[dim]Use 'dbmeta pull' to get updates from the team.[/dim]\n"
+            "[dim]Use 'dbmeta sync' to share your changes.[/dim]",
+            border_style="green",
+        )
+    )
+
+    # Offer to launch Claude Desktop
+    console.print()
+    if Confirm.ask("Launch Claude Desktop now?", default=True):
+        launch_claude_desktop()
+    else:
+        console.print("[dim]Please restart Claude Desktop manually.[/dim]")
+
+
+def _init_greenfield(name: str):
+    """Initialize a new connection from scratch (greenfield setup)."""
     console.print(
         Panel.fit(
             f"[bold blue]dbmeta Setup[/bold blue]\n\nConfigure connection: [cyan]{name}[/cyan]",
@@ -299,6 +686,51 @@ def init(name: str):
             console.print("[dim]Will create new config file.[/dim]")
 
     # Prompt for DATABASE_URL
+    database_url = _prompt_and_save_database_url(name, existing_url)
+    if not database_url:
+        return
+
+    # Create connection directory
+    connection_path.mkdir(parents=True, exist_ok=True)
+    console.print(f"[green]✓ Connection directory created: {connection_path}[/green]")
+
+    # Configure Claude Desktop
+    _configure_claude_desktop(name)
+
+    # Run migration if legacy data exists
+    if LEGACY_VAULT_DIR.exists() or LEGACY_PROVIDERS_DIR.exists():
+        console.print("\n[yellow]Legacy data detected. Running migration...[/yellow]")
+        try:
+            from db_meta_v2.vault.migrate import migrate_to_connection_structure
+
+            stats = migrate_to_connection_structure(name)
+            if not stats.get("skipped"):
+                console.print("[green]✓ Legacy data migrated[/green]")
+        except Exception as e:
+            console.print(f"[yellow]Migration warning: {e}[/yellow]")
+
+    # Offer git sync setup (only for greenfield, if git is available)
+    _offer_git_setup(name, connection_path)
+
+    console.print()
+    console.print(
+        Panel.fit(
+            "[bold green]Setup Complete![/bold green]\n\n"
+            "Claude Desktop needs to restart to load the new config.",
+            border_style="green",
+        )
+    )
+
+    # Offer to launch Claude Desktop
+    console.print()
+    if Confirm.ask("Launch Claude Desktop now?", default=True):
+        launch_claude_desktop()
+    else:
+        console.print("[dim]Please restart Claude Desktop manually.[/dim]")
+
+
+def _prompt_and_save_database_url(name: str, existing_url: str | None = None) -> str | None:
+    """Prompt for database URL and save config."""
     console.print("\n[bold]Database Connection[/bold]")
     console.print("[dim]Examples:[/dim]")
     console.print("  trino://user:pass@host:8443/catalog/schema?http_scheme=https")
@@ -313,7 +745,7 @@ def init(name: str):
 
     if not database_url:
         console.print("[red]Database URL is required.[/red]")
-        return
+        return None
 
     # Build dbmeta config (saved to ~/.dbmeta/config.yaml)
     config = load_config()
@@ -330,9 +762,14 @@ def init(name: str):
     save_config(config)
     console.print(f"\n[green]✓ Config saved to {CONFIG_FILE}[/green]")
 
-    # Create connection directory
-    connection_path.mkdir(parents=True, exist_ok=True)
-    console.print(f"[green]✓ Connection directory created: {connection_path}[/green]")
+    return database_url
+
+
+def _configure_claude_desktop(name: str):
+    """Configure Claude Desktop for dbmeta."""
+    claude_config, claude_config_path = load_claude_desktop_config()
+    mcp_servers = claude_config.get("mcpServers", {})
+    has_legacy = "db-meta-v2" in mcp_servers
 
     # Update Claude Desktop config
     if "mcpServers" not in claude_config:
@@ -361,33 +798,41 @@ def init(name: str):
     if other_servers:
         console.print(f"[dim]Other MCP servers (unchanged): {', '.join(other_servers)}[/dim]")
 
-    # Run migration if legacy data exists
-    if LEGACY_VAULT_DIR.exists() or LEGACY_PROVIDERS_DIR.exists():
-        console.print("\n[yellow]Legacy data detected. Running migration...[/yellow]")
-        try:
-            from db_meta_v2.vault.migrate import migrate_to_connection_structure
 
-            stats = migrate_to_connection_structure(name)
-            if not stats.get("skipped"):
-                console.print("[green]✓ Legacy data migrated[/green]")
-        except Exception as e:
-            console.print(f"[yellow]Migration warning: {e}[/yellow]")
+def _offer_git_setup(name: str, connection_path: Path):
+    """Offer to set up git sync for the connection."""
+    # Skip if already a git repo (e.g., from brownfield)
+    if is_git_repo(connection_path):
+        return
 
-    console.print()
+    # Check if git is installed
+    if not is_git_installed():
+        console.print("\n[dim]Tip: Install git to enable team sync features.[/dim]")
+        console.print(f"[dim]     {GIT_INSTALL_URL}[/dim]")
+        return
+
+    console.print("\n[bold]Git Sync (Optional)[/bold]")
+    console.print("[dim]Enable git to share your semantic layer with your team.[/dim]")
+
+    if not Confirm.ask("Enable git sync for this connection?", default=False):
+        return
+
+    # Ask for remote URL (optional)
     console.print(
-        Panel.fit(
-            "[bold green]Setup Complete![/bold green]\n\n"
-            "Claude Desktop needs to restart to load the new config.",
-            border_style="green",
-        )
+        "\n[dim]Enter a git remote URL to sync with (or leave empty to add later).[/dim]"
     )
+    console.print("[dim]Example: git@github.com:yourorg/dbmeta-mydb.git[/dim]")
+    remote_url = Prompt.ask("Git remote URL", default="")
 
-    # Offer to launch Claude Desktop
-    console.print()
-    if Confirm.ask("Launch Claude Desktop now?", default=True):
-        launch_claude_desktop()
-    else:
-        console.print("[dim]Please restart Claude Desktop manually.[/dim]")
+    # Initialize git
+    if git_init(connection_path, remote_url if remote_url else None):
+        console.print("[green]✓ Git repository initialized[/green]")
+        if remote_url:
+            console.print(f"[dim]Remote 'origin' set to {remote_url}[/dim]")
+            console.print("[dim]Use 'dbmeta sync' to push changes to the team.[/dim]")
+        else:
+            console.print("[dim]Add a remote later with: git remote add origin <url>[/dim]")
+            console.print("[dim]Then use 'dbmeta sync' to push changes.[/dim]")
 
 
 @main.command()
@@ -637,6 +1082,146 @@ def use(name: str):
     set_active_connection(name)
     console.print(f"[green]✓ Switched to connection '{name}'[/green]")
     console.print("[dim]Restart Claude Desktop to apply changes.[/dim]")
+
+
+@main.command()
+@click.argument("name", default=None, required=False)
+def sync(name: str | None):
+    """Sync connection changes with git remote.
+
+    NAME is the connection name (default: active connection).
+
+    This command:
+    1. Commits any local changes (auto-generated commit message)
+    2. Pulls remote changes (with rebase)
+    3. Pushes to remote
+
+    Use this to share your semantic layer updates with your team.
+    """
+    # Default to active connection
+    if not name:
+        name = get_active_connection()
+
+    if not connection_exists(name):
+        console.print(f"[red]Connection '{name}' not found.[/red]")
+        sys.exit(1)
+
+    conn_path = get_connection_path(name)
+
+    # Check if it's a git repo
+    if not is_git_repo(conn_path):
+        console.print(f"[yellow]Connection '{name}' is not a git repository.[/yellow]")
+        console.print("[dim]Run 'dbmeta init' and enable git sync, or initialize manually:[/dim]")
+        console.print(f"  cd {conn_path}")
+        console.print("  git init")
+        console.print("  git remote add origin <your-repo-url>")
+        return
+
+    console.print(f"[bold]Syncing connection: {name}[/bold]")
+    git_sync(conn_path)
+
+
+@main.command()
+@click.argument("name", default=None, required=False)
+def pull(name: str | None):
+    """Pull connection updates from git remote.
+
+    NAME is the connection name (default: active connection).
+
+    This pulls the latest changes from the remote repository,
+    allowing you to get updates from your team.
+    """
+    # Default to active connection
+    if not name:
+        name = get_active_connection()
+
+    if not connection_exists(name):
+        console.print(f"[red]Connection '{name}' not found.[/red]")
+        sys.exit(1)
+
+    conn_path = get_connection_path(name)
+
+    # Check if it's a git repo
+    if not is_git_repo(conn_path):
+        console.print(f"[yellow]Connection '{name}' is not a git repository.[/yellow]")
+        console.print("[dim]This connection was not set up with git sync.[/dim]")
+        return
+
+    console.print(f"[bold]Pulling updates for: {name}[/bold]")
+    git_pull(conn_path)
+
+
+@main.command("git-init")
+@click.argument("name", default=None, required=False)
+@click.argument("remote_url", default=None, required=False)
+def git_init_cmd(name: str | None, remote_url: str | None):
+    """Enable git sync for an existing connection.
+
+    NAME is the connection name (default: active connection).
+    REMOTE_URL is the optional git remote URL.
+
+    This initializes a git repository in the connection directory
+    and optionally sets up a remote for syncing.
+
+    Examples:
+        dbmeta git-init
+        dbmeta git-init mydb
+        dbmeta git-init mydb git@github.com:org/dbmeta-mydb.git
+    """
+    # Check git is installed
+    if not is_git_installed():
+        console.print(
+            Panel.fit(
+                "[bold red]Git Not Found[/bold red]\n\n"
+                f"Install from: [cyan]{GIT_INSTALL_URL}[/cyan]",
+                border_style="red",
+            )
+        )
+        return
+
+    # Default to active connection
+    if not name:
+        name = get_active_connection()
+
+    if not connection_exists(name):
+        console.print(f"[red]Connection '{name}' not found.[/red]")
+        sys.exit(1)
+
+    conn_path = get_connection_path(name)
+
+    # Check if already a git repo
+    if is_git_repo(conn_path):
+        console.print(f"[yellow]Connection '{name}' is already a git repository.[/yellow]")
+        # Show remote info if any
+        try:
+            result = subprocess.run(
+                ["git", "remote", "-v"],
+                cwd=conn_path,
+                capture_output=True,
+                check=True,
+            )
+            if result.stdout.strip():
+                console.print("[dim]Remotes:[/dim]")
+                console.print(result.stdout.decode())
+        except subprocess.CalledProcessError:
+            pass
+        return
+
+    # Prompt for remote if not provided
+    if not remote_url:
+        console.print(f"\n[bold]Enable git sync for: {name}[/bold]")
+        console.print(
+            "[dim]Enter a git remote URL to sync with (or leave empty to add later).[/dim]"
+        )
+        console.print("[dim]Example: git@github.com:yourorg/dbmeta-mydb.git[/dim]")
+        remote_url = Prompt.ask("Git remote URL", default="")
+
+    # Initialize git
+    if git_init(conn_path, remote_url if remote_url else None):
+        console.print(f"[green]✓ Git initialized for '{name}'[/green]")
+        if remote_url:
+            console.print(f"[dim]Remote 'origin' set to {remote_url}[/dim]")
+        console.print("[dim]Use 'dbmeta sync' to push changes to the team.[/dim]")
 
 
 @main.command()
