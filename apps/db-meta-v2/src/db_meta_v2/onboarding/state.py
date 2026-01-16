@@ -108,16 +108,25 @@ def save_state(state: OnboardingState) -> dict:
 def load_state(provider_id: str | None = None) -> OnboardingState | None:
     """Load onboarding state from YAML file.
 
+    If state file doesn't exist but schema/domain files do (e.g., after
+    cloning from git), automatically recovers state from existing files.
+
     Args:
         provider_id: Ignored in v2 (kept for backward compatibility)
 
     Returns:
-        OnboardingState if found, None otherwise
+        OnboardingState if found or recovered, None otherwise
     """
     state_file = get_state_file_path()
 
     if not state_file.exists():
-        return None
+        # Try to recover state from existing files (e.g., after git clone)
+        recovered = _recover_state_from_files()
+        if recovered:
+            # Save the recovered state
+            save_state(recovered)
+            logger.info("Recovered onboarding state from existing files")
+        return recovered
 
     try:
         with open(state_file) as f:
@@ -126,6 +135,68 @@ def load_state(provider_id: str | None = None) -> OnboardingState | None:
         return OnboardingState.model_validate(state_dict)
     except Exception:
         return None
+
+
+def _recover_state_from_files() -> OnboardingState | None:
+    """Attempt to recover onboarding state from existing files.
+
+    This handles the case where a connection was cloned from git
+    (state.yaml is gitignored) but schema/domain files exist.
+
+    Returns:
+        Recovered OnboardingState or None if no files found
+    """
+    conn_path = get_connection_path()
+
+    # Check what files exist
+    schema_file = conn_path / "schema" / "descriptions.yaml"
+    domain_file = conn_path / "domain" / "model.md"
+
+    has_schema = schema_file.exists()
+    has_domain = domain_file.exists()
+
+    # If neither exists, nothing to recover
+    if not has_schema and not has_domain:
+        return None
+
+    logger.info(f"Recovering state: schema={has_schema}, domain={has_domain}")
+
+    # Count tables in schema if it exists
+    tables_total = 0
+    if has_schema:
+        try:
+            with open(schema_file) as f:
+                schema_data = yaml.safe_load(f)
+            if schema_data and "tables" in schema_data:
+                tables_total = len(schema_data["tables"])
+        except Exception:
+            pass
+
+    # Determine phase based on what exists
+    if has_schema and has_domain:
+        phase = OnboardingPhase.COMPLETE
+    elif has_schema:
+        phase = OnboardingPhase.DOMAIN
+    else:
+        phase = OnboardingPhase.SCHEMA
+
+    # Get provider_id from settings
+    settings = get_settings()
+    provider_id = settings.get_effective_provider_id()
+
+    # Create recovered state
+    return OnboardingState(
+        provider_id=provider_id,
+        phase=phase,
+        database_url_configured=True,
+        connection_verified=True,
+        tables_discovered=has_schema,
+        tables_total=tables_total,
+        domain_model_generated=has_domain,
+        domain_model_approved=has_domain,
+        started_at=datetime.now(UTC),
+        last_updated_at=datetime.now(UTC),
+    )
 
 
 def delete_state(provider_id: str | None = None) -> dict:

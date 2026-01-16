@@ -1031,6 +1031,49 @@ def status(connection: str | None):
         console.print("  [dim]Run 'dbmeta init' to migrate to new connection structure.[/dim]")
 
 
+def _get_git_remote_url(path: Path) -> str | None:
+    """Get the git remote origin URL for a repository."""
+    try:
+        result = subprocess.run(
+            ["git", "remote", "get-url", "origin"],
+            cwd=path,
+            capture_output=True,
+            check=True,
+        )
+        return result.stdout.decode().strip()
+    except subprocess.CalledProcessError:
+        return None
+
+
+def _get_git_status_indicator(path: Path) -> str:
+    """Get a short git status indicator for a connection."""
+    if not is_git_repo(path):
+        return "[dim]-[/dim]"
+
+    remote_url = _get_git_remote_url(path)
+
+    # Check for uncommitted changes
+    try:
+        result = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=path,
+            capture_output=True,
+            check=True,
+        )
+        has_changes = bool(result.stdout.strip())
+    except subprocess.CalledProcessError:
+        has_changes = False
+
+    if remote_url:
+        if has_changes:
+            return "[yellow]●[/yellow]"  # Has remote, uncommitted changes
+        return "[green]✓[/green]"  # Has remote, clean
+    else:
+        if has_changes:
+            return "[yellow]○[/yellow]"  # Local only, uncommitted changes
+        return "[dim]○[/dim]"  # Local only, clean
+
+
 @main.command("list")
 def list_cmd():
     """List all configured connections."""
@@ -1047,7 +1090,8 @@ def list_cmd():
     table.add_column("Active", justify="center")
     table.add_column("Schema", justify="center")
     table.add_column("Domain", justify="center")
-    table.add_column("Path")
+    table.add_column("Git", justify="center")
+    table.add_column("Remote")
 
     for conn in connections:
         conn_path = get_connection_path(conn)
@@ -1056,15 +1100,35 @@ def list_cmd():
         has_schema = (conn_path / "schema" / "descriptions.yaml").exists()
         has_domain = (conn_path / "domain" / "model.md").exists()
 
+        git_status = _get_git_status_indicator(conn_path)
+        git_remote = ""
+        if is_git_repo(conn_path):
+            remote_url = _get_git_remote_url(conn_path)
+            if remote_url:
+                # Shorten the URL for display
+                if remote_url.startswith("git@github.com:"):
+                    git_remote = remote_url.replace("git@github.com:", "gh:")
+                elif remote_url.startswith("https://github.com/"):
+                    git_remote = remote_url.replace("https://github.com/", "gh:")
+                else:
+                    git_remote = remote_url
+                # Trim .git suffix
+                if git_remote.endswith(".git"):
+                    git_remote = git_remote[:-4]
+
         table.add_row(
             conn,
             "[green]●[/green]" if is_active else "",
             "[green]✓[/green]" if has_schema else "[dim]-[/dim]",
             "[green]✓[/green]" if has_domain else "[dim]-[/dim]",
-            str(conn_path),
+            git_status,
+            f"[dim]{git_remote}[/dim]" if git_remote else "",
         )
 
     console.print(table)
+
+    # Legend
+    console.print("\n[dim]Git: ✓ synced, ● uncommitted changes, ○ local only, - not enabled[/dim]")
 
 
 @main.command()
