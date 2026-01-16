@@ -609,6 +609,9 @@ def _init_brownfield(name: str, git_url: str):
     # Now prompt for DATABASE_URL (credentials are not in git)
     _prompt_and_save_database_url(name)
 
+    # Recover onboarding state from cloned files
+    _recover_onboarding_state(name, connection_path)
+
     # Configure Claude Desktop
     _configure_claude_desktop(name)
 
@@ -797,6 +800,41 @@ def _configure_claude_desktop(name: str):
     other_servers = [k for k in claude_config["mcpServers"].keys() if k != "dbmeta"]
     if other_servers:
         console.print(f"[dim]Other MCP servers (unchanged): {', '.join(other_servers)}[/dim]")
+
+
+def _recover_onboarding_state(name: str, connection_path: Path):
+    """Recover onboarding state from cloned files.
+
+    When cloning from git, state.yaml is not included (gitignored).
+    This reconstructs the state based on existing schema/domain files.
+    """
+    # Set environment so state module uses correct path
+    os.environ["CONNECTION_NAME"] = name
+    os.environ["CONNECTIONS_DIR"] = str(CONNECTIONS_DIR)
+
+    # Check what files exist
+    schema_file = connection_path / "schema" / "descriptions.yaml"
+    domain_file = connection_path / "domain" / "model.md"
+
+    has_schema = schema_file.exists()
+    has_domain = domain_file.exists()
+
+    if not has_schema and not has_domain:
+        console.print("[dim]No existing schema/domain files found.[/dim]")
+        return
+
+    # Import here to avoid circular imports and ensure env is set
+    from db_meta_v2.onboarding.state import load_state
+
+    # load_state will auto-recover and save if files exist but state doesn't
+    state = load_state()
+
+    if state:
+        console.print(f"[green]✓ Onboarding state recovered: {state.phase.value}[/green]")
+        if has_schema:
+            console.print(f"  [dim]Schema: {state.tables_total} tables[/dim]")
+        if has_domain:
+            console.print("  [dim]Domain model: ready[/dim]")
 
 
 def _offer_git_setup(name: str, connection_path: Path):
