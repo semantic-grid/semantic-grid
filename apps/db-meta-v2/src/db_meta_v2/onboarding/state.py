@@ -161,14 +161,16 @@ def _recover_state_from_files() -> OnboardingState | None:
 
     logger.info(f"Recovering state: schema={has_schema}, domain={has_domain}")
 
-    # Count tables in schema if it exists
+    # Extract table names from schema if it exists
+    tables_discovered: list[str] = []
     tables_total = 0
     if has_schema:
         try:
             with open(schema_file) as f:
                 schema_data = yaml.safe_load(f)
             if schema_data and "tables" in schema_data:
-                tables_total = len(schema_data["tables"])
+                tables_discovered = list(schema_data["tables"].keys())
+                tables_total = len(tables_discovered)
         except Exception:
             pass
 
@@ -190,7 +192,7 @@ def _recover_state_from_files() -> OnboardingState | None:
         phase=phase,
         database_url_configured=True,
         connection_verified=True,
-        tables_discovered=has_schema,
+        tables_discovered=tables_discovered,
         tables_total=tables_total,
         domain_model_generated=has_domain,
         domain_model_approved=has_domain,
