@@ -10,7 +10,7 @@ Commands:
     dbmeta git-init [NAME] [URL]  - Enable git sync for existing connection
     dbmeta sync [NAME]            - Sync changes to git remote
     dbmeta pull [NAME]            - Pull updates from git remote
-    dbmeta edit [NAME]            - Open connection directory in editor
+    dbmeta edit [NAME]            - Edit connection credentials (.env file)
     dbmeta rename OLD NEW         - Rename a connection
     dbmeta remove NAME            - Remove a connection
 
@@ -1390,19 +1390,19 @@ def git_init_cmd(name: str | None, remote_url: str | None):
 @main.command()
 @click.argument("name", default=None, required=False)
 def edit(name: str | None):
-    """Open connection directory in editor.
+    """Edit connection credentials (.env file).
 
     NAME is the connection name to edit (default: active connection).
 
-    Opens the connection directory in your editor (vim by default).
+    Opens the connection's .env file in your editor (vim by default).
     Set EDITOR environment variable to change the editor.
 
-    The connection directory contains:
-    - schema/descriptions.yaml - Column descriptions
-    - domain/model.md - Domain model documentation
-    - examples/ - Query examples
-    - instructions/ - Custom instructions
-    - learnings/ - Failure patterns
+    The .env file contains:
+    - DATABASE_URL - Connection string for the database
+
+    To edit other connection files (schema, domain, etc.),
+    open the connection directory directly:
+        $EDITOR ~/.dbmeta/connections/<name>/
     """
     # Default to active connection
     if not name:
@@ -1413,18 +1413,29 @@ def edit(name: str | None):
         console.print("[dim]Run 'dbmeta list' to see available connections.[/dim]")
         sys.exit(1)
 
-    conn_path = get_connection_path(name)
+    env_path = _get_connection_env_path(name)
+
+    # Create .env file if it doesn't exist
+    if not env_path.exists():
+        console.print(f"[yellow]No .env file found for '{name}'.[/yellow]")
+        if Confirm.ask("Create one now?", default=True):
+            _save_connection_env(name, {"DATABASE_URL": ""})
+            console.print(f"[green]✓ Created {env_path}[/green]")
+        else:
+            return
+
     editor = os.environ.get("EDITOR", "vim")
 
-    console.print(f"[dim]Opening {conn_path} in {editor}...[/dim]")
+    console.print(f"[dim]Opening {env_path} in {editor}...[/dim]")
 
     try:
-        subprocess.run([editor, str(conn_path)], check=True)
-        console.print("[green]✓ Done.[/green]")
+        subprocess.run([editor, str(env_path)], check=True)
+        console.print("[green]✓ Credentials updated.[/green]")
+        console.print("[dim]Restart Claude Desktop to apply changes.[/dim]")
     except FileNotFoundError:
         console.print(f"[red]Editor '{editor}' not found.[/red]")
         console.print("[dim]Set EDITOR environment variable or edit manually:[/dim]")
-        console.print(f"  {conn_path}")
+        console.print(f"  {env_path}")
     except subprocess.CalledProcessError:
         console.print("[yellow]Editor exited with error.[/yellow]")
 
@@ -1680,6 +1691,127 @@ def all(command: str):
                     console.print("  [green]✓ Migrated[/green]")
             except Exception as e:
                 console.print(f"  [red]Error: {e}[/red]")
+
+
+# =============================================================================
+# Traces commands
+# =============================================================================
+
+
+@main.group()
+def traces():
+    """Manage trace capture for diagnostics and learning.
+
+    Traces capture MCP server activity (tool calls, queries, etc.)
+    and store them as JSONL files for agent analysis.
+
+    Examples:
+        dbmeta traces on       # Enable trace capture
+        dbmeta traces off      # Disable trace capture
+        dbmeta traces status   # Show trace settings and files
+    """
+    pass
+
+
+@traces.command("on")
+def traces_on():
+    """Enable trace capture.
+
+    When enabled, the MCP server will write traces to:
+        ~/.dbmeta/connections/{name}/traces/{user_id}/YYYY-MM-DD.jsonl
+
+    A unique user_id is generated on first enable to identify
+    your traces when sharing with the team.
+    """
+    from db_meta_v2.traces import generate_user_id, get_user_id_from_config
+
+    config = load_config()
+
+    # Check if already enabled
+    if config.get("traces_enabled"):
+        console.print("[dim]Traces already enabled.[/dim]")
+        user_id = config.get("user_id", "unknown")
+        console.print(f"[dim]User ID: {user_id}[/dim]")
+        return
+
+    # Generate user_id if not exists
+    user_id = get_user_id_from_config()
+    if not user_id:
+        user_id = generate_user_id()
+        config["user_id"] = user_id
+        console.print(f"[green]✓ Generated user ID: {user_id}[/green]")
+
+    # Enable traces
+    config["traces_enabled"] = True
+    save_config(config)
+
+    console.print("[green]✓ Traces enabled[/green]")
+    console.print(f"[dim]User ID: {user_id}[/dim]")
+    console.print("[dim]Restart Claude Desktop to start capturing traces.[/dim]")
+
+
+@traces.command("off")
+def traces_off():
+    """Disable trace capture.
+
+    Existing trace files are preserved.
+    """
+    config = load_config()
+
+    if not config.get("traces_enabled"):
+        console.print("[dim]Traces already disabled.[/dim]")
+        return
+
+    config["traces_enabled"] = False
+    save_config(config)
+
+    console.print("[green]✓ Traces disabled[/green]")
+    console.print("[dim]Restart Claude Desktop to stop capturing traces.[/dim]")
+
+
+@traces.command("status")
+def traces_status():
+    """Show trace capture status and file locations."""
+    config = load_config()
+
+    enabled = config.get("traces_enabled", False)
+    user_id = config.get("user_id")
+
+    console.print("[bold]Trace Capture[/bold]")
+    console.print(f"  Status:  {'[green]enabled[/green]' if enabled else '[dim]disabled[/dim]'}")
+
+    if user_id:
+        console.print(f"  User ID: [cyan]{user_id}[/cyan]")
+    else:
+        console.print("  User ID: [dim]not set (will generate on enable)[/dim]")
+
+    # Show trace files for active connection
+    active = get_active_connection()
+    if active and user_id:
+        conn_path = get_connection_path(active)
+        traces_dir = conn_path / "traces" / user_id
+
+        console.print(f"\n[bold]Traces for '{active}'[/bold]")
+        console.print(f"  Directory: {traces_dir}")
+
+        if traces_dir.exists():
+            trace_files = sorted(traces_dir.glob("*.jsonl"), reverse=True)
+            if trace_files:
+                console.print(f"  Files: {len(trace_files)}")
+                # Show recent files
+                for tf in trace_files[:5]:
+                    size = tf.stat().st_size
+                    size_str = f"{size / 1024:.1f}KB" if size > 1024 else f"{size}B"
+                    console.print(f"    [dim]{tf.name}[/dim] ({size_str})")
+                if len(trace_files) > 5:
+                    console.print(f"    [dim]... and {len(trace_files) - 5} more[/dim]")
+            else:
+                console.print("  [dim]No trace files yet.[/dim]")
+        else:
+            console.print("  [dim]No traces directory yet.[/dim]")
+
+    if not enabled:
+        console.print("\n[dim]Run 'dbmeta traces on' to enable capture.[/dim]")
 
 
 if __name__ == "__main__":

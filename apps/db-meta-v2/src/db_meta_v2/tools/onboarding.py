@@ -323,7 +323,7 @@ async def _onboarding_start(provider_id: str | None = None, force: bool = False)
         "phase": state.phase.value,
         "ignore_patterns": ignore.patterns,
         "pattern_count": len(ignore.patterns),
-        "next_action": "Review ignore patterns, then call onboarding_discover to proceed",
+        "next_action": "Review ignore patterns, then call onboarding_discover(phase='structure')",
         "guidance": {
             "summary": f"Connected to {state.dialect_detected} database. Review ignore patterns.",
             "next_steps": [
@@ -331,7 +331,9 @@ async def _onboarding_start(provider_id: str | None = None, force: bool = False)
                 "Add patterns with onboarding_add_ignore_pattern",
                 "Remove patterns with onboarding_remove_ignore_pattern",
                 "Import from file with onboarding_import_ignore_patterns",
-                "When ready, call onboarding_discover to scan the database",
+                "Call onboarding_discover(phase='structure') to discover catalogs/schemas",
+                "Review schemas, add more ignore patterns if needed",
+                "Call onboarding_discover(phase='tables') to scan tables",
             ],
             "suggested_response": (
                 f"**Database connected successfully!**\n\n"
@@ -343,22 +345,33 @@ async def _onboarding_start(provider_id: str | None = None, force: bool = False)
                 "- **Add** a pattern: tell me what to ignore (e.g., 'ignore test_*')\n"
                 "- **Remove** a pattern: tell me what to include\n"
                 "- **Upload** a file with patterns for me to import\n\n"
-                "When you're happy with the patterns, say **'discover'** to scan the database."
+                "When you're ready, say **'discover'** to scan the database structure.\n"
+                "(I'll show you schemas first, then you can add more patterns before table scan)"
             ),
         },
     }
 
 
-async def _onboarding_discover(provider_id: str | None = None) -> dict:
+async def _onboarding_discover(
+    provider_id: str | None = None,
+    phase: str = "structure",
+) -> dict:
     """Run schema discovery after reviewing ignore patterns.
 
-    This will:
-    1. Discover catalogs (for Trino 3-level hierarchy)
-    2. Discover schemas and tables
-    3. Create initial schema_descriptions.yaml with all tables
+    Discovery is split into two phases to allow users to add ignore patterns
+    after seeing the database structure but before the slow table scan:
+
+    - phase="structure": Discover catalogs and schemas only (fast)
+    - phase="tables": Discover tables in non-ignored schemas (slow)
+
+    Typical flow:
+    1. onboarding_discover(phase="structure") - see catalogs/schemas
+    2. User reviews and adds ignore patterns for schemas they don't need
+    3. onboarding_discover(phase="tables") - scan tables in remaining schemas
 
     Args:
         provider_id: Provider ID. Uses configured default if not provided.
+        phase: Discovery phase - "structure" (catalogs/schemas) or "tables"
 
     Returns:
         Discovery result with counts
@@ -366,6 +379,13 @@ async def _onboarding_discover(provider_id: str | None = None) -> dict:
     if provider_id is None:
         settings = get_settings()
         provider_id = settings.provider_id
+
+    # Validate phase parameter
+    if phase not in ("structure", "tables"):
+        return {
+            "discovered": False,
+            "error": f"Invalid phase '{phase}'. Must be 'structure' or 'tables'.",
+        }
 
     # Load state - must be in INIT phase
     state = load_state(provider_id)
@@ -375,12 +395,30 @@ async def _onboarding_discover(provider_id: str | None = None) -> dict:
             "error": "Onboarding not started. Call onboarding_start first.",
         }
 
-    if state.phase != OnboardingPhase.INIT:
+    # For structure phase, must be in INIT
+    # For tables phase, can be in INIT (if structure already done) or INIT
+    if phase == "structure" and state.phase != OnboardingPhase.INIT:
         return {
             "discovered": False,
             "error": f"Already discovered (phase: {state.phase.value}). "
             "Use onboarding_start with force=True to rediscover.",
             "phase": state.phase.value,
+        }
+
+    if phase == "tables" and state.phase not in (OnboardingPhase.INIT,):
+        return {
+            "discovered": False,
+            "error": f"Already discovered tables (phase: {state.phase.value}). "
+            "Use onboarding_start with force=True to rediscover.",
+            "phase": state.phase.value,
+        }
+
+    # For tables phase, check that structure discovery was done first
+    if phase == "tables" and not state.schemas_discovered:
+        return {
+            "discovered": False,
+            "error": "Structure discovery not done yet. "
+            "Call onboarding_discover(phase='structure') first.",
         }
 
     # Load ignore patterns
@@ -389,107 +427,206 @@ async def _onboarding_discover(provider_id: str | None = None) -> dict:
         f"[DISCOVERY] Loaded {len(ignore.patterns)} ignore patterns", file=sys.stderr, flush=True
     )
 
-    # Discover catalogs first (for Trino 3-level hierarchy)
-    try:
-        print("[DISCOVERY] Discovering catalogs...", file=sys.stderr, flush=True)
-        catalogs = get_catalogs()
-        print(
-            f"[DISCOVERY] Found catalogs (before filter): {catalogs}", file=sys.stderr, flush=True
-        )
-        catalogs = ignore.filter_catalogs(catalogs)
-        print(
-            f"[DISCOVERY] Found catalogs (after filter): {catalogs}", file=sys.stderr, flush=True
-        )
-        state.catalogs_discovered = [c for c in catalogs if c is not None]
-    except Exception as e:
-        print(f"[DISCOVERY] Error discovering catalogs: {e}", file=sys.stderr, flush=True)
-        catalogs = [None]
-        state.catalogs_discovered = []
+    # ============================================================
+    # PHASE: STRUCTURE - Discover catalogs and schemas only (fast)
+    # ============================================================
+    if phase == "structure":
+        # Discover catalogs first (for Trino 3-level hierarchy)
+        try:
+            print("[DISCOVERY] Discovering catalogs...", file=sys.stderr, flush=True)
+            catalogs = get_catalogs()
+            print(
+                f"[DISCOVERY] Found catalogs (before filter): {catalogs}",
+                file=sys.stderr,
+                flush=True,
+            )
+            catalogs = ignore.filter_catalogs(catalogs)
+            print(
+                f"[DISCOVERY] Found catalogs (after filter): {catalogs}",
+                file=sys.stderr,
+                flush=True,
+            )
+            state.catalogs_discovered = [c for c in catalogs if c is not None]
+        except Exception as e:
+            print(f"[DISCOVERY] Error discovering catalogs: {e}", file=sys.stderr, flush=True)
+            catalogs = [None]
+            state.catalogs_discovered = []
 
-    # Discover schemas for each catalog
-    all_schemas = []
-    try:
-        for catalog in catalogs:
+        # Discover schemas for each catalog
+        all_schemas = []
+        all_schemas_with_catalog = []  # For display: list of {"catalog": ..., "schema": ...}
+        try:
+            for catalog in catalogs:
+                print(
+                    f"[DISCOVERY] Discovering schemas for catalog: {catalog}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                schemas = get_schemas(catalog=catalog)
+                print(
+                    f"[DISCOVERY] Found schemas in {catalog} (before filter): {schemas}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                schemas = ignore.filter_schemas(schemas)
+                print(
+                    f"[DISCOVERY] Found schemas in {catalog} (after filter): {schemas}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                for schema in schemas:
+                    if schema is not None:
+                        all_schemas.append(schema)
+                        all_schemas_with_catalog.append(
+                            {
+                                "catalog": catalog,
+                                "schema": schema,
+                                "full_name": f"{catalog}.{schema}" if catalog else schema,
+                            }
+                        )
+            state.schemas_discovered = all_schemas
             print(
-                f"[DISCOVERY] Discovering schemas for catalog: {catalog}",
+                f"[DISCOVERY] Total schemas discovered: {len(all_schemas)}",
                 file=sys.stderr,
                 flush=True,
             )
-            schemas = get_schemas(catalog=catalog)
-            print(
-                f"[DISCOVERY] Found schemas in {catalog} (before filter): {schemas}",
-                file=sys.stderr,
-                flush=True,
-            )
-            schemas = ignore.filter_schemas(schemas)
-            print(
-                f"[DISCOVERY] Found schemas in {catalog} (after filter): {schemas}",
-                file=sys.stderr,
-                flush=True,
-            )
-            for schema in schemas:
-                if schema is not None:
-                    all_schemas.append(schema)
-        state.schemas_discovered = all_schemas
-        print(
-            f"[DISCOVERY] Total schemas discovered: {len(all_schemas)}",
-            file=sys.stderr,
-            flush=True,
+        except Exception as e:
+            print(f"[DISCOVERY] Error discovering schemas: {e}", file=sys.stderr, flush=True)
+            state.schemas_discovered = []
+
+        # Save state (still in INIT phase, waiting for tables discovery)
+        save_result = save_state(state)
+        if not save_result["saved"]:
+            return {
+                "discovered": False,
+                "provider_id": provider_id,
+                "error": f"Failed to save state: {save_result['error']}",
+            }
+
+        # Format schemas for display
+        schemas_display = "\n".join(
+            [f"  - {s['full_name']}" for s in all_schemas_with_catalog[:20]]
         )
-    except Exception as e:
-        print(f"[DISCOVERY] Error discovering schemas: {e}", file=sys.stderr, flush=True)
-        state.schemas_discovered = []
+        if len(all_schemas_with_catalog) > 20:
+            schemas_display += f"\n  ... and {len(all_schemas_with_catalog) - 20} more"
+
+        return {
+            "discovered": True,
+            "discovery_phase": "structure",
+            "provider_id": provider_id,
+            "dialect": state.dialect_detected,
+            "catalogs_found": len(state.catalogs_discovered),
+            "catalogs": state.catalogs_discovered,
+            "schemas_found": len(state.schemas_discovered),
+            "schemas": all_schemas_with_catalog,
+            "phase": state.phase.value,
+            "next_action": "Review schemas, add ignore patterns if needed, "
+            "then call onboarding_discover(phase='tables')",
+            "guidance": {
+                "summary": (
+                    f"Found {len(state.schemas_discovered)} schemas"
+                    + (
+                        f" in {len(state.catalogs_discovered)} catalogs"
+                        if state.catalogs_discovered
+                        else ""
+                    )
+                    + ". Review before table discovery."
+                ),
+                "next_steps": [
+                    "Review the discovered schemas",
+                    "Add ignore patterns for schemas you don't need (e.g., test_*, staging_*)",
+                    "Then call onboarding_discover(phase='tables') to scan tables",
+                ],
+                "suggested_response": (
+                    "**Structure discovery complete!**\n\n"
+                    + (
+                        f"**Catalogs ({len(state.catalogs_discovered)}):** "
+                        f"{', '.join(state.catalogs_discovered)}\n\n"
+                        if state.catalogs_discovered
+                        else ""
+                    )
+                    + f"**Schemas ({len(state.schemas_discovered)}):**\n{schemas_display}\n\n"
+                    "**Before I scan for tables**, please review the schemas above.\n\n"
+                    "Table discovery can be slow for large databases. "
+                    "To speed this up, you can add **ignore patterns** for schemas "
+                    "you don't need:\n"
+                    "- `test_*` - skip test schemas\n"
+                    "- `staging_*` - skip staging schemas\n"
+                    "- `*_backup` - skip backup schemas\n\n"
+                    "Tell me any patterns to ignore, or say **'continue'** to scan tables."
+                ),
+            },
+        }
+
+    # ============================================================
+    # PHASE: TABLES - Discover tables in non-ignored schemas (slow)
+    # ============================================================
+    # Re-filter schemas in case new ignore patterns were added
+    all_schemas_filtered = []
+    catalogs = state.catalogs_discovered if state.catalogs_discovered else [None]
+
+    for catalog in catalogs:
+        schemas = get_schemas(catalog=catalog)
+        schemas = ignore.filter_schemas(schemas)
+        for schema in schemas:
+            if schema is not None:
+                all_schemas_filtered.append({"catalog": catalog, "schema": schema})
+
+    # Update state with filtered schemas
+    state.schemas_discovered = [s["schema"] for s in all_schemas_filtered]
+
+    print(
+        f"[DISCOVERY] Schemas after re-filtering: {len(all_schemas_filtered)}",
+        file=sys.stderr,
+        flush=True,
+    )
 
     # Discover tables with columns (iterate catalog -> schema -> table)
     all_tables = []
     try:
-        for catalog in catalogs:
-            schemas = get_schemas(catalog=catalog)
-            schemas = ignore.filter_schemas(schemas)
+        for schema_info in all_schemas_filtered:
+            catalog = schema_info["catalog"]
+            schema = schema_info["schema"]
 
-            for schema in schemas:
-                if schema is None:
-                    continue
+            print(
+                f"[DISCOVERY] Discovering tables for {catalog}.{schema}...",
+                file=sys.stderr,
+                flush=True,
+            )
+            tables = get_tables(schema=schema, catalog=catalog)
+            print(
+                f"[DISCOVERY] Found {len(tables)} tables in {catalog}.{schema} (pre-filter)",
+                file=sys.stderr,
+                flush=True,
+            )
+            tables = ignore.filter_tables(tables)
+            print(
+                f"[DISCOVERY] Found {len(tables)} tables in {catalog}.{schema} (after filter)",
+                file=sys.stderr,
+                flush=True,
+            )
 
-                print(
-                    f"[DISCOVERY] Discovering tables for {catalog}.{schema}...",
-                    file=sys.stderr,
-                    flush=True,
-                )
-                tables = get_tables(schema=schema, catalog=catalog)
-                print(
-                    f"[DISCOVERY] Found {len(tables)} tables in {catalog}.{schema} (pre-filter)",
-                    file=sys.stderr,
-                    flush=True,
-                )
-                tables = ignore.filter_tables(tables)
-                print(
-                    f"[DISCOVERY] Found {len(tables)} tables in {catalog}.{schema} (after filter)",
-                    file=sys.stderr,
-                    flush=True,
-                )
-
-                for t in tables:
-                    # Get columns for each table
-                    try:
-                        columns = get_columns(t["name"], schema=schema, catalog=catalog)
-                    except Exception as e:
-                        print(
-                            f"[DISCOVERY] Error getting columns for {t['name']}: {e}",
-                            file=sys.stderr,
-                            flush=True,
-                        )
-                        columns = []
-
-                    all_tables.append(
-                        {
-                            "name": t["name"],
-                            "schema": schema,
-                            "catalog": catalog,
-                            "full_name": t["full_name"],
-                            "columns": columns,
-                        }
+            for t in tables:
+                # Get columns for each table
+                try:
+                    columns = get_columns(t["name"], schema=schema, catalog=catalog)
+                except Exception as e:
+                    print(
+                        f"[DISCOVERY] Error getting columns for {t['name']}: {e}",
+                        file=sys.stderr,
+                        flush=True,
                     )
+                    columns = []
+
+                all_tables.append(
+                    {
+                        "name": t["name"],
+                        "schema": schema,
+                        "catalog": catalog,
+                        "full_name": t["full_name"],
+                        "columns": columns,
+                    }
+                )
 
         state.tables_discovered = [t["full_name"] for t in all_tables]
         state.tables_total = len(all_tables)
@@ -529,9 +666,10 @@ async def _onboarding_discover(provider_id: str | None = None) -> dict:
 
     return {
         "discovered": True,
+        "discovery_phase": "tables",
         "provider_id": provider_id,
         "dialect": state.dialect_detected,
-        "catalogs_found": len(state.catalogs_discovered),
+        "catalogs_found": len(state.catalogs_discovered) if state.catalogs_discovered else 0,
         "schemas_found": len(state.schemas_discovered),
         "tables_found": state.tables_total,
         "phase": state.phase.value,

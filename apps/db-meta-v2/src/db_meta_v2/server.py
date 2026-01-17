@@ -414,7 +414,7 @@ def _configure_logging():
 
 
 def _configure_observability():
-    """Configure observability (Logfire and/or local console)."""
+    """Configure observability (Logfire, local console, and/or JSONL traces)."""
     settings = get_settings()
     logger = logging.getLogger(__name__)
 
@@ -427,6 +427,29 @@ def _configure_observability():
         logger.debug(f"HTTP tracing configured (port {console_port})")
     except Exception as e:
         logger.debug(f"HTTP tracing not available: {e}")
+
+    # Set up JSONL trace exporter if enabled
+    try:
+        from db_meta_v2.traces import setup_trace_exporter
+
+        connection_path = get_connection_path()
+        exporter = setup_trace_exporter(connection_path)
+        if exporter:
+            from opentelemetry import trace
+            from opentelemetry.sdk.trace import TracerProvider
+            from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+
+            # Get or create tracer provider
+            provider = trace.get_tracer_provider()
+            if not isinstance(provider, TracerProvider):
+                provider = TracerProvider()
+                trace.set_tracer_provider(provider)
+
+            # Add JSONL exporter
+            provider.add_span_processor(SimpleSpanProcessor(exporter))
+            logger.info(f"JSONL trace exporter enabled: {exporter.traces_dir}")
+    except Exception as e:
+        logger.debug(f"JSONL trace exporter not available: {e}")
 
     # Also configure Logfire if token is set
     if settings.logfire_token:

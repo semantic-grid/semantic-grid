@@ -176,9 +176,9 @@ main() {
         info "Commands:"
         printf '  dbmeta init [NAME]      Configure new connection (default: "default")\n'
         printf '  dbmeta init NAME <url>  Clone connection from git (team sync)\n'
-        printf '  dbmeta git-init [NAME]  Enable git sync for existing connection\n'
         printf '  dbmeta sync [NAME]      Sync changes to git remote\n'
         printf '  dbmeta pull [NAME]      Pull updates from git remote\n'
+        printf '  dbmeta traces on/off    Enable/disable trace capture\n'
         printf '  dbmeta list             List all connections\n'
         printf '  dbmeta status           Show current configuration\n'
         printf '  dbmeta --help           Show all commands\n\n'
