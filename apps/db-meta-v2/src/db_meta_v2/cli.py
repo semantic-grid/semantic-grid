@@ -231,17 +231,18 @@ GIT_INSTALL_URL = "https://git-scm.com/downloads"
 
 # Default .gitignore content for connection directories
 GITIGNORE_CONTENT = """# dbmeta gitignore
+# Ignore all dotfiles (local state, credentials, editor files, etc.)
+.*
+# Exception: keep .gitignore itself
+!.gitignore
+
 # Local state (not shared)
 state.yaml
 
 # Temp/backup files
 *.tmp
 *.bak
-*.swp
 *~
-
-# Environment files (may contain credentials)
-.env*
 """
 
 
