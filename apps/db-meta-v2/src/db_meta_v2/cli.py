@@ -125,6 +125,16 @@ def get_dbmeta_binary_path() -> str:
     """Get path to dbmeta binary (or script in dev mode)."""
     # If running as PyInstaller bundle
     if getattr(sys, "frozen", False):
+        # Check if there's a symlink at ~/.local/bin/dbmeta pointing to us
+        # If so, use the symlink path so upgrades work automatically
+        symlink_path = Path.home() / ".local" / "bin" / "dbmeta"
+        if symlink_path.is_symlink():
+            try:
+                resolved = symlink_path.resolve()
+                if resolved == Path(sys.executable).resolve():
+                    return str(symlink_path)
+            except OSError:
+                pass
         return sys.executable
     # Running as script - return the command that invoked us
     return "dbmeta"
