@@ -1,5 +1,6 @@
 """Configuration for db-meta-v2."""
 
+import os
 from pathlib import Path
 from typing import Literal
 
@@ -10,11 +11,48 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 STORAGE_VERSION = 2
 
 
+def _get_env_files() -> list[Path]:
+    """Get list of .env files to load, in priority order.
+
+    Priority (later files override earlier):
+    1. Current directory .env (if exists)
+    2. Connection-specific .env (from CONNECTION_PATH or CONNECTIONS_DIR/CONNECTION_NAME)
+    """
+    env_files = []
+
+    # 1. Current directory .env
+    cwd_env = Path(".env")
+    if cwd_env.exists():
+        env_files.append(cwd_env)
+
+    # 2. Connection-specific .env
+    connection_path = os.environ.get("CONNECTION_PATH", "")
+    if connection_path:
+        conn_env = Path(connection_path) / ".env"
+        if conn_env.exists():
+            env_files.append(conn_env)
+    else:
+        # Try connections_dir + connection_name
+        connections_dir = os.environ.get("CONNECTIONS_DIR", "")
+        connection_name = os.environ.get("CONNECTION_NAME", "default")
+        if connections_dir:
+            conn_env = Path(connections_dir) / connection_name / ".env"
+            if conn_env.exists():
+                env_files.append(conn_env)
+        else:
+            # Default location
+            conn_env = Path.home() / ".dbmeta" / "connections" / connection_name / ".env"
+            if conn_env.exists():
+                env_files.append(conn_env)
+
+    return env_files
+
+
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=_get_env_files(),
         env_file_encoding="utf-8",
         extra="ignore",
     )
