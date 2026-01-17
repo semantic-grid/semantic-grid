@@ -95,13 +95,12 @@ def _get_auth_provider():
     """
     settings = get_settings()
     if settings.auth0_enabled and settings.auth0_domain:
-        from pathlib import Path
 
         from fastmcp.server.auth.providers.auth0 import Auth0Provider
         from key_value.aio.stores.disk import DiskStore
 
-        # Use the providers PVC directory for OAuth session storage
-        oauth_storage_path = Path(settings.providers_dir) / ".oauth"
+        # Use connection path for OAuth session storage
+        oauth_storage_path = settings.get_effective_connection_path() / ".oauth"
 
         provider = Auth0Provider(
             config_url=f"https://{settings.auth0_domain}/.well-known/openid-configuration",

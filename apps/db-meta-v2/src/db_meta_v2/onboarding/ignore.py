@@ -146,9 +146,10 @@ def load_ignore_patterns(provider_id: str | None = None) -> IgnorePatterns:
     """Load ignore patterns from .dbmetaignore file.
 
     Searches for .dbmetaignore in:
-    1. Provider directory: {providers_dir}/{provider_id}/.dbmetaignore
-    2. Resources directory: {resources_dir}/.dbmetaignore
-    3. Falls back to built-in defaults
+    1. Connection directory: {connection_path}/.dbmetaignore
+    2. Legacy provider directory: {providers_dir}/{provider_id}/.dbmetaignore
+    3. Resources directory: {resources_dir}/.dbmetaignore
+    4. Falls back to built-in defaults
 
     Args:
         provider_id: Provider ID. Uses configured default if not provided.
@@ -160,12 +161,21 @@ def load_ignore_patterns(provider_id: str | None = None) -> IgnorePatterns:
     if provider_id is None:
         provider_id = settings.provider_id
 
-    # Check provider-specific file first
-    provider_ignore = Path(settings.providers_dir) / provider_id / ".dbmetaignore"
-    if provider_ignore.exists():
-        content = provider_ignore.read_text()
+    # Check connection-specific file first (new v2 structure)
+    connection_path = settings.get_effective_connection_path()
+    connection_ignore = connection_path / ".dbmetaignore"
+    if connection_ignore.exists():
+        content = connection_ignore.read_text()
         patterns = IgnorePatterns._parse_patterns(content)
         return IgnorePatterns(patterns)
+
+    # Check legacy provider directory
+    if settings.providers_dir:
+        provider_ignore = Path(settings.providers_dir) / provider_id / ".dbmetaignore"
+        if provider_ignore.exists():
+            content = provider_ignore.read_text()
+            patterns = IgnorePatterns._parse_patterns(content)
+            return IgnorePatterns(patterns)
 
     # Check resources directory
     resources_ignore = Path(settings.resources_dir) / ".dbmetaignore"
@@ -191,17 +201,19 @@ def save_ignore_patterns(provider_id: str, patterns: list[str]) -> dict:
     """Save ignore patterns to .dbmetaignore file.
 
     Args:
-        provider_id: Provider ID
+        provider_id: Provider ID (unused in v2, kept for compatibility)
         patterns: List of patterns to save
 
     Returns:
         Dict with save status
     """
     settings = get_settings()
-    provider_dir = Path(settings.providers_dir) / provider_id
-    provider_dir.mkdir(parents=True, exist_ok=True)
 
-    ignore_file = provider_dir / ".dbmetaignore"
+    # Use new connection path structure
+    connection_path = settings.get_effective_connection_path()
+    connection_path.mkdir(parents=True, exist_ok=True)
+
+    ignore_file = connection_path / ".dbmetaignore"
 
     try:
         content = "\n".join(patterns)
