@@ -1,6 +1,6 @@
 [project]
 name = "db-meta-v2"
-version = "0.2.9"
+version = "0.2.10"
 description = "MCP server for database semantics and query intelligence"
 requires-python = ">=3.13"
 dependencies = [
