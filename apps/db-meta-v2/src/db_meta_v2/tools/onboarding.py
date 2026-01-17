@@ -3,6 +3,7 @@
 import logging
 import sys
 
+from mcp.server.fastmcp import Context
 from sg_models import OnboardingPhase, TableDescriptionStatus
 
 from db_meta_v2.config import get_settings
@@ -35,6 +36,19 @@ from db_meta_v2.onboarding.state import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+async def _report_progress(ctx: Context | None, progress: float, total: float = 100) -> None:
+    """Report progress if context supports it.
+
+    Safe to call even if ctx is None or doesn't support progress.
+    """
+    if ctx is None:
+        return
+    try:
+        await ctx.report_progress(progress=progress, total=total)
+    except Exception:
+        pass  # Ignore if context doesn't support progress
 
 
 def _build_status_guidance(state, tables_described: int) -> dict:
@@ -353,6 +367,7 @@ async def _onboarding_start(provider_id: str | None = None, force: bool = False)
 
 
 async def _onboarding_discover(
+    ctx: Context | None = None,
     provider_id: str | None = None,
     phase: str = "structure",
 ) -> dict:
@@ -362,7 +377,7 @@ async def _onboarding_discover(
     after seeing the database structure but before the slow table scan:
 
     - phase="structure": Discover catalogs and schemas only (fast)
-    - phase="tables": Discover tables in non-ignored schemas (slow)
+    - phase="tables": Discover tables in non-ignored schemas (slow, with progress)
 
     Typical flow:
     1. onboarding_discover(phase="structure") - see catalogs/schemas
@@ -370,6 +385,7 @@ async def _onboarding_discover(
     3. onboarding_discover(phase="tables") - scan tables in remaining schemas
 
     Args:
+        ctx: MCP Context for progress reporting (optional)
         provider_id: Provider ID. Uses configured default if not provided.
         phase: Discovery phase - "structure" (catalogs/schemas) or "tables"
 
@@ -561,6 +577,8 @@ async def _onboarding_discover(
     # ============================================================
     # PHASE: TABLES - Discover tables in non-ignored schemas (slow)
     # ============================================================
+    await _report_progress(ctx, 0, 100)  # 0% - Starting tables phase
+
     # Re-filter schemas in case new ignore patterns were added
     all_schemas_filtered = []
     catalogs = state.catalogs_discovered if state.catalogs_discovered else [None]
@@ -574,19 +592,27 @@ async def _onboarding_discover(
 
     # Update state with filtered schemas
     state.schemas_discovered = [s["schema"] for s in all_schemas_filtered]
+    total_schemas = len(all_schemas_filtered)
 
     print(
-        f"[DISCOVERY] Schemas after re-filtering: {len(all_schemas_filtered)}",
+        f"[DISCOVERY] Schemas after re-filtering: {total_schemas}",
         file=sys.stderr,
         flush=True,
     )
 
+    await _report_progress(ctx, 5, 100)  # 5% - Schemas filtered
+
     # Discover tables with columns (iterate catalog -> schema -> table)
     all_tables = []
     try:
-        for schema_info in all_schemas_filtered:
+        for schema_idx, schema_info in enumerate(all_schemas_filtered):
             catalog = schema_info["catalog"]
             schema = schema_info["schema"]
+
+            # Report progress: 5% to 90% for schema discovery
+            if total_schemas > 0:
+                schema_progress = 5 + (85 * schema_idx / total_schemas)
+                await _report_progress(ctx, schema_progress, 100)
 
             print(
                 f"[DISCOVERY] Discovering tables for {catalog}.{schema}...",
@@ -638,6 +664,8 @@ async def _onboarding_discover(
         state.tables_discovered = []
         state.tables_total = 0
 
+    await _report_progress(ctx, 90, 100)  # 90% - Tables discovered, saving
+
     # Create schema_descriptions.yaml with all discovered tables
     schema = create_initial_schema(
         provider_id=provider_id,
@@ -663,6 +691,8 @@ async def _onboarding_discover(
             "provider_id": provider_id,
             "error": f"Failed to save state: {save_result['error']}",
         }
+
+    await _report_progress(ctx, 100, 100)  # 100% - Complete
 
     return {
         "discovered": True,
