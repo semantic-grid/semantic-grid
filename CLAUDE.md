@@ -305,6 +305,27 @@ uv run ruff check . --fix  # Lint and auto-fix
 
 Fix any errors before considering the task complete. Warnings (like `no-console`) are acceptable, but errors must be resolved.
 
+## Documentation Standards
+
+When writing or updating markdown documentation (especially in `docs/`):
+
+- **NO ASCII box diagrams** — They break when copied/pasted and render poorly across tools
+- **Use pure markdown** for diagrams: tables, bullet lists, numbered lists, bold headers
+- **Use simple arrow characters** (→, ↓) to show flow between elements
+- **Tables** work well for multi-column comparisons and workflows
+- **Nested bullet lists** work well for hierarchical structures
+- **Numbered lists** work well for sequential steps/workflows
+
+Example of good flow representation:
+```
+**Step 1** → **Step 2** → **Step 3**
+
+| Phase | Action | Output |
+|-------|--------|--------|
+| First | Do X | Result A |
+| Second | Do Y | Result B |
+```
+
 ## Important Notes
 
 - This is a monorepo managed by Turbo; always run setup tasks through Turbo to respect dependencies
